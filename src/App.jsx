@@ -1,34 +1,70 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import { useRef, useEffect } from 'react'
 import './App.css'
+import SPIKEEditor from './components/SPIKEEditor'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const resizerRef = useRef(null);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const resizer = resizerRef.current;
+    const container = containerRef.current;
+    if (!resizer || !container) return;
+
+    let isDragging = false;
+
+    const handleMouseDown = (e) => {
+      e.preventDefault();
+      isDragging = true;
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    };
+
+    const handleMouseMove = (e) => {
+      if (!isDragging) return;
+      const rect = container.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const percent = (offsetX / rect.width) * 100;
+      
+      // Constrain between 20% and 80%
+      const constrainedPercent = Math.min(Math.max(percent, 20), 80);
+      container.style.gridTemplateColumns = `${constrainedPercent}% 5px auto`;
+    };
+
+    const handleMouseUp = () => {
+      if (isDragging) {
+        isDragging = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    };
+
+    resizer.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      resizer.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="app-container">
+      <div className="title-bar">
+        {/* Space for title bar */}
       </div>
-      <h1 className="text-3xl font-bold text-blue-600 mb-4">Vite + React</h1>
-      <div className="card bg-gray-100 p-6 rounded-lg shadow-md">
-        <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p className="mt-4 text-gray-700">
-          Edit <code className="bg-gray-200 px-2 py-1 rounded">src/App.jsx</code> and save to test HMR
-        </p>
+      <div className="main-content" ref={containerRef}>
+        <div className="left-panel">
+          <SPIKEEditor />
+        </div>
+        <div className="horizontal-resizer" ref={resizerRef}></div>
+        <div className="right-panel">
+          {/* Space for chat component */}
+        </div>
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </div>
   )
 }
 
