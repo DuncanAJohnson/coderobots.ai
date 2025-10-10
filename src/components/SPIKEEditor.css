@@ -121,11 +121,11 @@
 
 /* Right Panel - Green buttons */
 .right-panel .button {
-  background-color: #28a745;
+  background-color: #26823b;
 }
 
 .right-panel .button:hover:not(:disabled) {
-  background-color: #218838;
+  background-color: #2d5c37;
 }
 
 /* REPL-only buttons - Cyan */

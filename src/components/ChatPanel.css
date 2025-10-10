@@ -36,7 +36,7 @@
 
 .admin-controls button {
     padding: 2px 8px;
-    background: #4a90e2;
+    background: #002E6D;
     color: white;
     border: none;
     border-radius: 4px;
@@ -141,7 +141,7 @@
 
 .chat-context-controls button {
     padding: 0.5rem 1rem;
-    background: #369af2;
+    background: #002E6D;
     color: #fff;
     border: none;
     border-radius: 4px;
@@ -182,7 +182,7 @@
 
 .chat-input-row button {
     padding:1rem 1rem;
-    background: #1d7ffd;
+    background: #002E6D;
     color:#ffffff;
     border:none;
     border-radius:6px;
@@ -214,7 +214,7 @@
 /* VIEW CODE button -------------------------- */
 .code-btn {
     margin:.4rem 0;
-    background:#4eaf4e;
+    background:#277227;
     color:#fff;
     border:none;
     padding:.35rem .8rem;
