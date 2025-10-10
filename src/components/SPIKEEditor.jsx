@@ -3,7 +3,7 @@ import Board from '../utils/microRepl.js';
 import { STOP_CODE } from '../utils/stopSpike.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
-import { logCode, logConsole } from '../services/dataLogger';
+import { logCode, logConsole, logInteraction } from '../services/dataLogger';
 import './SPIKEEditor.css';
 
 const FIFO_SIZE = 10000;
@@ -158,10 +158,16 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
 
     if (connected) {
       // Disconnect
+      if (sessionId) {
+        await logInteraction('disconnect', sessionId);
+      }
       await board.reset();
       await board.disconnect();
     } else {
       // Connect
+      if (sessionId) {
+        await logInteraction('connect', sessionId);
+      }
       try {
         await board.connect(replContainerRef.current, true);
       } catch (error) {
@@ -179,8 +185,9 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
 
     const currentCode = editorRef.current?.getCode() || code;
     
-    // Log code before running
+    // Log interaction and code before running
     if (sessionId) {
+      await logInteraction('run_device', sessionId);
       await logCode(currentCode, sessionId, 'run_device');
     }
     
@@ -204,6 +211,10 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
     const board = boardRef.current;
     if (!board || !connected) return;
 
+    if (sessionId) {
+      await logInteraction('send_ctrl_c', sessionId);
+    }
+
     setIsRunning(false);
     await board.write('\x03');
     
@@ -222,6 +233,10 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
     const board = boardRef.current;
     if (!board || !connected) return;
 
+    if (sessionId) {
+      await logInteraction('reset_device', sessionId);
+    }
+
     setIsRunning(false);
     await board.reset();
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -231,9 +246,12 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
   };
 
   const handleClear = async () => {
-    // Log console before clearing
-    if (sessionId && buffer) {
-      await logConsole(buffer, sessionId, 'clear_console');
+    // Log interaction and console before clearing
+    if (sessionId) {
+      await logInteraction('clear_console', sessionId);
+      if (buffer) {
+        await logConsole(buffer, sessionId, 'clear_console');
+      }
     }
     
     if (terminalRef.current) {
@@ -249,6 +267,10 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
     const board = boardRef.current;
     if (!board || !connected) return;
 
+    if (sessionId) {
+      await logInteraction('switch_to_repl_mode', sessionId);
+    }
+
     await board.write('\x03');
     setMode('repl');
   };
@@ -256,6 +278,10 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
   const handleEnterProgramSlot = async () => {
     const board = boardRef.current;
     if (!board || !connected) return;
+
+    if (sessionId) {
+      await logInteraction('switch_to_program_slot_mode', sessionId);
+    }
 
     setIsRunning(false);
     await board.reset();
@@ -272,8 +298,9 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
 
     const currentCode = editorRef.current?.getCode() || code;
     
-    // Log code before saving to slot
+    // Log interaction and code before saving to slot
     if (sessionId) {
+      await logInteraction(`save_to_slot_${selectedSlot}`, sessionId);
       await logCode(currentCode, sessionId, 'save_to_slot');
     }
     

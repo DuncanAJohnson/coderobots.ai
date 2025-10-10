@@ -172,11 +172,9 @@ function AppContent() {
       }
 
       debugLog('✅ Session saved successfully');
-      alert('Session saved successfully!');
     } catch (error) {
       console.error('Error saving session:', error);
       debugLog(`❌ Error saving session: ${error.message}`);
-      alert(`Failed to save session: ${error.message}`);
     }
   };
 
