@@ -18,8 +18,6 @@ export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxT
   }
 
   try {
-    console.log('MODAL_ENDPOINT_URL', MODAL_ENDPOINT_URL);
-
     const response = await fetch(MODAL_ENDPOINT_URL, {
       method: 'POST',
       headers: {
@@ -32,8 +30,6 @@ export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxT
       }),
     });
 
-    console.log('response', response);
-
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -45,15 +41,10 @@ export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxT
     while (true) {
       const { done, value } = await reader.read();
 
-      console.log('value', value);
-      console.log('done', done);
-
       if (done) break;
 
       // Decode chunk and add to buffer
       buffer += decoder.decode(value, { stream: true });
-
-      console.log('buffer', buffer);
 
       // Process complete SSE messages (lines starting with "data: ")
       const lines = buffer.split('\n');

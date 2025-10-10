@@ -41,8 +41,6 @@ async def stream_chat_completion(
     
     # Initialize OpenAI client with API key from Modal secret
     client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
-
-    print('client', client)
     
     try:
         # Convert messages to new Responses API format
@@ -83,13 +81,9 @@ async def stream_chat_completion(
         
         # Create streaming response with new API
         stream = await client.responses.create(**request_params)
-
-        print('stream', stream)
         
         # Stream chunks as SSE format
         async for event in stream:
-            print('event', event)
-            print('event.type', event.type)
             # Handle different event types from the Responses API
             if hasattr(event, 'type'):
                 # Handle text delta events - the main streaming content
@@ -100,12 +94,10 @@ async def stream_chat_completion(
                             "type": "content",
                             "content": event.delta
                         })
-                        print('data', data)
                         yield f"data: {data}\n\n"
         
         # Send completion signal
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
-        print('done')
         
     except Exception as e:
         # Send error message
