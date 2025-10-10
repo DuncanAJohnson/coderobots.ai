@@ -12,12 +12,14 @@ const MODAL_ENDPOINT_URL = import.meta.env.VITE_MODAL_ENDPOINT_URL;
  * @param {Number} maxTokens - Maximum tokens to generate
  * @returns {AsyncGenerator} - Yields chunks of content as they arrive
  */
-export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxTokens = 10000) {
+export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxTokens = 100000) {
   if (!MODAL_ENDPOINT_URL) {
     throw new Error('VITE_MODAL_ENDPOINT_URL is not configured in .env.local');
   }
 
   try {
+    console.log('MODAL_ENDPOINT_URL', MODAL_ENDPOINT_URL);
+
     const response = await fetch(MODAL_ENDPOINT_URL, {
       method: 'POST',
       headers: {
@@ -30,6 +32,8 @@ export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxT
       }),
     });
 
+    console.log('response', response);
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -40,11 +44,16 @@ export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxT
 
     while (true) {
       const { done, value } = await reader.read();
-      
+
+      console.log('value', value);
+      console.log('done', done);
+
       if (done) break;
 
       // Decode chunk and add to buffer
       buffer += decoder.decode(value, { stream: true });
+
+      console.log('buffer', buffer);
 
       // Process complete SSE messages (lines starting with "data: ")
       const lines = buffer.split('\n');

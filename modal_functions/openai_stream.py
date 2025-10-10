@@ -22,8 +22,8 @@ image = modal.Image.debian_slim().pip_install("openai")
 )
 async def stream_chat_completion(
     messages: list[dict],
-    model: str = "gpt-4",
-    max_tokens: int = 10000,
+    model: str = "gpt-5-nano",
+    max_tokens: int = 100000,
 ) -> AsyncIterator[str]:
     """
     Stream OpenAI responses using the new Responses API with Server-Sent Events format.
@@ -41,6 +41,8 @@ async def stream_chat_completion(
     
     # Initialize OpenAI client with API key from Modal secret
     client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+    print('client', client)
     
     try:
         # Convert messages to new Responses API format
@@ -81,25 +83,29 @@ async def stream_chat_completion(
         
         # Create streaming response with new API
         stream = await client.responses.create(**request_params)
+
+        print('stream', stream)
         
         # Stream chunks as SSE format
         async for event in stream:
+            print('event', event)
+            print('event.type', event.type)
             # Handle different event types from the Responses API
             if hasattr(event, 'type'):
-                # Handle delta events containing text content
-                if event.type == "response.output_item.delta":
-                    if hasattr(event, 'delta') and hasattr(event.delta, 'type'):
-                        if event.delta.type == "output_text":
-                            if hasattr(event.delta, 'text') and event.delta.text:
-                                # Format as SSE data
-                                data = json.dumps({
-                                    "type": "content",
-                                    "content": event.delta.text
-                                })
-                                yield f"data: {data}\n\n"
+                # Handle text delta events - the main streaming content
+                if event.type == "response.output_text.delta":
+                    if hasattr(event, 'delta') and event.delta:
+                        # delta is a string directly, not an object
+                        data = json.dumps({
+                            "type": "content",
+                            "content": event.delta
+                        })
+                        print('data', data)
+                        yield f"data: {data}\n\n"
         
         # Send completion signal
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        print('done')
         
     except Exception as e:
         # Send error message
@@ -114,7 +120,7 @@ async def stream_chat_completion(
     image=image,
     secrets=[modal.Secret.from_name("openai-api-key")],
 )
-@modal.web_endpoint(method="POST")
+@modal.fastapi_endpoint(method="POST")
 async def chat_endpoint(request: dict):
     """
     HTTP endpoint for chat requests.
@@ -132,7 +138,7 @@ async def chat_endpoint(request: dict):
     # Extract parameters
     messages = request.get("messages", [])
     model = request.get("model", "gpt-5-nano")
-    max_tokens = request.get("max_tokens", 10000)
+    max_tokens = request.get("max_tokens", 100000)
     
     if not messages:
         return {"error": "No messages provided"}, 400

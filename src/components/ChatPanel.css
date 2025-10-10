@@ -62,9 +62,15 @@
 }
 
 /* left-aligned bubbles nudge in from the edge */
+.chat-msg-wrap.align-left {
+    align-items: flex-start;
+}
 .chat-msg-wrap.align-left  .chat-bubble{ margin-left:6px; }
 
 /* right-aligned bubbles keep a buffer from the scrollbar */
+.chat-msg-wrap.align-right {
+    align-items: flex-end;
+}
 .chat-msg-wrap.align-right .chat-bubble{ margin-right:6px; }
 
 /* label above bubble */

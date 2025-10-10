@@ -193,28 +193,32 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     setIsStreaming(true);
     streamingMessageRef.current = '';
 
-    // Add empty bot message that will be updated
-    setMessages(prev => [...prev, { role: 'bot', content: '', streaming: true }]);
-
     try {
       let fullResponse = '';
       let promptTokens = 0;
       let completionTokens = 0;
+      let isFirstChunk = true;
 
       for await (const chunk of streamChatCompletion(conversation, modelName)) {
         fullResponse += chunk;
         streamingMessageRef.current = fullResponse;
         
-        // Update last message
-        setMessages(prev => {
-          const newMessages = [...prev];
-          newMessages[newMessages.length - 1] = {
-            role: 'bot',
-            content: fullResponse,
-            streaming: true,
-          };
-          return newMessages;
-        });
+        if (isFirstChunk) {
+          // Add bot message only when first chunk arrives
+          isFirstChunk = false;
+          setMessages(prev => [...prev, { role: 'bot', content: fullResponse, streaming: true }]);
+        } else {
+          // Update last message
+          setMessages(prev => {
+            const newMessages = [...prev];
+            newMessages[newMessages.length - 1] = {
+              role: 'bot',
+              content: fullResponse,
+              streaming: true,
+            };
+            return newMessages;
+          });
+        }
       }
 
       // Finalize message
