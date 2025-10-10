@@ -17,6 +17,7 @@ function AppContent() {
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [sessionModalCancellable, setSessionModalCancellable] = useState(false);
   const [editorCode, setEditorCode] = useState('# Start your project here!\n');
+  const [sessionsInitialized, setSessionsInitialized] = useState(false);
 
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
@@ -31,9 +32,9 @@ function AppContent() {
     }
   }, [user, authLoading]);
 
-  // Load sessions and show session modal when authenticated
+  // Load sessions and show session modal when authenticated (only once)
   useEffect(() => {
-    if (user && !authLoading) {
+    if (user && !authLoading && !sessionsInitialized) {
       loadSessions().then((userSessions) => {
         if (userSessions && userSessions.length > 0) {
           // Show session modal (non-cancellable on first load)
@@ -43,9 +44,10 @@ function AppContent() {
           // Auto-create new session if none exist
           setActiveSessionById('new');
         }
+        setSessionsInitialized(true);
       });
     }
-  }, [user, authLoading, loadSessions, setActiveSessionById]);
+  }, [user, authLoading, sessionsInitialized, loadSessions, setActiveSessionById]);
 
   // Load code when active session changes
   useEffect(() => {
