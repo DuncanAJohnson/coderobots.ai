@@ -83,12 +83,13 @@ function AppContent() {
 
     const handleMouseMove = (e) => {
       if (!isDragging) return;
+
       const rect = container.getBoundingClientRect();
       const offsetX = e.clientX - rect.left;
       const percent = (offsetX / rect.width) * 100;
-      
-      // Constrain between 20% and 80%
-      const constrainedPercent = Math.min(Math.max(percent, 20), 80);
+
+      // Constrain between 15% and 85%
+      const constrainedPercent = Math.min(Math.max(percent, 15), 85);
       container.style.gridTemplateColumns = `${constrainedPercent}% 5px auto`;
     };
 
@@ -109,7 +110,7 @@ function AppContent() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, []);
+  }, [user, activeSession]);
 
   const handleSessionSelect = async (sessionId) => {
     setShowSessionModal(false);
