@@ -46,6 +46,9 @@ const CodeEditor = forwardRef(({ initialCode = '# Start your project here!\n', o
             overflow: 'auto',
             fontFamily: 'Monaco, Courier New, monospace'
           },
+          '.cm-line': {
+            fontWeight: 'bold',
+          }
         })
       ]}
       onChange={handleChange}
