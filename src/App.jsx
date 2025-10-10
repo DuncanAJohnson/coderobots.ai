@@ -4,10 +4,11 @@ import SPIKEEditor from './components/SPIKEEditor';
 import ChatPanel from './components/ChatPanel';
 import AuthModal from './components/AuthModal';
 import SessionModal from './components/SessionModal';
+import TitleBar from './components/TitleBar';
+import DebugManager, { debugLog } from './components/DebugManager';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SessionProvider, useSession } from './contexts/SessionContext';
-import { getLatestCode } from './services/dataLogger';
-import { logCode } from './services/dataLogger';
+import { getLatestCode, logCode, logConsole } from './services/dataLogger';
 
 function AppContent() {
   const { user, loading: authLoading } = useAuth();
@@ -16,6 +17,7 @@ function AppContent() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [sessionModalCancellable, setSessionModalCancellable] = useState(false);
+  const [showDebugModal, setShowDebugModal] = useState(false);
   const [editorCode, setEditorCode] = useState('# Start your project here!\n');
   const [sessionsInitialized, setSessionsInitialized] = useState(false);
 
@@ -146,12 +148,42 @@ function AppContent() {
     setShowSessionModal(true);
   };
 
+  const handleSaveSession = async () => {
+    if (!activeSession?.id) {
+      debugLog('Cannot save: No active session');
+      return;
+    }
+
+    try {
+      // Get current code and console content
+      const currentCode = await getCodeContent();
+      const currentConsole = await getConsoleContent();
+
+      // Log code
+      if (currentCode) {
+        await logCode(currentCode, activeSession.id, 'manual_save');
+        debugLog(`Saved code (${currentCode.length} characters)`);
+      }
+
+      // Log console
+      if (currentConsole) {
+        await logConsole(currentConsole, activeSession.id, 'manual_save');
+        debugLog(`Saved console (${currentConsole.length} characters)`);
+      }
+
+      debugLog('✅ Session saved successfully');
+      alert('Session saved successfully!');
+    } catch (error) {
+      console.error('Error saving session:', error);
+      debugLog(`❌ Error saving session: ${error.message}`);
+      alert(`Failed to save session: ${error.message}`);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="app-container">
-        <div className="title-bar">
-          <span>EN1 AI Editor - Loading...</span>
-        </div>
+        <TitleBar />
       </div>
     );
   }
@@ -161,13 +193,17 @@ function AppContent() {
       <>
         <AuthModal visible={showAuthModal} />
         <div className="app-container">
-          <div className="title-bar">
-            <span>EN1 AI Editor</span>
-          </div>
+          <TitleBar 
+            onShowDebug={() => setShowDebugModal(true)}
+          />
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
             <p>Please sign in to continue</p>
           </div>
         </div>
+        <DebugManager 
+          visible={showDebugModal} 
+          onClose={() => setShowDebugModal(false)} 
+        />
       </>
     );
   }
@@ -183,25 +219,12 @@ function AppContent() {
       />
       
       <div className="app-container">
-        <div className="title-bar">
-          <span>EN1 AI Editor</span>
-          {activeSession && (
-            <button
-              onClick={openSessionSelector}
-              style={{
-                marginLeft: 'auto',
-                padding: '4px 12px',
-                background: '#0a84ff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
-              Switch Session
-            </button>
-          )}
-        </div>
+        <TitleBar 
+          onSaveSession={handleSaveSession}
+          onOpenSessions={openSessionSelector}
+          onShowDebug={() => setShowDebugModal(true)}
+          activeSession={activeSession}
+        />
         <div className="main-content" ref={containerRef}>
           <div className="left-panel">
             <SPIKEEditor 
@@ -220,6 +243,11 @@ function AppContent() {
           </div>
         </div>
       </div>
+
+      <DebugManager 
+        visible={showDebugModal} 
+        onClose={() => setShowDebugModal(false)} 
+      />
     </>
   );
 }

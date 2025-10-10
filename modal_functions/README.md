@@ -29,3 +29,13 @@ Copy this URL and add it to your `.env.local` file as `VITE_MODAL_ENDPOINT_URL`.
 The URL will look like:
 `https://your-workspace--coderobots-openai-stream-chat-endpoint.modal.run`
 
+## API Notes
+
+This service uses the OpenAI Responses API (not the legacy Chat Completions API).
+The service:
+- Accepts messages in the old format (array of `{role, content}` objects)
+- Converts system messages to `instructions` parameter
+- Converts user/assistant messages to the new `input` format
+- Streams responses using Server-Sent Events (SSE)
+- Maintains compatibility with the existing frontend
+

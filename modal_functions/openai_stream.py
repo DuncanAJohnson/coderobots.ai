@@ -1,6 +1,7 @@
 """
-Modal serverless function for streaming OpenAI chat completions.
+Modal serverless function for streaming OpenAI responses using the Responses API.
 Handles conversation history, coding level priming, and context injection.
+Converts legacy message format to new Responses API format internally.
 """
 
 import modal
@@ -25,7 +26,7 @@ async def stream_chat_completion(
     max_tokens: int = 10000,
 ) -> AsyncIterator[str]:
     """
-    Stream OpenAI chat completions using Server-Sent Events format.
+    Stream OpenAI responses using the new Responses API with Server-Sent Events format.
     
     Args:
         messages: List of message dicts with 'role' and 'content'
@@ -42,25 +43,60 @@ async def stream_chat_completion(
     client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
     
     try:
-        # Create streaming completion
-        stream = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens,
-            stream=True,
-        )
+        # Convert messages to new Responses API format
+        instructions = None
+        input_messages = []
+        
+        for msg in messages:
+            if msg["role"] == "system":
+                # Combine system messages into instructions
+                if instructions is None:
+                    instructions = msg["content"]
+                else:
+                    instructions += "\n\n" + msg["content"]
+            else:
+                # Convert user/assistant messages to input format
+                input_messages.append({
+                    "type": "message",
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+        
+        # Build request parameters for new Responses API
+        request_params = {
+            "model": model,
+            "input": input_messages,
+            "max_output_tokens": max_tokens,
+            "stream": True,
+            "text": {
+                "format": {
+                    "type": "text"
+                }
+            }
+        }
+        
+        # Add instructions if system messages were present
+        if instructions:
+            request_params["instructions"] = instructions
+        
+        # Create streaming response with new API
+        stream = await client.responses.create(**request_params)
         
         # Stream chunks as SSE format
-        async for chunk in stream:
-            if chunk.choices and len(chunk.choices) > 0:
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    # Format as SSE data
-                    data = json.dumps({
-                        "type": "content",
-                        "content": delta.content
-                    })
-                    yield f"data: {data}\n\n"
+        async for event in stream:
+            # Handle different event types from the Responses API
+            if hasattr(event, 'type'):
+                # Handle delta events containing text content
+                if event.type == "response.output_item.delta":
+                    if hasattr(event, 'delta') and hasattr(event.delta, 'type'):
+                        if event.delta.type == "output_text":
+                            if hasattr(event.delta, 'text') and event.delta.text:
+                                # Format as SSE data
+                                data = json.dumps({
+                                    "type": "content",
+                                    "content": event.delta.text
+                                })
+                                yield f"data: {data}\n\n"
         
         # Send completion signal
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
