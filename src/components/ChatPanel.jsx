@@ -16,6 +16,7 @@ import {
   intermediatePrompt,
   experiencedPrompt,
 } from '../prompts/codingLevels';
+import CodeModal from './CodeModal';
 import './ChatPanel.css';
 
 const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
@@ -432,21 +433,14 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       </div>
 
       {/* Code Modal */}
-      {codeModalOpen && (
-        <div className="code-modal" onClick={(e) => e.target.className === 'code-modal' && closeCodeModal()}>
-          <div className="code-box">
-            {currentCodeSnippet.lang && (
-              <div className="code-lang">{currentCodeSnippet.lang.toUpperCase()}</div>
-            )}
-            <textarea readOnly value={currentCodeSnippet.code} />
-            <div className="code-actions">
-              <button data-act="cancel" onClick={closeCodeModal}>Cancel</button>
-              <button data-act="copy" onClick={handleCopyCode}>Copy</button>
-              <button data-act="replace" onClick={handleReplaceCode}>Replace</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CodeModal
+        isOpen={codeModalOpen}
+        code={currentCodeSnippet.code}
+        lang={currentCodeSnippet.lang}
+        onClose={closeCodeModal}
+        onCopy={handleCopyCode}
+        onReplace={handleReplaceCode}
+      />
     </div>
   );
 };
