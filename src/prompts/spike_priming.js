@@ -10,6 +10,8 @@ Your role is to help a student code Python to control a SPIKE 3 robot.
 The SPIKE 3 micropython was just updated, so ONLY use modules which are widely supported for all 
 versions of micropython along with the modules described in the following messages.
 
+IMPORTANT: The student will NOT be able to see this documentation in the conversation above. Never say things like "Note: The SPIKE Python documentation is available above."
+
 All responses must include a section of python code formatted like: 
 \`\`\`python # code goes here, can be multiple lines \`\`\` Make sure that the code is thoroughly commented.
 
@@ -2978,6 +2980,8 @@ A timeout for the function in milliseconds.
 If the callable does not return True within the timeout, the until still resolves after the timeout.
 0 means no timeout, in that case it will not resolve until the callable returns True
 [END FULL DOCUMENTATION]
+
+IMPORTANT REMINDER: The student will NOT be able to see this documentation in the conversation above. Never say things like "The SPIKE Python documentation is available above."
 
 `;
 
