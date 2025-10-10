@@ -2981,7 +2981,5 @@ If the callable does not return True within the timeout, the until still resolve
 0 means no timeout, in that case it will not resolve until the callable returns True
 [END FULL DOCUMENTATION]
 
-IMPORTANT REMINDER: The student will NOT be able to see this documentation in the conversation above. Never say things like "The SPIKE Python documentation is available above."
-
 `;
 
