@@ -13,10 +13,13 @@
     "@babel/runtime": "^7.28.4",
     "@codemirror/lang-python": "^6.2.1",
     "@codemirror/view": "^6.38.5",
+    "@supabase/supabase-js": "^2.39.0",
     "@tailwindcss/vite": "^4.1.13",
     "@uiw/react-codemirror": "^4.25.2",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
+    "dompurify": "^3.0.8",
+    "marked": "^11.1.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "tailwindcss": "^4.1.13"

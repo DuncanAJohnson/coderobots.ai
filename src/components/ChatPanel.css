@@ -1,0 +1,258 @@
+/* root container */
+.chat-panel{
+    display:flex;
+    flex-direction:column;
+    height:100%;
+    width:100%;
+    box-sizing:border-box;
+    padding:4px;
+    gap:4px; /* tiny gap between body & input bar */
+}
+
+/* --- Top control groups for selectors and admin tools --- */
+.control-group,
+.admin-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    background: #f0f0f0;
+    border-bottom: 1px solid #ccc;
+    flex-shrink: 0;
+}
+
+.admin-controls label,
+.control-group label {
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.admin-controls input {
+    flex-grow: 1;
+    padding: 2px 4px;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+}
+
+.admin-controls button {
+    padding: 2px 8px;
+    background: #4a90e2;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+/* conversation area */
+.chat-body{
+    flex:1 1 0;
+    position:relative; /* lets spinner sit inside */
+    overflow-y:auto;
+    padding:6px;
+    background:#fff7e1;
+    width:100%;
+}
+
+/* message wrapper (role alignment handled inline) */
+.chat-msg-wrap{
+    display:flex;
+    flex-direction:column;
+    margin:.35rem 0;
+}
+
+/* left-aligned bubbles nudge in from the edge */
+.chat-msg-wrap.align-left  .chat-bubble{ margin-left:6px; }
+
+/* right-aligned bubbles keep a buffer from the scrollbar */
+.chat-msg-wrap.align-right .chat-bubble{ margin-right:6px; }
+
+/* label above bubble */
+.chat-label{
+    font-size:.6rem;
+    font-weight:600;
+    margin-bottom:.12rem; /* gap below label */
+    color:#555;
+}
+
+/* bubble */
+.chat-bubble{
+    max-width:70%;
+      padding:.45rem .7rem;
+      border-radius:14px;
+      box-shadow:0 1px 2px rgba(0,0,0,.2);
+      white-space:normal;
+      word-break:break-word;
+      font-size:.85rem;
+}
+
+/* --- markdown inside chat bubbles ------------------------------- */
+.chat-bubble{
+    /* remove the pre-wrap that made HTML margins huge */
+    white-space: normal;
+}
+
+.chat-bubble p{
+    margin: .25rem 0;
+}
+
+.chat-bubble ul,
+.chat-bubble ol{
+    margin: .25rem 0 .25rem 1.2rem;    /* tighter & consistent */
+    padding: 0;                       /* remove default left-pad in Chrome */
+}
+
+.chat-bubble li{
+    margin: .15rem 0;
+}
+
+/* small heading for detected code language */
+.code-lang{
+    font-size: .75rem;
+    font-weight:600;
+    margin-bottom:.25rem;
+}
+
+.chat-disclaimer {
+    padding: 8px;
+    text-align: center;
+    font-size: 0.75rem; /* 12px */
+    color: #666;
+    background-color: #f8f8f8;
+    border-bottom: 1px solid #eee;
+    flex-shrink: 0; /* Prevents shrinking */
+}
+
+/* send area */
+.chat-input-area{
+    display: flex;
+    flex-direction: column; /* Lays out context-bar above input-row */
+    border-top:1px solid #ccc;
+    background:#f0f0f0;
+    width:100%;
+}
+
+/* Horizontal row for context buttons and indicator */
+.chat-context-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+}
+
+.chat-context-controls button {
+    padding: 0.5rem 1rem;
+    background: #369af2;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    flex-shrink: 0; /* Prevents buttons from shrinking */
+}
+
+.chat-context-controls button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.context-indicator {
+    flex-grow: 1; /* Pushes the text to the right */
+    text-align: left;
+    font-size: 0.85rem;
+    color: #333;
+    white-space: nowrap; /* Prevents text from wrapping */
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Wrapper for the textarea and send button */
+.chat-input-row {
+    display: flex;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 4px 8px;
+}
+
+.chat-input-row textarea {
+    flex:1 1 0;
+    resize:none;
+    font-family:inherit;
+    padding:.4rem;
+}
+
+.chat-input-row button {
+    padding:1rem 1rem;
+    background: #1d7ffd;
+    color:#ffffff;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+.chat-input-row button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* spinner ----------------------------------- */
+.chat-spinner{
+    display:none;
+    margin:.6rem 0; /* same gap as messages    */
+    justify-content:center;
+}
+
+.chat-spinner .loader{
+    width:18px; height:18px;
+    border:3px solid #999;
+    border-top-color:transparent;
+    border-radius:50%;
+    animation: spin .9s linear infinite;
+}
+
+@keyframes spin { to { transform:rotate(360deg);} }
+
+/* VIEW CODE button -------------------------- */
+.code-btn {
+    margin:.4rem 0;
+    background:#4eaf4e;
+    color:#fff;
+    border:none;
+    padding:.35rem .8rem;
+    border-radius:6px;
+    cursor:pointer;
+    font-size:.75rem;
+}
+
+/* modal overlay ----------------------------- */
+.code-modal{
+    position:fixed; inset:0;
+    background:rgba(0,0,0,.75);
+    display:flex; align-items:center; justify-content:center;
+    z-index:20000;
+}
+
+.code-box{
+    width:80%; max-width:500px;
+    background:#fff; padding:1rem;
+    display:flex; flex-direction:column; gap:.6rem;
+}
+
+.code-box textarea{
+    width:100%; height:300px;
+    font-family:monospace; font-size:.9rem;
+    resize:none;
+}
+
+.code-actions{ display:flex; gap:.6rem; justify-content:flex-end; }
+
+.code-actions button{
+    padding:.35rem .9rem;
+    border:none; border-radius:4px;
+    cursor:pointer;
+}
+
+.code-actions [data-act="cancel"]  { background:#aaa; color:#fff; }
+.code-actions [data-act="copy"]    { background:#1d7ffd; color:#fff; }
+.code-actions [data-act="replace"] { background:#0f730f; color:#fff; }
+

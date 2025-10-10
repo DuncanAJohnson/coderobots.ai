@@ -1,14 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import Board from '../utils/microRepl.js';
 import { STOP_CODE } from '../utils/stopSpike.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
+import { logCode, logConsole } from '../services/dataLogger';
 import './SPIKEEditor.css';
 
 const FIFO_SIZE = 10000;
 
 
-const SPIKEEditor = () => {
+const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
   const [connected, setConnected] = useState(false);
   const [mode, setMode] = useState('disconnected');
   const [code, setCode] = useState('# Start your project here!\n');
@@ -22,6 +23,25 @@ const SPIKEEditor = () => {
   const replContainerRef = useRef(null);
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
+
+  // Expose methods to parent via ref
+  useImperativeHandle(ref, () => ({
+    getCode: () => editorRef.current?.getCode() || code,
+    getBuffer: () => buffer,
+    setCode: (newCode) => {
+      setCode(newCode);
+      if (editorRef.current?.setCode) {
+        editorRef.current.setCode(newCode);
+      }
+    },
+  }));
+
+  // Update code when initialCode prop changes (from session load)
+  useEffect(() => {
+    if (initialCode && initialCode !== code) {
+      setCode(initialCode);
+    }
+  }, [initialCode]);
 
   // Initialize board on mount
   useEffect(() => {
@@ -159,6 +179,11 @@ const SPIKEEditor = () => {
 
     const currentCode = editorRef.current?.getCode() || code;
     
+    // Log code before running
+    if (sessionId) {
+      await logCode(currentCode, sessionId, 'run_device');
+    }
+    
     // Stop any running code first
     if (isRunning) {
       await handleCtrlC();
@@ -205,7 +230,12 @@ const SPIKEEditor = () => {
     board.terminal?.focus();
   };
 
-  const handleClear = () => {
+  const handleClear = async () => {
+    // Log console before clearing
+    if (sessionId && buffer) {
+      await logConsole(buffer, sessionId, 'clear_console');
+    }
+    
     if (terminalRef.current) {
       terminalRef.current.clear();
     }
@@ -241,6 +271,12 @@ const SPIKEEditor = () => {
     }
 
     const currentCode = editorRef.current?.getCode() || code;
+    
+    // Log code before saving to slot
+    if (sessionId) {
+      await logCode(currentCode, sessionId, 'save_to_slot');
+    }
+    
     const slotStr = String(selectedSlot).padStart(2, '0');
     
     console.log(`Saving code to SPIKE program slot ${selectedSlot}...`);
@@ -335,7 +371,9 @@ os.chdir('/flash')
       </div>
     </div>
   );
-};
+});
+
+SPIKEEditor.displayName = 'SPIKEEditor';
 
 export default SPIKEEditor;
 
