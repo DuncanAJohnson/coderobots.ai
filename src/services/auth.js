@@ -13,11 +13,21 @@ const WHITELISTED_EMAILS = [
   'duncanjohnson99@gmail.com',
 ];
 
+// Check if we're in SHOWCASE deployment mode
+const DEPLOYMENT_MODE = import.meta.env.VITE_DEPLOYMENT_MODE;
+export const isShowcaseMode = () => DEPLOYMENT_MODE === 'SHOWCASE';
+
 /**
  * Check if an email is authorized (domain or whitelist)
+ * In SHOWCASE mode, all emails are authorized
  */
 export const isEmailAuthorized = (email) => {
   if (!email) return false;
+
+  // In SHOWCASE mode, skip email domain checks
+  if (isShowcaseMode()) {
+    return true;
+  }
 
   const lowerEmail = email.toLowerCase();
 
@@ -59,6 +69,50 @@ export const signInWithGoogle = async () => {
 
   if (error) {
     console.error('Google sign-in error:', error);
+    throw error;
+  }
+
+  return data;
+};
+
+/**
+ * Sign in with email and password
+ * Only available in SHOWCASE mode
+ */
+export const signInWithPassword = async (email, password) => {
+  if (!isShowcaseMode()) {
+    throw new Error('Password authentication is only available in SHOWCASE mode');
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    console.error('Password sign-in error:', error);
+    throw error;
+  }
+
+  return data;
+};
+
+/**
+ * Sign up with email and password
+ * Only available in SHOWCASE mode
+ */
+export const signUpWithPassword = async (email, password) => {
+  if (!isShowcaseMode()) {
+    throw new Error('Password authentication is only available in SHOWCASE mode');
+  }
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+  });
+
+  if (error) {
+    console.error('Password sign-up error:', error);
     throw error;
   }
 

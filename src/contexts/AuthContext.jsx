@@ -6,11 +6,14 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import {
   signInWithGoogle,
+  signInWithPassword,
+  signUpWithPassword,
   signOut,
   getSession,
   onAuthStateChange,
   isEmailAuthorized,
   isAdmin as checkIsAdmin,
+  isShowcaseMode,
 } from '../services/auth';
 
 const AuthContext = createContext();
@@ -101,6 +104,28 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const handlePasswordSignIn = async (email, password) => {
+    try {
+      setAuthError(null);
+      await signInWithPassword(email, password);
+    } catch (error) {
+      setAuthError(error.message);
+      console.error('Password sign-in error:', error);
+      throw error;
+    }
+  };
+
+  const handlePasswordSignUp = async (email, password) => {
+    try {
+      setAuthError(null);
+      await signUpWithPassword(email, password);
+    } catch (error) {
+      setAuthError(error.message);
+      console.error('Password sign-up error:', error);
+      throw error;
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -120,7 +145,10 @@ export const AuthProvider = ({ children }) => {
     isAdmin,
     authError,
     signIn: handleSignIn,
+    signInWithPassword: handlePasswordSignIn,
+    signUpWithPassword: handlePasswordSignUp,
     signOut: handleSignOut,
+    isShowcaseMode: isShowcaseMode(),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
