@@ -9,7 +9,8 @@ import DOMPurify from 'dompurify';
 import { useAuth } from '../contexts/AuthContext';
 import { useSession } from '../contexts/SessionContext';
 import { logMessage, logCode, logConsole } from '../services/dataLogger';
-import { streamChatCompletion } from '../utils/openaiStream';
+import { streamChatCompletion, streamChatCompletionWithBudget } from '../utils/openaiStream';
+import { getUserAccessLevel } from '../services/aiUsage';
 import { 
   LEVEL_INSTRUCTION_PREFIX,
   beginnerPrompt,
@@ -17,21 +18,24 @@ import {
   experiencedPrompt,
 } from '../prompts/codingLevels';
 import CodeModal from './CodeModal';
+import BudgetErrorModal from './BudgetErrorModal';
 import './ChatPanel.css';
 
 const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
-  const { isAdmin } = useAuth();
   const { activeSession, conversationHistory, getSystemPriming } = useSession();
   
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [codingLevel, setCodingLevel] = useState('beginner');
+  const [selectedModel, setSelectedModel] = useState('gpt-5-nano');
   const [modelName, setModelName] = useState(import.meta.env.VITE_DEFAULT_MODEL || 'gpt-4');
   const [isStreaming, setIsStreaming] = useState(false);
   const [attachedContext, setAttachedContext] = useState({ includeCode: false, includeConsole: false });
   const [codeModalOpen, setCodeModalOpen] = useState(false);
   const [currentCodeSnippet, setCurrentCodeSnippet] = useState({ code: '', lang: '' });
   const [consoleHasContent, setConsoleHasContent] = useState(false);
+  const [budgetErrorVisible, setBudgetErrorVisible] = useState(false);
+  const [userAccessLevel, setUserAccessLevel] = useState('standard');
 
   const chatBodyRef = useRef(null);
   const streamingMessageRef = useRef(null);
@@ -67,6 +71,19 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     };
     checkConsole();
   }, [getConsoleContent]);
+
+  // Fetch user access level
+  useEffect(() => {
+    const fetchAccessLevel = async () => {
+      try {
+        const level = await getUserAccessLevel();
+        setUserAccessLevel(level);
+      } catch (err) {
+        console.error('Error fetching access level:', err);
+      }
+    };
+    fetchAccessLevel();
+  }, []);
 
   const scrollToBottom = () => {
     if (chatBodyRef.current) {
@@ -196,29 +213,37 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
     try {
       let fullResponse = '';
-      let promptTokens = 0;
-      let completionTokens = 0;
+      let budgetStatus = null;
+      let usageData = null;
       let isFirstChunk = true;
 
-      for await (const chunk of streamChatCompletion(conversation, modelName)) {
-        fullResponse += chunk;
-        streamingMessageRef.current = fullResponse;
-        
-        if (isFirstChunk) {
-          // Add bot message only when first chunk arrives
-          isFirstChunk = false;
-          setMessages(prev => [...prev, { role: 'bot', content: fullResponse, streaming: true }]);
-        } else {
-          // Update last message
-          setMessages(prev => {
-            const newMessages = [...prev];
-            newMessages[newMessages.length - 1] = {
-              role: 'bot',
-              content: fullResponse,
-              streaming: true,
-            };
-            return newMessages;
-          });
+      // Determine which model to use
+      const actualModel = selectedModel;
+
+      for await (const event of streamChatCompletionWithBudget(conversation, actualModel)) {
+        if (event.type === 'content') {
+          fullResponse += event.content;
+          streamingMessageRef.current = fullResponse;
+          
+          if (isFirstChunk) {
+            // Add bot message only when first chunk arrives
+            isFirstChunk = false;
+            setMessages(prev => [...prev, { role: 'bot', content: fullResponse, streaming: true }]);
+          } else {
+            // Update last message
+            setMessages(prev => {
+              const newMessages = [...prev];
+              newMessages[newMessages.length - 1] = {
+                role: 'bot',
+                content: fullResponse,
+                streaming: true,
+              };
+              return newMessages;
+            });
+          }
+        } else if (event.type === 'budget_status') {
+          budgetStatus = event;
+          usageData = event.usage;
         }
       }
 
@@ -239,10 +264,15 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         role: 'assistant',
         content: fullResponse,
         coding_level: codingLevel,
-        ai_model: modelName,
-        prompt_tokens: promptTokens,
-        completion_tokens: completionTokens,
+        ai_model: actualModel,
+        prompt_tokens: usageData?.input_tokens || 0,
+        completion_tokens: usageData?.output_tokens || 0,
       });
+
+      // Check budget status and show modal if budget exceeded
+      if (budgetStatus && !budgetStatus.has_budget) {
+        setBudgetErrorVisible(true);
+      }
 
     } catch (error) {
       console.error('Streaming error:', error);
@@ -363,20 +393,19 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
           <option value="intermediate">Intermediate</option>
           <option value="experienced">Experienced</option>
         </select>
-      </div>
 
-      {isAdmin && (
-        <div className="admin-controls">
-          <label htmlFor="admin-model-input">Model Name:</label>
-          <input
-            type="text"
-            id="admin-model-input"
-            value={modelName}
-            onChange={(e) => setModelName(e.target.value)}
-          />
-          <button onClick={handleModelUpdate}>Update</button>
-        </div>
-      )}
+        <label htmlFor="model-selector" style={{ marginLeft: '15px' }}>AI Model:</label>
+        <select
+          id="model-selector"
+          className="chat-level-selector"
+          value={selectedModel}
+          onChange={(e) => setSelectedModel(e.target.value)}
+        >
+          <option value="gpt-5-nano">gpt-5-nano</option>
+          <option value="gpt-5-mini">gpt-5-mini</option>
+          <option value="gpt-5">gpt-5</option>
+        </select>
+      </div>
 
       <div className="chat-body" ref={chatBodyRef}>
         <div className="chat-disclaimer">
@@ -440,6 +469,13 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         onClose={closeCodeModal}
         onCopy={handleCopyCode}
         onReplace={handleReplaceCode}
+      />
+
+      {/* Budget Error Modal */}
+      <BudgetErrorModal
+        visible={budgetErrorVisible}
+        onClose={() => setBudgetErrorVisible(false)}
+        accessLevel={userAccessLevel}
       />
     </div>
   );
