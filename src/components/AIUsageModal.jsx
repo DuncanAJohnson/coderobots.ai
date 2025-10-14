@@ -128,15 +128,25 @@ const AIUsageModal = ({ visible, onClose }) => {
     }
   };
 
+  const handleOverlayClick = (e) => {
+    // Only close if clicking the overlay itself (not the modal content)
+    if (e.target === e.currentTarget) {
+      onClose?.();
+    }
+  };
+
   return (
-    <>
-      <div className="modal-overlay" onClick={onClose}></div>
-      <div className="modal-container ai-usage-modal">
-        <div className="modal-header">
+    <div
+      className="ai-usage-modal-overlay"
+      style={{ display: visible ? 'flex' : 'none' }}
+      onClick={handleOverlayClick}
+    >
+      <div className="ai-usage-modal-box">
+        <div className="ai-usage-modal-header">
           <h2>📊 AI Usage Statistics</h2>
-          <button className="modal-close-btn" onClick={onClose}>×</button>
+          <button className="ai-usage-modal-close-btn" onClick={onClose}>×</button>
         </div>
-        <div className="modal-body">
+        <div className="ai-usage-modal-body">
           {loading ? (
             <div className="loading">Loading usage data...</div>
           ) : error ? (
@@ -149,13 +159,13 @@ const AIUsageModal = ({ visible, onClose }) => {
             </>
           )}
         </div>
-        <div className="modal-footer">
+        <div className="ai-usage-modal-footer">
           <button className="modal-btn primary" onClick={onClose}>
             Close
           </button>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

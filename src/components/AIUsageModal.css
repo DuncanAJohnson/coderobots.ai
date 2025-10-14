@@ -1,11 +1,93 @@
-.ai-usage-modal {
-  max-width: 900px;
-  max-height: 80vh;
+/* --- AI Usage Modal Overlay --- */
+
+.ai-usage-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: none; /* Hidden by default */
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-.ai-usage-modal .modal-body {
+.ai-usage-modal-box {
+  background-color: #d3d3d3;
+  color: #ffffff;
+  padding: 25px;
+  border-radius: 14px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 80vh;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow: hidden;
+}
+
+.ai-usage-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.ai-usage-modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #000000;
+}
+
+.ai-usage-modal-close-btn {
+  background: none;
+  border: none;
+  color: #000000;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.ai-usage-modal-close-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.ai-usage-modal-body {
+  flex: 1;
   max-height: 60vh;
   overflow-y: auto;
+  padding-right: 5px; /* For scrollbar spacing */
+}
+
+/* Custom scrollbar for a modern look */
+.ai-usage-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ai-usage-modal-body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.ai-usage-modal-body::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+.ai-usage-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+.ai-usage-modal-footer {
+  margin-top: 10px;
+  text-align: center;
 }
 
 .budget-info {
@@ -24,6 +106,7 @@
 .budget-info.standard {
   background-color: #fff3cd;
   border-left-color: #ffc107;
+  color: #2e2d2d;
 }
 
 .budget-info p {
