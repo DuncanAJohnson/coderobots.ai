@@ -136,7 +136,8 @@ async def log_usage(supabase_client, user_id: str, model: str,
     image=image,
     secrets=[
         modal.Secret.from_name("openai-api-key"),
-        modal.Secret.from_name("supabase-credentials"),
+        modal.Secret.from_name("supabase-en1-credentials"),
+        modal.Secret.from_name("supabase-showcase-credentials"),
     ],
     timeout=300,  # 5 minute timeout
 )
@@ -144,6 +145,7 @@ async def stream_chat_completion_with_budget(
     messages: list[dict],
     user_id: str,
     auth_token: str,
+    environment: str = "EN1",
     model: str = "gpt-5-nano",
     max_tokens: int = 100000,
 ) -> AsyncIterator[str]:
@@ -154,6 +156,7 @@ async def stream_chat_completion_with_budget(
         messages: List of message dicts with 'role' and 'content'
         user_id: Supabase user ID
         auth_token: Supabase auth token for verification
+        environment: Supabase environment to use ('EN1' or 'SHOWCASE')
         model: OpenAI model name
         max_tokens: Maximum tokens to generate
     
@@ -165,8 +168,17 @@ async def stream_chat_completion_with_budget(
     
     # Initialize clients
     openai_client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    supabase_url = os.environ["SUPABASE_URL"]
-    supabase_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]  # Use service role for inserts
+
+    # Configure Supabase based on environment parameter
+    if environment == "EN1":
+        supabase_url = os.environ["SUPABASE_EN1_URL"]
+        supabase_key = os.environ["SUPABASE_EN1_SERVICE_ROLE_KEY"]
+    elif environment == "SHOWCASE":
+        supabase_url = os.environ["SUPABASE_SHOWCASE_URL"]
+        supabase_key = os.environ["SUPABASE_SHOWCASE_SERVICE_ROLE_KEY"]
+    else:
+        raise ValueError(f"Unsupported environment: {environment}")
+
     supabase_client = create_client(supabase_url, supabase_key)
     
     usage_data = None
@@ -337,6 +349,7 @@ async def chat_endpoint_with_budget(request: dict):
         "messages": [{"role": "system|user|assistant", "content": "..."}],
         "user_id": "uuid",
         "auth_token": "jwt_token",
+        "environment": "EN1",
         "model": "gpt-5-nano",
         "max_tokens": 10000
     }
@@ -347,6 +360,7 @@ async def chat_endpoint_with_budget(request: dict):
     messages = request.get("messages", [])
     user_id = request.get("user_id")
     auth_token = request.get("auth_token")
+    environment = request.get("environment", "EN1")
     model = request.get("model", "gpt-5-nano")
     max_tokens = request.get("max_tokens", 100000)
     
@@ -362,6 +376,7 @@ async def chat_endpoint_with_budget(request: dict):
             messages=messages,
             user_id=user_id,
             auth_token=auth_token,
+            environment=environment,
             model=model,
             max_tokens=max_tokens,
         ),

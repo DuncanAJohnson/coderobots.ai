@@ -84,9 +84,10 @@ export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxT
  * @param {Array} messages - Array of message objects with role and content
  * @param {String} model - OpenAI model name
  * @param {Number} maxTokens - Maximum tokens to generate
+ * @param {String} environment - Supabase environment to use ('EN1' or 'SHOWCASE')
  * @returns {AsyncGenerator} - Yields chunks of content and budget status
  */
-export async function* streamChatCompletionWithBudget(messages, model = 'gpt-5-nano', maxTokens = 100000) {
+export async function* streamChatCompletionWithBudget(messages, model = 'gpt-5-nano', maxTokens = 100000, environment = null) {
   if (!MODAL_BUDGET_ENDPOINT_URL) {
     throw new Error('VITE_MODAL_BUDGET_ENDPOINT_URL is not configured in .env.local');
   }
@@ -95,10 +96,13 @@ export async function* streamChatCompletionWithBudget(messages, model = 'gpt-5-n
     // Get current user and auth session
     const { data: { user } } = await supabase.auth.getUser();
     const { data: { session } } = await supabase.auth.getSession();
-    
+
     if (!user || !session) {
       throw new Error('User not authenticated');
     }
+
+    // Determine environment to use
+    const deploymentMode = environment || import.meta.env.VITE_DEPLOYMENT_MODE || 'EN1';
 
     const response = await fetch(MODAL_BUDGET_ENDPOINT_URL, {
       method: 'POST',
@@ -111,6 +115,7 @@ export async function* streamChatCompletionWithBudget(messages, model = 'gpt-5-n
         max_tokens: maxTokens,
         user_id: user.id,
         auth_token: session.access_token,
+        environment: deploymentMode,
       }),
     });
 
