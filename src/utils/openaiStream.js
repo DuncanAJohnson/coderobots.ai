@@ -68,6 +68,10 @@ export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxT
               throw new Error(data.error);
             }
           } catch (parseError) {
+            // If this is an intentionally thrown Error (not a SyntaxError from JSON.parse), re-throw it
+            if (!(parseError instanceof SyntaxError)) {
+              throw parseError;
+            }
             console.warn('Failed to parse SSE data:', dataStr, parseError);
           }
         }
@@ -150,12 +154,18 @@ export async function* streamChatCompletionWithBudget(messages, model = 'gpt-5-n
               yield { type: 'content', content: data.content };
             } else if (data.type === 'budget_status') {
               yield { type: 'budget_status', ...data };
+            } else if (data.type === 'usage_logged') {
+              yield { type: 'usage_logged', ...data };
             } else if (data.type === 'done') {
               return; // Stream complete
             } else if (data.type === 'error') {
               throw new Error(data.error);
             }
           } catch (parseError) {
+            // If this is an intentionally thrown Error (not a SyntaxError from JSON.parse), re-throw it
+            if (!(parseError instanceof SyntaxError)) {
+              throw parseError;
+            }
             console.warn('Failed to parse SSE data:', dataStr, parseError);
           }
         }

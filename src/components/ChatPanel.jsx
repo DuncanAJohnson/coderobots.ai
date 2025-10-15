@@ -37,6 +37,9 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const [budgetErrorVisible, setBudgetErrorVisible] = useState(false);
   const [userAccessLevel, setUserAccessLevel] = useState('standard');
 
+  // Models that support streaming
+  const STREAMING_MODELS = new Set(['gpt-5-nano']);
+
   const chatBodyRef = useRef(null);
   const streamingMessageRef = useRef(null);
 
@@ -241,7 +244,11 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
               return newMessages;
             });
           }
+        } else if (event.type === 'usage_logged') {
+          // Capture usage data from the usage_logged event
+          usageData = event.usage;
         } else if (event.type === 'budget_status') {
+          // Legacy support for budget_status events
           budgetStatus = event;
           usageData = event.usage;
         }
@@ -276,15 +283,29 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
     } catch (error) {
       console.error('Streaming error:', error);
-      setMessages(prev => {
-        const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = {
-          role: 'bot',
-          content: `Error: ${error.message}`,
-          streaming: false,
-        };
-        return newMessages;
-      });
+      
+      // Check if this is a budget error
+      const isBudgetError = error.message && error.message.includes('exceeded their budget');
+      
+      if (isBudgetError) {
+        // Show budget error modal, don't add any bot message
+        setBudgetErrorVisible(true);
+      } else {
+        // For other errors, show error message only if we started streaming
+        if (!isFirstChunk) {
+          // We added a bot message, update it with the error
+          setMessages(prev => {
+            const newMessages = [...prev];
+            newMessages[newMessages.length - 1] = {
+              role: 'bot',
+              content: `Error: ${error.message}`,
+              streaming: false,
+            };
+            return newMessages;
+          });
+        }
+        // If we didn't start streaming yet, don't add any error message
+      }
     } finally {
       setIsStreaming(false);
       streamingMessageRef.current = null;
@@ -401,10 +422,15 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
           value={selectedModel}
           onChange={(e) => setSelectedModel(e.target.value)}
         >
-          <option value="gpt-5-nano">gpt-5-nano</option>
-          <option value="gpt-5-mini">gpt-5-mini</option>
-          <option value="gpt-5">gpt-5</option>
+          <option value="gpt-5-nano">gpt-5-nano (streaming)</option>
+          <option value="gpt-5-mini">gpt-5-mini (full response)</option>
+          <option value="gpt-5">gpt-5 (full response)</option>
         </select>
+        {!STREAMING_MODELS.has(selectedModel) && (
+          <span style={{ marginLeft: '10px', fontSize: '0.85em', color: '#666' }}>
+            ⏱️ This model waits for the full response
+          </span>
+        )}
       </div>
 
       <div className="chat-body" ref={chatBodyRef}>
@@ -413,8 +439,13 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         </div>
         {messages.map((msg, idx) => renderMessage(msg, idx))}
         {isStreaming && (
-          <div className="chat-spinner" style={{ display: 'flex' }}>
+          <div className="chat-spinner" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div className="loader"></div>
+            {!STREAMING_MODELS.has(selectedModel) && (
+              <div style={{ marginTop: '10px', fontSize: '0.9em', color: '#666' }}>
+                Waiting for full response from {selectedModel}...
+              </div>
+            )}
           </div>
         )}
       </div>

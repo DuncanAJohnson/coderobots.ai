@@ -7,7 +7,7 @@ import modal
 import json
 import os
 from typing import AsyncIterator
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import pytz
 
 # Create Modal app
@@ -15,14 +15,19 @@ app = modal.App("coderobots-openai-stream-budget")
 
 # Define the image with dependencies
 image = modal.Image.debian_slim().pip_install(
+    "pydantic>=2.0.0",
     "openai",
     "supabase",
-    "pytz"
+    "pytz",
+    "fastapi[standard]"
 )
 
 # Budget configuration (in USD per week)
-EN1_WEEKLY_BUDGET = float(os.environ.get("EN1_WEEKLY_BUDGET", "10.00"))
-STANDARD_WEEKLY_BUDGET = float(os.environ.get("STANDARD_WEEKLY_BUDGET", "2.00"))
+EN1_WEEKLY_BUDGET = float(os.environ.get("EN1_WEEKLY_BUDGET", "3.00"))
+STANDARD_WEEKLY_BUDGET = float(os.environ.get("STANDARD_WEEKLY_BUDGET", "1.00"))
+
+# Models that support streaming
+STREAMING_MODELS = {"gpt-5-nano"}
 
 # Token pricing (per 1M tokens in USD)
 TOKEN_PRICING = {
@@ -71,10 +76,10 @@ def get_week_boundaries_et():
     # Get Monday of current week (weekday 0 = Monday)
     days_since_monday = now_et.weekday()
     week_start = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
-    week_start = week_start - pytz.timedelta(days=days_since_monday)
+    week_start = week_start - timedelta(days=days_since_monday)
     
     # Get Sunday end of week
-    week_end = week_start + pytz.timedelta(days=7)
+    week_end = week_start + timedelta(days=7)
     
     return week_start, week_end
 
@@ -117,6 +122,7 @@ async def log_usage(supabase_client, user_id: str, model: str,
                    cached_input_tokens: int, reasoning_tokens: int, cost: float):
     """Log usage to the ai_usage table."""
     try:
+        print(f"Logging usage: {user_id}, {model}, {input_tokens}, {output_tokens}, {cached_input_tokens}, {reasoning_tokens}, {cost}")
         supabase_client.table('ai_usage').insert({
             'user_id': user_id,
             'timestamp': datetime.now(timezone.utc).isoformat(),
@@ -209,11 +215,14 @@ async def stream_chat_completion_with_budget(
                 })
         
         # Build request parameters for new Responses API
+        # Determine if this model should stream
+        should_stream = model in STREAMING_MODELS
+        
         request_params = {
             "model": model,
             "input": input_messages,
             "max_output_tokens": max_tokens,
-            "stream": True,
+            "stream": should_stream,
             "text": {
                 "format": {
                     "type": "text"
@@ -225,7 +234,7 @@ async def stream_chat_completion_with_budget(
         if instructions:
             request_params["instructions"] = instructions
 
-        # Only allow a streaming response if the user has a budget
+        # Only allow a response if the user has a budget
         if access_level == 'standard':
             weekly_spend = await get_weekly_spend(supabase_client, user_id)
             if weekly_spend >= STANDARD_WEEKLY_BUDGET:
@@ -241,34 +250,84 @@ async def stream_chat_completion_with_budget(
         else:
             raise ValueError("Invalid access level")
         
-        # Create streaming response with new API
-        stream = await openai_client.responses.create(**request_params)
+        # Create response with new API (streaming or non-streaming)
+        response = await openai_client.responses.create(**request_params)
         
-        # Stream chunks as SSE format
-        async for event in stream:
-            # Handle different event types from the Responses API
-            if hasattr(event, 'type'):
-                # Handle text delta events - the main streaming content
-                if event.type == "response.output_text.delta":
-                    if hasattr(event, 'delta') and event.delta:
-                        data = json.dumps({
-                            "type": "content",
-                            "content": event.delta
-                        })
-                        yield f"data: {data}\n\n"
+        if should_stream:
+            # Handle streaming response
+            async for event in response:
+                # Handle different event types from the Responses API
+                if hasattr(event, 'type'):
+                    # Handle text delta events - the main streaming content
+                    if event.type == "response.output_text.delta":
+                        if hasattr(event, 'delta') and event.delta:
+                            data = json.dumps({
+                                "type": "content",
+                                "content": event.delta
+                            })
+                            yield f"data: {data}\n\n"
+                    
+                    # Capture usage data from completion event
+                    elif event.type == "response.completed":
+                        if hasattr(event, 'response') and hasattr(event.response, 'usage'):
+                            usage = event.response.usage
+                            # Extract cached tokens from input_tokens_details object
+                            cached_tokens = 0
+                            if hasattr(usage, 'input_tokens_details'):
+                                cached_tokens = getattr(usage.input_tokens_details, 'cached_tokens', 0)
+                            
+                            # Extract reasoning tokens from output_tokens_details object
+                            reasoning_tokens = 0
+                            if hasattr(usage, 'output_tokens_details'):
+                                reasoning_tokens = getattr(usage.output_tokens_details, 'reasoning_tokens', 0)
+                            
+                            usage_data = {
+                                'input_tokens': getattr(usage, 'input_tokens', 0),
+                                'output_tokens': getattr(usage, 'output_tokens', 0),
+                                'cached_input_tokens': cached_tokens,
+                                'reasoning_tokens': reasoning_tokens,
+                            }
+        else:
+            # Handle non-streaming response - wait for full completion
+            # Extract the full text content
+            full_content = ""
+            if hasattr(response, 'output') and response.output:
+                for item in response.output:
+                    if hasattr(item, 'content') and item.content:
+                        for content_item in item.content:
+                            if hasattr(content_item, 'text'):
+                                full_content += content_item.text
+            
+            # Send the full content as a single chunk
+            if full_content:
+                data = json.dumps({
+                    "type": "content",
+                    "content": full_content
+                })
+                yield f"data: {data}\n\n"
+            
+            # Extract usage data
+            if hasattr(response, 'usage'):
+                usage = response.usage
+                # Extract cached tokens from input_tokens_details object
+                cached_tokens = 0
+                if hasattr(usage, 'input_tokens_details'):
+                    cached_tokens = getattr(usage.input_tokens_details, 'cached_tokens', 0)
                 
-                # Capture usage data from done event
-                elif event.type == "response.done":
-                    if hasattr(event, 'response') and hasattr(event.response, 'usage'):
-                        usage = event.response.usage
-                        usage_data = {
-                            'input_tokens': getattr(usage, 'input_tokens', 0),
-                            'output_tokens': getattr(usage, 'output_tokens', 0),
-                            'cached_input_tokens': getattr(usage, 'input_tokens_details', {}).get('cached_tokens', 0) if hasattr(usage, 'input_tokens_details') else 0,
-                            'reasoning_tokens': getattr(usage, 'output_tokens_details', {}).get('reasoning_tokens', 0) if hasattr(usage, 'output_tokens_details') else 0,
-                        }
+                # Extract reasoning tokens from output_tokens_details object
+                reasoning_tokens = 0
+                if hasattr(usage, 'output_tokens_details'):
+                    reasoning_tokens = getattr(usage.output_tokens_details, 'reasoning_tokens', 0)
+                
+                usage_data = {
+                    'input_tokens': getattr(usage, 'input_tokens', 0),
+                    'output_tokens': getattr(usage, 'output_tokens', 0),
+                    'cached_input_tokens': cached_tokens,
+                    'reasoning_tokens': reasoning_tokens,
+                }
         
-        # After streaming, log usage and check budget
+
+        # After streaming, log usage
         if usage_data:
             # Calculate cost
             cost = calculate_cost(
@@ -291,34 +350,14 @@ async def stream_chat_completion_with_budget(
                 cost
             )
             
-            # Get total weekly spend AFTER logging this request
-            weekly_spend = await get_weekly_spend(supabase_client, user_id)
-            
-            # Check budget status
-            has_budget = True
-            budget_limit = STANDARD_WEEKLY_BUDGET
-            
-            if access_level == 'en1':
-                budget_limit = EN1_WEEKLY_BUDGET
-                # EN1 users have unlimited gpt-5-nano
-                if model != 'gpt-5-nano':
-                    has_budget = weekly_spend < EN1_WEEKLY_BUDGET
-            else:
-                # Standard users check budget for all models
-                has_budget = weekly_spend < STANDARD_WEEKLY_BUDGET
-            
-            # Send budget status
-            budget_status = {
-                "type": "budget_status",
-                "has_budget": has_budget,
-                "access_level": access_level,
-                "weekly_spend": weekly_spend,
-                "budget_limit": budget_limit,
+            # Send usage info (no budget check after the call)
+            usage_info = {
+                "type": "usage_logged",
                 "model": model,
                 "usage": usage_data,
                 "cost": cost
             }
-            yield f"data: {json.dumps(budget_status)}\n\n"
+            yield f"data: {json.dumps(usage_info)}\n\n"
         
         # Send completion signal
         yield f"data: {json.dumps({'type': 'done'})}\n\n"

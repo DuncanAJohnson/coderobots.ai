@@ -48,15 +48,25 @@ const BudgetErrorModal = ({ visible, onClose, accessLevel }) => {
 
   const isEN1 = accessLevel === 'en1';
 
+  const handleOverlayClick = (e) => {
+    // Only close if clicking the overlay itself (not the modal content)
+    if (e.target === e.currentTarget) {
+      onClose?.();
+    }
+  };
+
   return (
-    <>
-      <div className="modal-overlay" onClick={onClose}></div>
-      <div className="modal-container budget-error-modal">
-        <div className="modal-header">
+    <div
+      className="budget-error-modal-overlay"
+      style={{ display: visible ? 'flex' : 'none' }}
+      onClick={handleOverlayClick}
+    >
+      <div className="budget-error-modal-box">
+        <div className="budget-error-modal-header">
           <h2>⚠️ Budget Limit Reached</h2>
-          <button className="modal-close-btn" onClick={onClose}>×</button>
+          <button className="budget-error-modal-close-btn" onClick={onClose}>×</button>
         </div>
-        <div className="modal-body">
+        <div className="budget-error-modal-body">
           {isEN1 ? (
             <>
               <p className="budget-error-message">
@@ -80,13 +90,13 @@ const BudgetErrorModal = ({ visible, onClose, accessLevel }) => {
             </>
           )}
         </div>
-        <div className="modal-footer">
+        <div className="budget-error-modal-footer">
           <button className="modal-btn primary" onClick={onClose}>
             OK
           </button>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

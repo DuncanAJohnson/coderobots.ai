@@ -11,8 +11,8 @@ from typing import AsyncIterator
 # Create Modal app
 app = modal.App("coderobots-openai-stream")
 
-# Define the image with OpenAI dependency
-image = modal.Image.debian_slim().pip_install("openai")
+# Define the image with dependencies
+image = modal.Image.debian_slim().pip_install("openai", "fastapi[standard]")
 
 
 @app.function(
