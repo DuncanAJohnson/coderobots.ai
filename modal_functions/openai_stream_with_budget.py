@@ -23,8 +23,8 @@ image = modal.Image.debian_slim().pip_install(
 )
 
 # Budget configuration (in USD per week)
-EN1_WEEKLY_BUDGET = float(os.environ.get("EN1_WEEKLY_BUDGET", "3.00"))
-STANDARD_WEEKLY_BUDGET = float(os.environ.get("STANDARD_WEEKLY_BUDGET", "1.00"))
+EN1_WEEKLY_BUDGET = float(os.environ.get("EN1_WEEKLY_BUDGET", "1.00"))
+STANDARD_WEEKLY_BUDGET = float(os.environ.get("STANDARD_WEEKLY_BUDGET", "0.50"))
 
 # Models that support streaming
 STREAMING_MODELS = {"gpt-5-nano"}
