@@ -35,7 +35,7 @@ export const AuthProvider = ({ children }) => {
         // Validate email authorization
         if (isEmailAuthorized(email)) {
           // Ensure access level is set (especially for OAuth users)
-          await ensureAccessLevel();
+          await ensureAccessLevel(session.user);
           
           setSession(session);
           setUser(session.user);
@@ -60,7 +60,7 @@ export const AuthProvider = ({ children }) => {
         // Validate on every auth change
         if (isEmailAuthorized(email)) {
           // Ensure access level is set (especially for OAuth users)
-          await ensureAccessLevel();
+          await ensureAccessLevel(session.user);
           
           setSession(session);
           setUser(session.user);

@@ -195,12 +195,25 @@ export const onAuthStateChange = (callback) => {
 /**
  * Check and set access level for OAuth users (called after sign-in)
  * This ensures OAuth users get their access_level set based on email domain
+ * @param {Object} user - Optional user object (if already available from session)
  */
-export const ensureAccessLevel = async () => {
+export const ensureAccessLevel = async (user = null) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    // If user not provided, fetch it (with timeout)
+    if (!user) {
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('getUser timeout')), 5000)
+      );
+      
+      const getUserPromise = supabase.auth.getUser();
+      
+      const result = await Promise.race([getUserPromise, timeoutPromise]);
+      user = result.data?.user;
+    }
     
-    if (!user) return;
+    if (!user) {
+      return;
+    }
 
     // Check if user already has access_level set
     if (user.user_metadata?.access_level) {
@@ -209,6 +222,8 @@ export const ensureAccessLevel = async () => {
 
     // Determine access level from email
     const accessLevel = getAccessLevelFromEmail(user.email);
+
+    console.log('Setting access level to:', accessLevel);
 
     // Update user metadata
     const { error } = await supabase.auth.updateUser({
@@ -224,6 +239,7 @@ export const ensureAccessLevel = async () => {
     }
   } catch (error) {
     console.error('Error in ensureAccessLevel:', error);
+    // Don't throw - we don't want to block auth flow
   }
 };
 
