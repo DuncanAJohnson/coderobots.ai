@@ -73,7 +73,7 @@ const BudgetErrorModal = ({ visible, onClose, accessLevel }) => {
                 You've reached your weekly budget for premium models (gpt-5 and gpt-5-mini).
               </p>
               <p className="budget-error-suggestion">
-                <strong>Please use gpt-5-nano</strong>, which has unlimited usage for EN1 users.
+                <strong>Please use gpt-5-nano</strong>, which has unlimited usage for upgraded users.
               </p>
             </>
           ) : (

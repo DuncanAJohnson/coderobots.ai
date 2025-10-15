@@ -113,7 +113,7 @@ const AIUsageModal = ({ visible, onClose }) => {
     if (accessLevel === 'en1') {
       return (
         <div className="budget-info en1">
-          <p><strong>Your Plan:</strong> EN1 Access</p>
+          <p><strong>Your Plan:</strong> Upgraded Access</p>
           <p><strong>gpt-5-nano:</strong> Unlimited ♾️</p>
           <p><strong>gpt-5-mini & gpt-5:</strong> Limited weekly budget</p>
         </div>
