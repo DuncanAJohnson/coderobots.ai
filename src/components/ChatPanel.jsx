@@ -24,6 +24,12 @@ import BudgetErrorModal from './BudgetErrorModal';
 import ChatConfiguration from './ChatConfiguration';
 import './ChatPanel.css';
 
+// Configure marked for better markdown rendering
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+});
+
 const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const { activeSession, conversationHistory, getSystemPriming } = useSession();
   
@@ -416,8 +422,14 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
                 if (codeIdx % 2 === 0) {
                   // Markdown text
                   if (codeSeg.trim()) {
-                    const html = DOMPurify.sanitize(marked.parse(codeSeg));
-                    return <div key={`${consoleIdx}-${codeIdx}`} dangerouslySetInnerHTML={{ __html: html }} />;
+                    const html = DOMPurify.sanitize(marked.parse(codeSeg, { async: false }));
+                    return (
+                      <div 
+                        key={`${consoleIdx}-${codeIdx}`} 
+                        className="markdown-content"
+                        dangerouslySetInnerHTML={{ __html: html }} 
+                      />
+                    );
                   }
                 } else {
                   // Code block
