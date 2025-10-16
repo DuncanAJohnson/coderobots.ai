@@ -17,6 +17,7 @@ import {
   experiencedPrompt,
 } from '../prompts/codingLevels';
 import CodeModal from './CodeModal';
+import ConsoleModal from './ConsoleModal';
 import './ChatPanel.css';
 
 const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
@@ -31,6 +32,8 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const [attachedContext, setAttachedContext] = useState({ includeCode: false, includeConsole: false });
   const [codeModalOpen, setCodeModalOpen] = useState(false);
   const [currentCodeSnippet, setCurrentCodeSnippet] = useState({ code: '', lang: '' });
+  const [consoleModalOpen, setConsoleModalOpen] = useState(false);
+  const [currentConsoleContent, setCurrentConsoleContent] = useState('');
   const [consoleHasContent, setConsoleHasContent] = useState(false);
 
   const chatBodyRef = useRef(null);
@@ -95,7 +98,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       return;
     }
 
-    const text = inputText.trim();
+    let text = inputText.trim();
     if (!text && !attachedContext.includeCode && !attachedContext.includeConsole) {
       return;
     }
@@ -109,14 +112,17 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       finalContext.console = await getConsoleContent();
     }
 
-    // Build display message with indicators
-    let displayMessage = text;
-    if (finalContext.code) displayMessage += '\n[code]';
-    if (finalContext.console) displayMessage += '\n[console logs]';
+    // Build display message with wrapped code and console
+    if (finalContext.code) {
+      text += '\n```python\n' + finalContext.code + '\n```';
+    }
+    if (finalContext.console) {
+      text += '\n````\n' + finalContext.console + '\n````';
+    }
 
     // Add user message to UI
-    if (displayMessage.trim()) {
-      setMessages(prev => [...prev, { role: 'user', content: displayMessage }]);
+    if (text.trim()) {
+      setMessages(prev => [...prev, { role: 'user', content: text }]);
     }
 
     setInputText('');
@@ -299,50 +305,84 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     closeCodeModal();
   };
 
+  const openConsoleModal = (consoleContent) => {
+    setCurrentConsoleContent(consoleContent);
+    setConsoleModalOpen(true);
+  };
+
+  const closeConsoleModal = () => {
+    setConsoleModalOpen(false);
+    setCurrentConsoleContent('');
+  };
+
+  const handleCopyConsole = () => {
+    navigator.clipboard.writeText(currentConsoleContent);
+    closeConsoleModal();
+  };
+
   const renderMessage = (message, index) => {
     const isUser = message.role === 'user';
     const label = isUser ? 'User' : message.role === 'system' ? 'System' : 'AI Bot';
     const color = isUser ? '#fbe2d7' : message.role === 'system' ? '#d7e4fb' : '#d8f6d8';
     const align = isUser ? 'align-right' : 'align-left';
 
-    // Split content by code blocks
-    const segments = message.content.split(/```([\s\S]*?)```/g);
+    // First split by console blocks (4 backticks)
+    const consoleSegments = message.content.split(/````([\s\S]*?)````/g);
 
     return (
       <div key={index} className={`chat-msg-wrap ${align}`}>
         <div className="chat-label">{label}</div>
         <div className="chat-bubble" style={{ backgroundColor: color }}>
-          {segments.map((seg, idx) => {
-            if (idx % 2 === 0) {
-              // Markdown text
-              if (seg.trim()) {
-                const html = DOMPurify.sanitize(marked.parse(seg));
-                return <div key={idx} dangerouslySetInnerHTML={{ __html: html }} />;
-              }
-            } else {
-              // Code block
-              let codeText = seg;
-              let lang = '';
-              const firstNL = seg.indexOf('\n');
-              if (firstNL !== -1) {
-                const firstLine = seg.slice(0, firstNL).trim();
-                if (/^[a-zA-Z0-9+#-]+$/.test(firstLine)) {
-                  lang = firstLine;
-                  codeText = seg.slice(firstNL + 1);
-                }
-              }
-
+          {consoleSegments.map((consoleSeg, consoleIdx) => {
+            if (consoleIdx % 2 === 1) {
+              // This is a console block
+              const consoleText = consoleSeg.trim();
               return (
                 <button
-                  key={idx}
-                  className="code-btn"
-                  onClick={() => openCodeModal(codeText, lang)}
+                  key={consoleIdx}
+                  className="console-btn"
+                  onClick={() => openConsoleModal(consoleText)}
                 >
-                  VIEW CODE SNIPPET
+                  VIEW ATTACHED CONSOLE LOG
                 </button>
               );
+            } else {
+              // Not a console block, check for code blocks (3 backticks)
+              const codeSegments = consoleSeg.split(/```([\s\S]*?)```/g);
+              
+              return codeSegments.map((codeSeg, codeIdx) => {
+                if (codeIdx % 2 === 0) {
+                  // Markdown text
+                  if (codeSeg.trim()) {
+                    const html = DOMPurify.sanitize(marked.parse(codeSeg));
+                    return <div key={`${consoleIdx}-${codeIdx}`} dangerouslySetInnerHTML={{ __html: html }} />;
+                  }
+                } else {
+                  // Code block
+                  let codeText = codeSeg;
+                  let lang = '';
+                  const firstNL = codeSeg.indexOf('\n');
+                  if (firstNL !== -1) {
+                    const firstLine = codeSeg.slice(0, firstNL).trim();
+                    if (/^[a-zA-Z0-9+#-]+$/.test(firstLine)) {
+                      lang = firstLine;
+                      codeText = codeSeg.slice(firstNL + 1);
+                    }
+                  }
+
+                  return (
+                    <button
+                      key={`${consoleIdx}-${codeIdx}`}
+                      className="code-btn"
+                      onClick={() => openCodeModal(codeText, lang)}
+                    >
+                      VIEW CODE SNIPPET
+                    </button>
+                  );
+                }
+                return null;
+              });
             }
-            return null;
           })}
         </div>
       </div>
@@ -440,6 +480,14 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         onClose={closeCodeModal}
         onCopy={handleCopyCode}
         onReplace={handleReplaceCode}
+      />
+
+      {/* Console Modal */}
+      <ConsoleModal
+        isOpen={consoleModalOpen}
+        consoleContent={currentConsoleContent}
+        onClose={closeConsoleModal}
+        onCopy={handleCopyConsole}
       />
     </div>
   );

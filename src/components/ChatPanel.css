@@ -222,3 +222,14 @@
     cursor:pointer;
     font-size:.75rem;
 }
+
+.console-btn {
+    margin:.4rem 0;
+    background:#002E6D;
+    color:#fff;
+    border:none;
+    padding:.35rem .8rem;
+    border-radius:6px;
+    cursor:pointer;
+    font-size:.75rem;
+}
