@@ -10,7 +10,6 @@
 }
 
 /* --- Top control groups for selectors and admin tools --- */
-.control-group,
 .admin-controls {
     display: flex;
     align-items: center;
@@ -21,8 +20,7 @@
     flex-shrink: 0;
 }
 
-.admin-controls label,
-.control-group label {
+.admin-controls label {
     font-size: 0.8rem;
     font-weight: 600;
 }

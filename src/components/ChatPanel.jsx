@@ -17,8 +17,10 @@ import {
   intermediatePrompt,
   experiencedPrompt,
 } from '../prompts/codingLevels';
+import { spikeDocumentation } from '../prompts/spike_documentation';
 import CodeModal from './CodeModal';
 import BudgetErrorModal from './BudgetErrorModal';
+import ChatConfiguration from './ChatConfiguration';
 import './ChatPanel.css';
 
 const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
@@ -36,6 +38,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const [consoleHasContent, setConsoleHasContent] = useState(false);
   const [budgetErrorVisible, setBudgetErrorVisible] = useState(false);
   const [userAccessLevel, setUserAccessLevel] = useState('standard');
+  const [attachDocumentation, setAttachDocumentation] = useState(true);
 
   // Models that support streaming
   const STREAMING_MODELS = new Set(['gpt-5-nano']);
@@ -175,6 +178,14 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       role: 'system',
       content: getSystemPriming(),
     });
+
+    // Add SPIKE documentation if checkbox is checked
+    if (attachDocumentation) {
+      conversation.push({
+        role: 'system',
+        content: spikeDocumentation,
+      });
+    }
 
     // Add coding level instructions
     const levelInstructions = getLevelPrompt(codingLevel);
@@ -402,36 +413,15 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
   return (
     <div className="chat-panel">
-      <div className="control-group">
-        <label htmlFor="coding-level-selector">Coding Level:</label>
-        <select
-          id="coding-level-selector"
-          className="chat-level-selector"
-          value={codingLevel}
-          onChange={(e) => setCodingLevel(e.target.value)}
-        >
-          <option value="beginner">Beginner</option>
-          <option value="intermediate">Intermediate</option>
-          <option value="experienced">Experienced</option>
-        </select>
-
-        <label htmlFor="model-selector" style={{ marginLeft: '15px' }}>AI Model:</label>
-        <select
-          id="model-selector"
-          className="chat-level-selector"
-          value={selectedModel}
-          onChange={(e) => setSelectedModel(e.target.value)}
-        >
-          <option value="gpt-5-nano">gpt-5-nano (streaming)</option>
-          <option value="gpt-5-mini">gpt-5-mini (full response)</option>
-          <option value="gpt-5">gpt-5 (full response)</option>
-        </select>
-        {!STREAMING_MODELS.has(selectedModel) && (
-          <span style={{ marginLeft: '10px', fontSize: '0.85em', color: '#666' }}>
-            ⏱️ This model waits for the full response
-          </span>
-        )}
-      </div>
+      <ChatConfiguration
+        codingLevel={codingLevel}
+        onCodingLevelChange={setCodingLevel}
+        selectedModel={selectedModel}
+        onModelChange={setSelectedModel}
+        attachDocumentation={attachDocumentation}
+        onAttachDocumentationChange={setAttachDocumentation}
+        streamingModels={STREAMING_MODELS}
+      />
 
       <div className="chat-body" ref={chatBodyRef}>
         <div className="chat-disclaimer">
