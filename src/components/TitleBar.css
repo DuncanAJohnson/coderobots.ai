@@ -120,6 +120,16 @@
   background-color: #2cb04b;
 }
 
+.topbar-button.logout {
+  background-color: rgba(183, 74, 74, 0.8);
+  border-color: rgba(220, 38, 38, 0.9);
+}
+
+.topbar-button.logout:hover {
+  background-color: rgba(192, 79, 79, 0.9);
+  border-color: rgba(239, 68, 68, 1);
+}
+
 .topbar-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;

@@ -6,6 +6,7 @@
 import { useState, useRef, useEffect } from 'react';
 import AboutModal from './AboutModal';
 import AIUsageModal from './AIUsageModal';
+import { signOut } from '../services/auth';
 import './TitleBar.css';
 
 const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, onUpdateSessionName }) => {
@@ -46,6 +47,15 @@ const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, o
 
   const handleNameBlur = () => {
     handleNameSave();
+  };
+
+  const handleLogOut = async () => {
+    try {
+      await signOut();
+      // The auth state listener will handle navigation/cleanup
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   return (
@@ -122,6 +132,13 @@ const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, o
               DEBUG
             </button>
           )}
+          <button 
+            className="topbar-button logout" 
+            onClick={handleLogOut}
+            title="Sign out of your account"
+          >
+            LOG OUT
+          </button>
         </div>
       </div>
 
