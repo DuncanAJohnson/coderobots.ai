@@ -3,14 +3,50 @@
  * Main navigation bar with session management, debug, and about features
  */
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import AboutModal from './AboutModal';
 import AIUsageModal from './AIUsageModal';
 import './TitleBar.css';
 
-const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession }) => {
+const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, onUpdateSessionName }) => {
   const [showAbout, setShowAbout] = useState(false);
   const [showAIUsage, setShowAIUsage] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (isEditingName && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditingName]);
+
+  const handleNameClick = () => {
+    if (activeSession) {
+      setEditedName(activeSession.name || '');
+      setIsEditingName(true);
+    }
+  };
+
+  const handleNameSave = async () => {
+    if (activeSession && onUpdateSessionName) {
+      await onUpdateSessionName(activeSession.id, editedName.trim());
+    }
+    setIsEditingName(false);
+  };
+
+  const handleNameKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleNameSave();
+    } else if (e.key === 'Escape') {
+      setIsEditingName(false);
+    }
+  };
+
+  const handleNameBlur = () => {
+    handleNameSave();
+  };
 
   return (
     <>
@@ -19,6 +55,31 @@ const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession })
           <span className="logo-text">Tufts CEEO</span>
         </div>
         <div className="topbar-title">EN1 AI Editor</div>
+        {activeSession && (
+          <div className="topbar-session-name">
+            {isEditingName ? (
+              <input
+                ref={inputRef}
+                type="text"
+                className="topbar-session-name-input"
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                onKeyDown={handleNameKeyDown}
+                onBlur={handleNameBlur}
+                placeholder="Enter session name"
+                maxLength={100}
+              />
+            ) : (
+              <div 
+                className="topbar-session-name-display"
+                onClick={handleNameClick}
+                title="Click to rename session"
+              >
+                {activeSession.name || 'Unnamed Session'}
+              </div>
+            )}
+          </div>
+        )}
         <div className="topbar-actions">
           {activeSession && onSaveSession && (
             <button 

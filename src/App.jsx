@@ -12,7 +12,7 @@ import { getLatestCode, logCode, logConsole } from './services/dataLogger';
 
 function AppContent() {
   const { user, loading: authLoading } = useAuth();
-  const { activeSession, sessions, loadSessions, setActiveSessionById, loading: sessionLoading } = useSession();
+  const { activeSession, sessions, loadSessions, setActiveSessionById, updateSessionName, loading: sessionLoading } = useSession();
   
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSessionModal, setShowSessionModal] = useState(false);
@@ -223,6 +223,7 @@ function AppContent() {
           onOpenSessions={openSessionSelector}
           onShowDebug={() => setShowDebugModal(true)}
           activeSession={activeSession}
+          onUpdateSessionName={updateSessionName}
         />
         <div className="main-content" ref={containerRef}>
           <div className="left-panel">

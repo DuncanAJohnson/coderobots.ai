@@ -29,7 +29,54 @@
   font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.5px;
+}
+
+.topbar-session-name {
+  margin-left: 15px;
   margin-right: auto;
+  max-width: 300px;
+}
+
+.topbar-session-name-display {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.topbar-session-name-display:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.topbar-session-name-input {
+  width: 100%;
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  outline: none;
+  font-family: inherit;
+}
+
+.topbar-session-name-input:focus {
+  background-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.topbar-session-name-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .topbar-actions {

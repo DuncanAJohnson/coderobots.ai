@@ -82,6 +82,30 @@
     transform: scale(0.98);
 }
 
+.session-modal-button-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+}
+
+.session-name {
+    flex: 1;
+    font-size: 1rem;
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.session-updated {
+    font-size: 0.85rem;
+    color: #999;
+    white-space: nowrap;
+    font-weight: 400;
+}
+
 .session-modal-new-button {
     background-color: #0a84ff;
     color: white;

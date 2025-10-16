@@ -27,6 +27,21 @@ const SessionModal = ({ visible, sessions, onSelect, cancellable = false, onCanc
     });
   };
 
+  const formatLastUpdated = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+
   return (
     <div 
       className="session-modal-overlay" 
@@ -44,7 +59,14 @@ const SessionModal = ({ visible, sessions, onSelect, cancellable = false, onCanc
                 className="session-modal-button"
                 onClick={() => handleSessionSelect(session.id)}
               >
-                Session from {formatDate(session.start_time)}
+                <div className="session-modal-button-content">
+                  <span className="session-name">
+                    {session.name || 'Unnamed Session'}
+                  </span>
+                  <span className="session-updated">
+                    {formatLastUpdated(session.last_updated || session.start_time)}
+                  </span>
+                </div>
               </button>
             ))
           ) : (

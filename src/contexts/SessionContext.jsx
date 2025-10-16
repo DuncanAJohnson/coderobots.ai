@@ -7,6 +7,7 @@ import { createContext, useContext, useState, useCallback } from 'react';
 import {
   getUserSessions,
   createNewSession,
+  updateSessionName as updateSessionNameService,
 } from '../services/sessionManager';
 import {
   getConversationHistory,
@@ -106,6 +107,28 @@ export const SessionProvider = ({ children }) => {
     setConversationHistory([]);
   }, []);
 
+  /**
+   * Update the name of the active session
+   */
+  const updateSessionName = useCallback(async (sessionId, name) => {
+    try {
+      const updatedSession = await updateSessionNameService(sessionId, name);
+      if (updatedSession) {
+        // Update active session if it's the one being renamed
+        if (activeSession && activeSession.id === sessionId) {
+          setActiveSession(updatedSession);
+        }
+        // Reload sessions list to reflect the change
+        await loadSessions();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error updating session name:', error);
+      return false;
+    }
+  }, [activeSession, loadSessions]);
+
   const value = {
     activeSession,
     conversationHistory,
@@ -115,6 +138,7 @@ export const SessionProvider = ({ children }) => {
     setActiveSessionById,
     getSystemPriming,
     clearConversation,
+    updateSessionName,
   };
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

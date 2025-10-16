@@ -216,3 +216,36 @@ export const updateSessionConsole = async (sessionId, newConsoleId) => {
   }
 };
 
+/**
+ * Update session's name
+ */
+export const updateSessionName = async (sessionId, name) => {
+  try {
+    if (!sessionId) {
+      console.error('session_id is required');
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        name: name || null,
+        last_updated: new Date().toISOString(),
+      })
+      .eq('id', sessionId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating session name:', error);
+      return null;
+    }
+
+    console.log(`✅ Successfully updated session name`);
+    return data;
+  } catch (error) {
+    console.error('Error in updateSessionName:', error);
+    return null;
+  }
+};
+
