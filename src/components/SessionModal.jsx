@@ -53,7 +53,7 @@ const SessionModal = ({ visible, sessions, onSelect, cancellable = false, onCanc
         
         <div className="session-modal-list">
           {sessions && sessions.length > 0 ? (
-            sessions.map((session) => (
+            sessions.sort((a, b) => new Date(b.last_updated) - new Date(a.last_updated)).map((session) => (
               <button
                 key={session.id}
                 className="session-modal-button"
