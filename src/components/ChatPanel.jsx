@@ -8,7 +8,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { useAuth } from '../contexts/AuthContext';
 import { useSession } from '../contexts/SessionContext';
-import { logMessage, logCode, logConsole } from '../services/dataLogger';
+import { logMessage, logConsole } from '../services/dataLogger';
 import { streamChatCompletion, streamChatCompletionWithBudget } from '../utils/openaiStream';
 import { getUserAccessLevel } from '../services/aiUsage';
 import { 
@@ -41,6 +41,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     switchConversation,
     createNewConversation,
     updateConversationName,
+    createSnapshot,
   } = useSession();
   
   const [messages, setMessages] = useState([]);
@@ -143,9 +144,12 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     }
 
     // Fetch context at send time
+    let codeContextId = null;
     const finalContext = { code: null, console: null };
     if (attachedContext.includeCode && getCodeContent) {
       finalContext.code = await getCodeContent();
+      // Create snapshot when code is added to AI context
+      codeContextId = await createSnapshot('chat_context');
     }
     if (attachedContext.includeConsole && getConsoleContent) {
       finalContext.console = await getConsoleContent();
@@ -170,12 +174,8 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     // Log context to database
     const sessionId = activeSession.id;
     const conversationId = activeSession.current_conversation_id;
-    let codeContextId = null;
     let consoleContextId = null;
 
-    if (finalContext.code && finalContext.code.trim()) {
-      codeContextId = await logCode(finalContext.code, sessionId, 'chat_context');
-    }
     if (finalContext.console && finalContext.console.trim()) {
       consoleContextId = await logConsole(finalContext.console, sessionId, 'chat_context');
     }

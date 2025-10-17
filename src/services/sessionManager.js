@@ -10,6 +10,7 @@ import { supabase } from './supabase';
 const SESSIONS_TABLE = 'sessions';
 const CONVERSATIONS_TABLE = 'conversations';
 const CODE_TABLE = 'code';
+const CODE_SNAPSHOTS_TABLE = 'code_snapshots';
 const CONSOLE_TABLE = 'console';
 
 /**
@@ -169,6 +170,7 @@ export const updateSessionCode = async (sessionId, newCodeId) => {
       .eq('id', sessionId)
       .select()
       .single();
+
 
     if (error) {
       console.error('Error updating session code:', error);
@@ -375,6 +377,201 @@ export const updateSessionConversation = async (sessionId, conversationId) => {
   } catch (error) {
     console.error('Error in updateSessionConversation:', error);
     return null;
+  }
+};
+
+/**
+ * Get all code records for a session
+ */
+export const getSessionCode = async (sessionId) => {
+  try {
+    if (!sessionId) {
+      console.error('session_id is required');
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from(CODE_TABLE)
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('timestamp', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching code records:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error in getSessionCode:', error);
+    return [];
+  }
+};
+
+/**
+ * Create a new code record for a session
+ */
+export const createCode = async (sessionId, name = 'Code Tab', content = '# Start your new code here!\n') => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user || !sessionId) {
+      console.error('User and session_id are required');
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from(CODE_TABLE)
+      .insert({
+        user_id: user.id,
+        session_id: sessionId,
+        name: name,
+        content: content,
+        save_source: 'tab_create',
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating code record:', error);
+      return null;
+    }
+
+    console.log(`✅ Created new code record with ID: ${data.id}`);
+    return data;
+  } catch (error) {
+    console.error('Error in createCode:', error);
+    return null;
+  }
+};
+
+/**
+ * Update code record name
+ */
+export const updateCodeName = async (codeId, name) => {
+  try {
+    if (!codeId) {
+      console.error('code_id is required');
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from(CODE_TABLE)
+      .update({
+        name: name || 'Code Tab',
+      })
+      .eq('id', codeId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating code name:', error);
+      return null;
+    }
+
+    console.log(`✅ Successfully updated code name`);
+    return data;
+  } catch (error) {
+    console.error('Error in updateCodeName:', error);
+    return null;
+  }
+};
+
+/**
+ * Update code record content (live autosave)
+ */
+export const updateCodeContent = async (codeId, content) => {
+  try {
+    if (!codeId) {
+      console.error('code_id is required');
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from(CODE_TABLE)
+      .update({
+        content: content,
+        save_source: 'live_edit',
+      })
+      .eq('id', codeId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating code content:', error);
+      return null;
+    }
+
+    console.log(`✅ Live saved code content`);
+    return data;
+  } catch (error) {
+    console.error('Error in updateCodeContent:', error);
+    return null;
+  }
+};
+
+/**
+ * Create a code snapshot (historical record)
+ */
+export const createCodeSnapshot = async (codeId, sessionId, content, saveSource) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user || !codeId || !sessionId) {
+      console.error('User, code_id, and session_id are required');
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from(CODE_SNAPSHOTS_TABLE)
+      .insert({
+        user_id: user.id,
+        code_id: codeId,
+        session_id: sessionId,
+        content: content,
+        save_source: saveSource,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating code snapshot:', error);
+      return null;
+    }
+
+    console.log(`✅ Created code snapshot (source: ${saveSource})`);
+    return data;
+  } catch (error) {
+    console.error('Error in createCodeSnapshot:', error);
+    return null;
+  }
+};
+
+/**
+ * Get code snapshots for a specific code record
+ */
+export const getCodeSnapshots = async (codeId) => {
+  try {
+    if (!codeId) {
+      console.error('code_id is required');
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from(CODE_SNAPSHOTS_TABLE)
+      .select('*')
+      .eq('code_id', codeId)
+      .order('timestamp', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching code snapshots:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error in getCodeSnapshots:', error);
+    return [];
   }
 };
 
