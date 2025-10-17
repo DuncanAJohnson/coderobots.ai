@@ -24,6 +24,7 @@
   flex-grow: 1;
   min-height: 0;
   width: 100%;
+  padding-right: 10px;
   overflow: hidden;
   border: 1px solid #ccc;
   border-radius: 0 0 8px 8px;
