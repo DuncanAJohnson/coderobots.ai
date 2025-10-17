@@ -1,276 +1,296 @@
-# SPIKE PRIME React Editor - Implementation Summary
+# AI Usage Budget System - Implementation Summary
 
 ## Overview
 
-Successfully ported the PyScript-based SPIKE PRIME code editor to a modern React application. The new implementation maintains all the original functionality while leveraging React's component architecture and modern tooling.
+Successfully implemented a comprehensive AI usage tracking and budget enforcement system that monitors token usage, calculates costs, and enforces spending limits based on user access levels.
 
-## What Was Built
+## What Was Implemented
 
-### 1. Core Dependencies Installed ✅
+### 1. Database Layer
+**File:** `supabase/migrations/20241014_ai_usage_setup.sql`
 
-```json
-{
-  "pyodide": "^0.28.3",
-  "@codemirror/state": "^6.x",
-  "@codemirror/view": "^6.x",
-  "@codemirror/basic-setup": "^0.20.0",
-  "@codemirror/lang-python": "^6.x",
-  "@xterm/xterm": "^5.x",
-  "@xterm/addon-fit": "^0.10.x"
-}
-```
+- Created `ai_usage` table to track all AI requests with:
+  - Token counts (input, output, cached input, reasoning)
+  - Cost calculations in USD
+  - Model names and timestamps
+- Implemented Row Level Security (RLS):
+  - Users can only read their own records
+  - Only service role can insert records (prevents manipulation)
+- Added `access_level` support via user metadata
+- Created helper function `get_user_access_level(user_id)` for easy access level checks
 
-### 2. Utility Files Created ✅
+### 2. Modal Backend Function
+**File:** `modal_functions/openai_stream_with_budget.py`
 
-**`src/utils/microRepl.js`** (580 lines)
-- Complete Web Serial API integration
-- xterm.js terminal management
-- REPL control (eval, paste, upload, reset)
-- Device connection/disconnection handling
-- Maintains all original rs232 serial functionality
+Features:
+- Streams OpenAI responses with real-time token tracking
+- Authenticates users via Supabase auth tokens
+- Calculates costs using model-specific pricing:
+  - **gpt-5**: $1.25/$0.13/$10.00 (input/cached/output per 1M tokens)
+  - **gpt-5-mini**: $0.25/$0.03/$2.00
+  - **gpt-5-nano**: $0.05/$0.01/$0.40
+- Logs usage to Supabase after each request
+- Checks budget status and returns it to frontend
+- Budget enforcement:
+  - **EN1 users**: Unlimited gpt-5-nano, limited gpt-5-mini/gpt-5
+  - **Standard users**: Limited usage across all models
 
-**`src/utils/stopSpike.js`** (8 lines)
-- Python code to stop motors and unpair motor pairs
-- Used for emergency stops and cleanup
+Configuration:
+- `EN1_WEEKLY_BUDGET`: Default $10.00/week
+- `STANDARD_WEEKLY_BUDGET`: Default $2.00/week
+- Configurable via Modal environment variables
 
-### 3. Services Created ✅
+### 3. Frontend Services
 
-**`src/services/pyodideManager.js`** (54 lines)
-- Pyodide initialization and management
-- Local Python code execution
-- stdout/stderr capture
-- Error handling for browser-based Python
+#### AI Usage Service
+**File:** `src/services/aiUsage.js`
 
-### 4. React Components Created ✅
+Functions:
+- `fetchUserUsage()` - Retrieves all usage records for current user
+- `getWeeklyUsage()` - Calculates current week's usage (Mon-Sun ET)
+- `getAllTimeUsage()` - Calculates lifetime usage statistics
+- `getUserAccessLevel()` - Gets user's access level from Supabase
+- `getWeekBoundariesET()` - Calculates week boundaries in Eastern Time
+- `getNextMondayET()` - For countdown timers
+- `calculateUsageStats()` - Aggregates usage by model
+- Utility formatters for currency and numbers
 
-**`src/components/CodeEditor.jsx`** (64 lines)
-- CodeMirror 6 integration
-- Python syntax highlighting
-- Exposes `getCode()` and `setCode()` methods via ref
-- Auto-updates parent on code changes
+#### Streaming Utility Update
+**File:** `src/utils/openaiStream.js`
 
-**`src/components/Terminal.jsx`** (70 lines)
-- xterm.js wrapper component
-- Exposes `write()`, `clear()`, and `focus()` methods
-- Auto-fit on window resize
-- Returns terminal instance for micro_repl integration
+Added:
+- `streamChatCompletionWithBudget()` - New function that:
+  - Passes user authentication to Modal
+  - Handles budget status events
+  - Returns both content and budget information
+- Kept original `streamChatCompletion()` for backward compatibility
 
-**`src/components/ControlPanel.jsx`** (78 lines)
-- Left panel: Browser execution button
-- Right panel: All device control buttons
-- Mode-aware visibility (REPL/Program Slot)
-- Slot selector dropdown (0-19)
+### 4. Frontend Components
 
-**`src/components/SPIKEEditor.jsx`** (327 lines)
-- Main container orchestrating all components
-- State management for connection, mode, code
-- All event handlers implemented:
-  - `handleConnect()` - Serial connection management
-  - `handleRunLocal()` - Pyodide execution
-  - `handleRun()` - Device code execution
-  - `handleCtrlC()` - Program interruption
-  - `handleReset()` - Device reset
-  - `handleClear()` - Terminal clearing
-  - `handleEnterREPL()` - REPL mode switch
-  - `handleEnterProgramSlot()` - Program slot mode switch
-  - `handleSaveToSlot()` - Save to device storage
-- Resizable split-pane layout
-- FIFO buffer management (10,000 chars)
+#### ChatPanel Updates
+**File:** `src/components/ChatPanel.jsx`
 
-### 5. Styling Created ✅
+Added:
+- Model selection dropdown (gpt-5-nano, gpt-5-mini, gpt-5)
+- Default model: gpt-5-nano
+- Integration with budget-aware streaming function
+- Budget error detection and modal display
+- User access level tracking
+- Admin users can still use custom model names
 
-**`src/components/SPIKEEditor.css`** (220 lines)
-- Split pane grid layout
-- Resizable divider with hover effects
-- Button styling (blue/green/cyan theme)
-- Mode-based visibility classes
-- Responsive design for mobile
-- Full-height viewport utilization
+#### Budget Error Modal
+**Files:** 
+- `src/components/BudgetErrorModal.jsx`
+- `src/components/BudgetErrorModal.css`
 
-### 6. App Integration ✅
+Features:
+- Different messages for EN1 vs Standard users
+- EN1: Suggests switching to gpt-5-nano
+- Standard: Shows countdown to next Monday reset
+- Real-time countdown timer (days, hours, minutes, seconds)
+- Dismissible modal
 
-**`src/App.jsx`** - Updated
-- Removed demo code
-- Renders SPIKEEditor component
-- Clean, minimal structure
+#### AI Usage Modal
+**Files:**
+- `src/components/AIUsageModal.jsx`
+- `src/components/AIUsageModal.css`
 
-**`src/App.css`** - Updated
-- Full viewport height layout
-- Removed unnecessary demo styles
+Features:
+- Displays "This Week" and "All Time" usage
+- Breaks down by model:
+  - Request count
+  - Input/output/cached/reasoning tokens
+  - Total cost in USD
+- Shows access level and budget limits
+- Professional table layout with totals row
+- Real-time data fetching on modal open
 
-**`src/index.css`** - Updated
-- Body full-height styling
-- Removed flex centering that conflicted with layout
+#### TitleBar Update
+**File:** `src/components/TitleBar.jsx`
 
-## Feature Parity with Original
+Added:
+- "AI USAGE" button in top navigation bar
+- Opens AI Usage Modal on click
+- Accessible from any screen
 
-| Feature | Original (PyScript) | New (React) | Status |
-|---------|-------------------|-------------|--------|
-| Code Editor | mpy-editor | CodeMirror 6 | ✅ Improved |
-| Serial Communication | micro_repl | micro_repl | ✅ Same |
-| Terminal Display | xterm.js (CDN) | @xterm/xterm | ✅ Same |
-| Browser Python | PyScript | Pyodide | ✅ Same |
-| Device Connection | ✓ | ✓ | ✅ |
-| Run on Device | ✓ | ✓ | ✅ |
-| Run in Browser | ✓ | ✓ | ✅ |
-| REPL Mode | ✓ | ✓ | ✅ |
-| Program Slot Mode | ✓ | ✓ | ✅ |
-| Save to Slots (0-19) | ✓ | ✓ | ✅ |
-| Stop/Ctrl+C | ✓ | ✓ | ✅ |
-| Reset Device | ✓ | ✓ | ✅ |
-| Clear Console | ✓ | ✓ | ✅ |
-| Resizable Layout | ✓ | ✓ | ✅ |
-| File List | ✓ (hidden) | ✓ (code ready) | ✅ |
-| File Download | ✓ (hidden) | ✓ (code ready) | ✅ |
-| Motor Stop | ✓ | ✓ | ✅ |
+### 5. Configuration
 
-## Key Improvements Over Original
+Updated environment files:
+- `.envEN1.local` - Added `VITE_MODAL_BUDGET_ENDPOINT_URL`
+- `.envSHOWCASE.local` - Added `VITE_MODAL_BUDGET_ENDPOINT_URL`
 
-1. **Modern Build System**: Vite instead of PyScript loader
-2. **Better Performance**: React's virtual DOM vs PyScript's overhead
-3. **Developer Experience**: Hot module replacement, better debugging
-4. **Component Reusability**: Modular React components
-5. **Type Safety Ready**: Can add TypeScript later
-6. **Package Management**: npm ecosystem vs CDN dependencies
-7. **Code Maintainability**: Separated concerns, clear architecture
+Created documentation:
+- `modal_functions/BUDGET_SETUP.md` - Complete setup guide for Modal deployment
 
-## Architecture Highlights
+## How It Works
 
-### State Management
-- React hooks (`useState`, `useRef`, `useEffect`)
-- Component-level state (no external state library needed)
-- Ref-based imperative handles for editor and terminal
+### User Flow
 
-### Event Flow
-```
-User Action → ControlPanel → SPIKEEditor Handler → 
-  → Board/Pyodide Service → Terminal Output
-```
+1. **User sends message:**
+   - Selects model from dropdown (gpt-5-nano, gpt-5-mini, gpt-5)
+   - Types message and clicks send
+   - Frontend calls budget-aware Modal endpoint with auth token
 
-### Connection Flow
-```
-1. User clicks Connect
-2. Web Serial API prompts for device
-3. Board.connect() establishes connection
-4. xterm terminal rendered in DOM
-5. onconnect callback updates React state
-6. UI updates to show "REPL Mode"
-```
+2. **Modal processes request:**
+   - Verifies user authentication
+   - Fetches user's access level from Supabase
+   - Streams AI response from OpenAI
+   - Captures usage data (tokens)
+   - Calculates cost based on token counts
+   - Logs usage to `ai_usage` table
+   - Calculates current week's total spend
+   - Checks if user is over budget
+   - Returns budget status to frontend
 
-### Code Execution Flow (Device)
-```
-1. User clicks "Run Program"
-2. Get code from CodeMirror
-3. Stop any running code (Ctrl+C)
-4. Board.paste() sends code to device
-5. ondata callback receives output
-6. Output written to terminal
-7. Detect ">>> " prompt → mark execution complete
-```
+3. **Frontend handles response:**
+   - Displays streamed response to user
+   - Receives budget status
+   - If over budget, shows Budget Error Modal:
+     - EN1 users: "Use gpt-5-nano"
+     - Standard users: "Budget exceeded, resets in X days"
 
-### Code Execution Flow (Browser)
-```
-1. User clicks "Run Python Code in Browser"
-2. Get code from CodeMirror
-3. Initialize Pyodide (if needed)
-4. Execute code in Pyodide
-5. Capture stdout/stderr
-6. Display in terminal
-```
+4. **User views usage:**
+   - Clicks "AI USAGE" button in title bar
+   - Sees breakdown by model for this week and all time
+   - Sees total costs and token counts
+   - Can track spending against budget
 
-## Technical Decisions
+### Budget Enforcement
 
-### Why CodeMirror 6?
-- Modern, actively maintained
-- Better performance than CodeMirror 5
-- Excellent Python support
-- Flexible theming
+The system allows users to **go over budget by one AI call**. Budget is checked **after** the request completes, not before. This approach:
+- Prevents partial failures
+- Simplifies implementation
+- Provides better UX (users aren't blocked mid-conversation)
+- Notifies users immediately after exceeding budget
 
-### Why Keep micro_repl?
-- Proven working implementation
-- Handles Web Serial API complexity
-- Integrated xterm.js management
-- No need to reinvent the wheel
+### Access Levels
 
-### Why Pyodide?
-- Full Python runtime in browser
-- Compatible with original PyScript approach
-- No backend needed
-- Standard library support
+Users have an `access_level` field in their Supabase user metadata:
 
-### Why Not Use PyScript Directly?
-- React provides better component model
-- Vite build system is faster
-- Better developer tooling
-- Easier to extend and maintain
+**EN1 Users** (`access_level: 'en1'`):
+- Unlimited gpt-5-nano usage
+- Weekly budget for gpt-5-mini and gpt-5
+- Suggested for education environments
 
-## Testing Checklist
+**Standard Users** (`access_level: 'standard'`):
+- Weekly budget applies to all models
+- Lower overall spending limit
 
-✅ Dependencies installed successfully
-✅ No linter errors
-✅ Dev server starts without errors
-✅ All components created
-✅ All utilities in place
-✅ Styling applied correctly
-✅ Layout is full-height and resizable
+## Next Steps
 
-## Next Steps for User
+### Deployment Checklist
 
-1. **Test in Browser**:
-   - Visit http://localhost:5173
-   - Verify UI renders correctly
-   - Test code editor functionality
-   - Try "Run Python Code in Browser"
+1. **Database Setup:**
+   ```bash
+   # Run migration in Supabase SQL editor
+   # or via psql
+   psql your_database < supabase/migrations/20241014_ai_usage_setup.sql
+   ```
 
-2. **Test with SPIKE Device**:
-   - Connect SPIKE PRIME via USB
-   - Click "Connect" button
-   - Select device from browser dialog
-   - Verify REPL terminal appears
-   - Test running code on device
-   - Test saving to program slots
+2. **Set User Access Levels:**
+   ```sql
+   -- Example: Set EN1 access for specific users
+   UPDATE auth.users
+   SET raw_user_meta_data = raw_user_meta_data || '{"access_level": "en1"}'::jsonb
+   WHERE email LIKE '%@tufts.edu';
+   ```
 
-3. **Customization Options**:
-   - Adjust colors in SPIKEEditor.css
-   - Modify editor theme in CodeEditor.jsx
-   - Add custom buttons to ControlPanel
-   - Enable file browser features
+3. **Create Modal Secrets:**
+   ```bash
+   # OpenAI API key
+   modal secret create openai-api-key OPENAI_API_KEY=sk-...
+   
+   # Supabase credentials (use SERVICE ROLE key!)
+   modal secret create supabase-credentials \
+     SUPABASE_URL=https://xxx.supabase.co \
+     SUPABASE_SERVICE_ROLE_KEY=eyJ...
+   
+   # Optional: Custom budget limits
+   modal secret create budget-config \
+     EN1_WEEKLY_BUDGET=15.00 \
+     STANDARD_WEEKLY_BUDGET=3.00
+   ```
+
+4. **Deploy Modal Function:**
+   ```bash
+   cd modal_functions
+   modal deploy openai_stream_with_budget.py
+   ```
+
+5. **Update Environment Variables:**
+   - Copy the deployed endpoint URL
+   - Update `.envEN1.local` or `.envSHOWCASE.local`
+   - Set `VITE_MODAL_BUDGET_ENDPOINT_URL=<your_endpoint_url>`
+
+6. **Test the System:**
+   - Start the frontend
+   - Send AI messages
+   - Check AI Usage modal
+   - Test budget enforcement by lowering limits temporarily
+
+### Optional Enhancements
+
+Future improvements could include:
+- Email notifications when users approach budget limits
+- Admin dashboard to view all users' usage
+- Adjustable budgets per user (instead of global limits)
+- Usage analytics and reporting
+- Budget rollover for unused allocation
+- Team/class-level budgets
 
 ## Files Created/Modified
 
-### Created (9 files):
-1. `src/utils/microRepl.js`
-2. `src/utils/stopSpike.js`
-3. `src/services/pyodideManager.js`
-4. `src/components/CodeEditor.jsx`
-5. `src/components/Terminal.jsx`
-6. `src/components/ControlPanel.jsx`
-7. `src/components/SPIKEEditor.jsx`
-8. `src/components/SPIKEEditor.css`
-9. `SPIKE_EDITOR_README.md`
+### Created Files
+- `supabase/migrations/20241014_ai_usage_setup.sql`
+- `modal_functions/openai_stream_with_budget.py`
+- `modal_functions/BUDGET_SETUP.md`
+- `src/services/aiUsage.js`
+- `src/components/BudgetErrorModal.jsx`
+- `src/components/BudgetErrorModal.css`
+- `src/components/AIUsageModal.jsx`
+- `src/components/AIUsageModal.css`
 
-### Modified (4 files):
-1. `package.json` - Added dependencies
-2. `src/App.jsx` - Replaced demo with SPIKEEditor
-3. `src/App.css` - Full-height layout
-4. `src/index.css` - Body styling fixes
+### Modified Files
+- `src/components/ChatPanel.jsx` - Added model selector and budget integration
+- `src/components/TitleBar.jsx` - Added AI Usage button
+- `src/utils/openaiStream.js` - Added budget-aware streaming function
+- `.envEN1.local` - Added budget endpoint URL
+- `.envSHOWCASE.local` - Added budget endpoint URL
 
-### Total Lines of Code:
-- React Components: ~539 lines
-- Utilities: ~588 lines
-- Services: ~54 lines
-- CSS: ~220 lines
-- **Total: ~1,401 lines of new code**
+## Security Considerations
 
-## Browser Requirements
+✅ **Implemented:**
+- RLS policies prevent users from viewing others' usage
+- RLS policies prevent users from inserting fake usage records
+- Only service role can write to `ai_usage` table
+- User authentication via Supabase JWT tokens
+- Access level stored server-side (can't be spoofed)
+- Modal verifies auth tokens before processing
 
-- Chrome/Edge 89+ (Web Serial API)
-- Modern JavaScript (ES2022+)
-- HTTPS or localhost (required for Web Serial)
+✅ **Best Practices:**
+- Service role key stored only in Modal secrets
+- Anon key used in frontend (limited permissions)
+- Budget calculations done server-side
+- Usage logging happens in Modal (can't be bypassed)
 
-## Conclusion
+## Support
 
-The SPIKE PRIME React Editor has been successfully implemented with full feature parity to the original PyScript version. The new implementation leverages modern React patterns, provides better performance, and maintains all the serial communication and Python execution capabilities.
+For issues or questions:
+1. Check `modal_functions/BUDGET_SETUP.md` for setup instructions
+2. Review Modal logs: `modal logs openai_stream_with_budget.py`
+3. Check Supabase logs for database issues
+4. Query `ai_usage` table to verify data is being logged
 
-The application is ready to use and can be extended with additional features as needed.
+## Summary
+
+The AI Usage Budget System is fully implemented and ready for deployment. It provides:
+- ✅ Token usage tracking across all models
+- ✅ Cost calculation and monitoring
+- ✅ Two-tier access system (EN1 vs Standard)
+- ✅ User-friendly budget notifications
+- ✅ Comprehensive usage statistics
+- ✅ Secure, server-side enforcement
+- ✅ Easy configuration and management
+
+The old Modal endpoint (`openai_stream.py`) remains untouched and functional for backward compatibility.
 

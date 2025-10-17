@@ -298,3 +298,26 @@ export const updateSessionOnLoad = async (sessionId) => {
   }
 };
 
+/**
+ * Update message with port configurations
+ */
+export const updateMessagePortConfigurations = async (messageId, portConfigurations) => {
+  try {
+    const { error } = await supabase
+      .from(MESSAGES_TABLE)
+      .update({ port_configurations: portConfigurations })
+      .eq('id', messageId);
+
+    if (error) {
+      console.error('Error updating message port configurations:', error);
+      return false;
+    }
+
+    console.log(`✅ Updated port configurations for message ${messageId}`);
+    return true;
+  } catch (error) {
+    console.error('Error in updateMessagePortConfigurations:', error);
+    return false;
+  }
+};
+

@@ -8,7 +8,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { useAuth } from '../contexts/AuthContext';
 import { useSession } from '../contexts/SessionContext';
-import { logMessage, logConsole } from '../services/dataLogger';
+import { logMessage, logConsole, updateMessagePortConfigurations } from '../services/dataLogger';
 import { streamChatCompletion, streamChatCompletionWithBudget } from '../utils/openaiStream';
 import { getUserAccessLevel } from '../services/aiUsage';
 import { 
@@ -18,9 +18,11 @@ import {
   experiencedPrompt,
 } from '../prompts/codingLevels';
 import { spikeDocumentation } from '../prompts/spike_documentation';
+import { analyzePortConfiguration } from '../utils/portConfigStream';
 import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
 import BudgetErrorModal from './BudgetErrorModal';
+import PortConfigModal from './PortConfigModal';
 import ChatConfiguration from './ChatConfiguration';
 import ChatTabs from './ChatTabs';
 import './ChatPanel.css';
@@ -59,6 +61,9 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const [budgetErrorVisible, setBudgetErrorVisible] = useState(false);
   const [userAccessLevel, setUserAccessLevel] = useState('standard');
   const [attachDocumentation, setAttachDocumentation] = useState(true);
+  const [portConfigs, setPortConfigs] = useState(new Map());
+  const [portConfigModalOpen, setPortConfigModalOpen] = useState(false);
+  const [currentPortConfig, setCurrentPortConfig] = useState(null);
 
   // Models that support streaming
   const STREAMING_MODELS = new Set(['gpt-5-nano']);
@@ -75,10 +80,24 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         .map(msg => ({
           role: msg.role === 'user' ? 'user' : 'bot',
           content: msg.content,
+          messageId: msg.id, // Store message ID for port config lookup
         }));
       setMessages(displayMessages);
+      
+      // Load port configurations from database
+      const newPortConfigs = new Map();
+      conversationHistory.forEach((msg) => {
+        if (msg.port_configurations && typeof msg.port_configurations === 'object') {
+          // Restore port configurations from database
+          Object.entries(msg.port_configurations).forEach(([key, config]) => {
+            newPortConfigs.set(key, config);
+          });
+        }
+      });
+      setPortConfigs(newPortConfigs);
     } else {
       setMessages([]);
+      setPortConfigs(new Map());
     }
   }, [conversationHistory]);
 
@@ -130,6 +149,50 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       default:
         return beginnerPrompt;
     }
+  };
+
+  /**
+   * Extract Python code snippets from message content
+   * Returns array of { code, key } objects
+   * @param {string} content - The message content
+   * @param {string} messageId - The database message ID (used for consistent keys)
+   */
+  const extractPythonSnippets = (content, messageId) => {
+    const snippets = [];
+    
+    // Split by console blocks first (4 backticks)
+    const consoleSegments = content.split(/````([\s\S]*?)````/g);
+    
+    consoleSegments.forEach((consoleSeg, consoleIdx) => {
+      if (consoleIdx % 2 === 0) {
+        // Not a console block, check for code blocks (3 backticks)
+        const codeBlocks = consoleSeg.split(/```([\s\S]*?)```/g);
+        
+        for (let i = 1; i < codeBlocks.length; i += 2) {
+          const block = codeBlocks[i];
+          let codeText = block;
+          let lang = '';
+          
+          const firstNL = block.indexOf('\n');
+          if (firstNL !== -1) {
+            const firstLine = block.slice(0, firstNL).trim();
+            if (/^[a-zA-Z0-9+#-]+$/.test(firstLine)) {
+              lang = firstLine;
+              codeText = block.slice(firstNL + 1);
+            }
+          }
+          
+          const isPython = lang === 'python' || lang === 'py';
+          if (isPython && codeText.trim()) {
+            // Use messageId and match the rendering key format
+            const key = `msg-${messageId}-${consoleIdx}-${i}`;
+            snippets.push({ code: codeText, key });
+          }
+        }
+      }
+    });
+    
+    return snippets;
   };
 
   const handleSendMessage = async () => {
@@ -298,8 +361,8 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         return newMessages;
       });
 
-      // Log assistant message
-      await logMessage({
+      // Log assistant message first to get the message ID
+      const loggedMessage = await logMessage({
         conversation_id: conversationId,
         role: 'assistant',
         content: fullResponse,
@@ -308,6 +371,46 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         prompt_tokens: usageData?.input_tokens || 0,
         completion_tokens: usageData?.output_tokens || 0,
       });
+
+      // Extract Python code snippets and analyze port configurations
+      if (loggedMessage && loggedMessage.id) {
+        const pythonSnippets = extractPythonSnippets(fullResponse, loggedMessage.id);
+        const portConfigurationsForDb = {};
+
+        if (pythonSnippets.length > 0) {
+          // Analyze all Python snippets
+          for (const snippet of pythonSnippets) {
+            try {
+              const config = await analyzePortConfiguration(snippet.code);
+              portConfigurationsForDb[snippet.key] = config;
+              
+              // Update local state immediately
+              setPortConfigs(prev => {
+                const newMap = new Map(prev);
+                newMap.set(snippet.key, config);
+                return newMap;
+              });
+            } catch (error) {
+              console.error(`Error analyzing port configuration for ${snippet.key}:`, error);
+            }
+          }
+
+          // Update the message with port configurations
+          if (Object.keys(portConfigurationsForDb).length > 0) {
+            await updateMessagePortConfigurations(loggedMessage.id, portConfigurationsForDb);
+          }
+        }
+
+        // Update the message in state with the ID
+        setMessages(prev => {
+          const newMessages = [...prev];
+          newMessages[newMessages.length - 1] = {
+            ...newMessages[newMessages.length - 1],
+            messageId: loggedMessage.id,
+          };
+          return newMessages;
+        });
+      }
 
       // Check budget status and show modal if budget exceeded
       if (budgetStatus && !budgetStatus.has_budget) {
@@ -398,11 +501,27 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     closeConsoleModal();
   };
 
+  const handleViewPortConfig = (codeKey) => {
+    const config = portConfigs.get(codeKey);
+    if (config) {
+      setCurrentPortConfig(config);
+      setPortConfigModalOpen(true);
+    }
+  };
+
+  const closePortConfigModal = () => {
+    setPortConfigModalOpen(false);
+    setCurrentPortConfig(null);
+  };
+
   const renderMessage = (message, index) => {
     const isUser = message.role === 'user';
     const label = isUser ? 'User' : message.role === 'system' ? 'System' : 'AI Bot';
     const color = isUser ? '#fbe2d7' : message.role === 'system' ? '#d7e4fb' : '#d8f6d8';
     const align = isUser ? 'align-right' : 'align-left';
+
+    // Use messageId from database for consistent keys, fallback to index for display
+    const messageKey = message.messageId || index;
 
     // First split by console blocks (4 backticks)
     const consoleSegments = message.content.split(/````([\s\S]*?)````/g);
@@ -454,14 +573,33 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
                     }
                   }
 
+                  // Create unique key for this code snippet using messageId from database
+                  const codeKey = `msg-${messageKey}-${consoleIdx}-${codeIdx}`;
+                  
+                  // Check if this is Python code from a bot message
+                  const isPython = lang === 'python' || lang === 'py';
+                  const isBot = !isUser && message.role !== 'system';
+                  
+                  // Port configs are loaded from database on mount
+                  const hasConfig = portConfigs.has(codeKey);
+
                   return (
-                    <button
-                      key={`${consoleIdx}-${codeIdx}`}
-                      className="code-btn"
-                      onClick={() => openCodeModal(codeText, lang)}
-                    >
-                      VIEW CODE SNIPPET
-                    </button>
+                    <div key={`${consoleIdx}-${codeIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <button
+                        className="code-btn"
+                        onClick={() => openCodeModal(codeText, lang)}
+                      >
+                        VIEW CODE SNIPPET
+                      </button>
+                      {isPython && isBot && hasConfig && (
+                        <button
+                          className="port-config-btn"
+                          onClick={() => handleViewPortConfig(codeKey)}
+                        >
+                          VIEW PORT CONFIGURATION
+                        </button>
+                      )}
+                    </div>
                   );
                 }
                 return null;
@@ -577,6 +715,13 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         visible={budgetErrorVisible}
         onClose={() => setBudgetErrorVisible(false)}
         accessLevel={userAccessLevel}
+      />
+
+      {/* Port Configuration Modal */}
+      <PortConfigModal
+        isOpen={portConfigModalOpen}
+        portConfig={currentPortConfig}
+        onClose={closePortConfigModal}
       />
     </div>
   );
