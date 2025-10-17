@@ -249,3 +249,132 @@ export const updateSessionName = async (sessionId, name) => {
   }
 };
 
+/**
+ * Get all conversations for a session
+ */
+export const getSessionConversations = async (sessionId) => {
+  try {
+    if (!sessionId) {
+      console.error('session_id is required');
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from(CONVERSATIONS_TABLE)
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('start_time', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching conversations:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error in getSessionConversations:', error);
+    return [];
+  }
+};
+
+/**
+ * Create a new conversation for a session
+ */
+export const createConversation = async (sessionId) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user || !sessionId) {
+      console.error('User and session_id are required');
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from(CONVERSATIONS_TABLE)
+      .insert({
+        user_id: user.id,
+        session_id: sessionId,
+        name: 'Unnamed Chat',
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating conversation:', error);
+      return null;
+    }
+
+    console.log(`✅ Created new conversation with ID: ${data.id}`);
+    return data;
+  } catch (error) {
+    console.error('Error in createConversation:', error);
+    return null;
+  }
+};
+
+/**
+ * Update conversation name
+ */
+export const updateConversationName = async (conversationId, name) => {
+  try {
+    if (!conversationId) {
+      console.error('conversation_id is required');
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from(CONVERSATIONS_TABLE)
+      .update({
+        name: name || 'Unnamed Chat',
+        last_updated: new Date().toISOString(),
+      })
+      .eq('id', conversationId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating conversation name:', error);
+      return null;
+    }
+
+    console.log(`✅ Successfully updated conversation name`);
+    return data;
+  } catch (error) {
+    console.error('Error in updateConversationName:', error);
+    return null;
+  }
+};
+
+/**
+ * Update session's current conversation
+ */
+export const updateSessionConversation = async (sessionId, conversationId) => {
+  try {
+    if (!sessionId || !conversationId) {
+      console.error('session_id and conversation_id are required');
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        current_conversation_id: conversationId,
+        last_updated: new Date().toISOString(),
+      })
+      .eq('id', sessionId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating session conversation:', error);
+      return null;
+    }
+
+    console.log(`✅ Successfully updated session's current conversation`);
+    return data;
+  } catch (error) {
+    console.error('Error in updateSessionConversation:', error);
+    return null;
+  }
+};
+

@@ -22,6 +22,7 @@ import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
 import BudgetErrorModal from './BudgetErrorModal';
 import ChatConfiguration from './ChatConfiguration';
+import ChatTabs from './ChatTabs';
 import './ChatPanel.css';
 
 // Configure marked for better markdown rendering
@@ -31,7 +32,16 @@ marked.setOptions({
 });
 
 const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
-  const { activeSession, conversationHistory, getSystemPriming } = useSession();
+  const { 
+    activeSession, 
+    conversationHistory, 
+    conversations,
+    currentConversationId,
+    getSystemPriming,
+    switchConversation,
+    createNewConversation,
+    updateConversationName,
+  } = useSession();
   
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
@@ -474,6 +484,16 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         onAttachDocumentationChange={setAttachDocumentation}
         streamingModels={STREAMING_MODELS}
       />
+
+      {activeSession && conversations.length > 0 && (
+        <ChatTabs
+          conversations={conversations}
+          currentConversationId={currentConversationId}
+          onSwitchConversation={switchConversation}
+          onCreateConversation={createNewConversation}
+          onRenameConversation={updateConversationName}
+        />
+      )}
 
       <div className="chat-body" ref={chatBodyRef}>
         <div className="chat-disclaimer">

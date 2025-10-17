@@ -8,6 +8,10 @@ import {
   getUserSessions,
   createNewSession,
   updateSessionName as updateSessionNameService,
+  getSessionConversations,
+  createConversation,
+  updateConversationName as updateConversationNameService,
+  updateSessionConversation,
 } from '../services/sessionManager';
 import {
   getConversationHistory,
@@ -21,6 +25,8 @@ const SessionContext = createContext();
 export const SessionProvider = ({ children }) => {
   const [activeSession, setActiveSession] = useState(null);
   const [conversationHistory, setConversationHistory] = useState([]);
+  const [conversations, setConversations] = useState([]);
+  const [currentConversationId, setCurrentConversationId] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -38,6 +44,25 @@ export const SessionProvider = ({ children }) => {
       return [];
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  /**
+   * Load conversations for the current session
+   */
+  const loadConversations = useCallback(async (sessionId) => {
+    if (!sessionId) {
+      setConversations([]);
+      return [];
+    }
+    
+    try {
+      const sessionConversations = await getSessionConversations(sessionId);
+      setConversations(sessionConversations);
+      return sessionConversations;
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+      return [];
     }
   }, []);
 
@@ -79,10 +104,15 @@ export const SessionProvider = ({ children }) => {
         if (session.current_conversation_id) {
           const history = await getConversationHistory(session.current_conversation_id);
           setConversationHistory(history);
+          setCurrentConversationId(session.current_conversation_id);
         }
       }
 
       setActiveSession(session);
+      
+      // Load all conversations for this session
+      await loadConversations(session.id);
+      
       console.log(`✅ Active session set to: ${session.id}`);
       return true;
     } catch (error) {
@@ -91,7 +121,7 @@ export const SessionProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [loadSessions]);
+  }, [loadSessions, loadConversations]);
 
   /**
    * Get the initial system priming message for building conversation
@@ -129,9 +159,91 @@ export const SessionProvider = ({ children }) => {
     }
   }, [activeSession, loadSessions]);
 
+  /**
+   * Switch to a different conversation within the current session
+   */
+  const switchConversation = useCallback(async (conversationId) => {
+    if (!activeSession) {
+      console.error('No active session');
+      return false;
+    }
+
+    try {
+      // Load conversation history
+      const history = await getConversationHistory(conversationId);
+      setConversationHistory(history);
+      setCurrentConversationId(conversationId);
+
+      // Update session's current conversation
+      const updatedSession = await updateSessionConversation(activeSession.id, conversationId);
+      if (updatedSession) {
+        setActiveSession(updatedSession);
+      }
+
+      console.log(`✅ Switched to conversation ${conversationId}`);
+      return true;
+    } catch (error) {
+      console.error('Error switching conversation:', error);
+      return false;
+    }
+  }, [activeSession]);
+
+  /**
+   * Create a new conversation in the current session
+   */
+  const createNewConversation = useCallback(async () => {
+    if (!activeSession) {
+      console.error('No active session');
+      return null;
+    }
+
+    try {
+      const newConversation = await createConversation(activeSession.id);
+      if (newConversation) {
+        // Reload conversations list
+        await loadConversations(activeSession.id);
+        
+        // Switch to the new conversation
+        await switchConversation(newConversation.id);
+        
+        return newConversation;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      return null;
+    }
+  }, [activeSession, loadConversations, switchConversation]);
+
+  /**
+   * Rename a conversation
+   */
+  const updateConversationName = useCallback(async (conversationId, name) => {
+    if (!activeSession) {
+      console.error('No active session');
+      return false;
+    }
+
+    try {
+      const updatedConversation = await updateConversationNameService(conversationId, name);
+      if (updatedConversation) {
+        // Reload conversations list to reflect the change
+        await loadConversations(activeSession.id);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error updating conversation name:', error);
+      return false;
+    }
+  }, [activeSession, loadConversations]);
+
+  
   const value = {
     activeSession,
     conversationHistory,
+    conversations,
+    currentConversationId,
     sessions,
     loading,
     loadSessions,
@@ -139,6 +251,10 @@ export const SessionProvider = ({ children }) => {
     getSystemPriming,
     clearConversation,
     updateSessionName,
+    switchConversation,
+    createNewConversation,
+    updateConversationName,
+    loadConversations
   };
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
