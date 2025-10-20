@@ -85,7 +85,10 @@ const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, o
                 onClick={handleNameClick}
                 title="Click to rename session"
               >
-                {activeSession.name || 'Unnamed Session'}
+                <span>{activeSession.name || 'Unnamed Session'}</span>
+                <span className={`topbar-firmware-badge firmware-${activeSession.firmware_version || '3'}`}>
+                  {activeSession.firmware_version || '3'}
+                </span>
               </div>
             )}
           </div>

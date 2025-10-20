@@ -96,9 +96,9 @@ function AppContent() {
     };
   }, [user, activeSession]);
 
-  const handleSessionSelect = async (sessionId) => {
+  const handleSessionSelect = async (sessionId, firmwareVersion) => {
     setShowSessionModal(false);
-    await setActiveSessionById(sessionId);
+    await setActiveSessionById(sessionId, firmwareVersion);
   };
 
   const handleReplaceCode = async (newCode) => {

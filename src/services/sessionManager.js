@@ -46,7 +46,7 @@ export const getUserSessions = async () => {
 /**
  * Create a new session with associated conversation, code, and console records
  */
-export const createNewSession = async () => {
+export const createNewSession = async (firmwareVersion = '3') => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     
@@ -60,7 +60,10 @@ export const createNewSession = async () => {
     // Step 1: Create placeholder session to get ID
     const { data: placeholderSession, error: placeholderError } = await supabase
       .from(SESSIONS_TABLE)
-      .insert({ user_id: user.id })
+      .insert({ 
+        user_id: user.id,
+        firmware_version: firmwareVersion 
+      })
       .select()
       .single();
 
@@ -572,6 +575,67 @@ export const getCodeSnapshots = async (codeId) => {
   } catch (error) {
     console.error('Error in getCodeSnapshots:', error);
     return [];
+  }
+};
+
+/**
+ * Get firmware version for a session
+ */
+export const getFirmwareVersion = async (sessionId) => {
+  try {
+    if (!sessionId) {
+      console.error('session_id is required');
+      return '3'; // Default to SPIKE 3
+    }
+
+    const { data, error } = await supabase
+      .from(SESSIONS_TABLE)
+      .select('firmware_version')
+      .eq('id', sessionId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching firmware version:', error);
+      return '3'; // Default to SPIKE 3
+    }
+
+    return data?.firmware_version || '3';
+  } catch (error) {
+    console.error('Error in getFirmwareVersion:', error);
+    return '3'; // Default to SPIKE 3
+  }
+};
+
+/**
+ * Update session's firmware version
+ */
+export const updateFirmwareVersion = async (sessionId, version) => {
+  try {
+    if (!sessionId) {
+      console.error('session_id is required');
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        firmware_version: version,
+        last_updated: new Date().toISOString(),
+      })
+      .eq('id', sessionId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating firmware version:', error);
+      return null;
+    }
+
+    console.log(`✅ Successfully updated firmware version to ${version}`);
+    return data;
+  } catch (error) {
+    console.error('Error in updateFirmwareVersion:', error);
+    return null;
   }
 };
 

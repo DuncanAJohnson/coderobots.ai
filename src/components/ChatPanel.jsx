@@ -17,7 +17,8 @@ import {
   intermediatePrompt,
   experiencedPrompt,
 } from '../prompts/codingLevels';
-import { spikeDocumentation } from '../prompts/spike_documentation';
+import { spike3Documentation } from '../prompts/spike_3_documentation';
+import { spike2Documentation } from '../prompts/spike_2_documentation';
 import { analyzePortConfiguration } from '../utils/portConfigStream';
 import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
@@ -39,6 +40,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     conversationHistory, 
     conversations,
     currentConversationId,
+    firmwareVersion,
     getSystemPriming,
     switchConversation,
     createNewConversation,
@@ -264,12 +266,19 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       content: getSystemPriming(),
     });
 
-    // Add SPIKE documentation if checkbox is checked
+    // Add SPIKE documentation if checkbox is checked and firmware version is specified
     if (attachDocumentation) {
-      conversation.push({
-        role: 'system',
-        content: spikeDocumentation,
-      });
+      if (firmwareVersion === '3') {
+        conversation.push({
+          role: 'system',
+          content: spike3Documentation,
+        });
+      } else if (firmwareVersion === '2') {
+        conversation.push({
+          role: 'system',
+          content: spike2Documentation,
+        });
+      }
     }
 
     // Add coding level instructions

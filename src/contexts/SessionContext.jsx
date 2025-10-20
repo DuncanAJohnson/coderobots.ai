@@ -38,6 +38,7 @@ export const SessionProvider = ({ children }) => {
   const [currentCodeContent, setCurrentCodeContent] = useState('# Start your project here!\n');
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [firmwareVersion, setFirmwareVersion] = useState('3');
   
   // Debounce timer for live code saving
   const saveDebounceTimer = useRef(null);
@@ -100,7 +101,7 @@ export const SessionProvider = ({ children }) => {
   /**
    * Switch to a specific session or create a new one
    */
-  const setActiveSessionById = useCallback(async (sessionId) => {
+  const setActiveSessionById = useCallback(async (sessionId, newFirmwareVersion = '3') => {
     setLoading(true);
     try {
       // Save current code before switching sessions
@@ -112,8 +113,8 @@ export const SessionProvider = ({ children }) => {
       let session;
 
       if (sessionId === 'new') {
-        // Create new session
-        session = await createNewSession();
+        // Create new session with firmware version
+        session = await createNewSession(newFirmwareVersion);
         if (!session) {
           console.error('Failed to create new session');
           return false;
@@ -146,6 +147,9 @@ export const SessionProvider = ({ children }) => {
       }
 
       setActiveSession(session);
+      
+      // Set firmware version from session
+      setFirmwareVersion(session.firmware_version || '3');
       
       // Load all conversations for this session
       await loadConversations(session.id);
@@ -451,6 +455,7 @@ export const SessionProvider = ({ children }) => {
     currentCodeContent,
     sessions,
     loading,
+    firmwareVersion,
     loadSessions,
     setActiveSessionById,
     getSystemPriming,
