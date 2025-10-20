@@ -156,18 +156,19 @@
   cursor: not-allowed;
 }
 
-.code-tab-port-config.loading {
-  background: #999;
+.code-tab-port-config-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .spinner-small {
   display: inline-block;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border: 2px solid rgba(255, 255, 255, 0.3);
   border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin .8s linear infinite;
+  animation: spin .8s linear infinite;  
 }
 
 @keyframes spin {

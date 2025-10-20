@@ -126,16 +126,16 @@ const CodeTabs = ({
 
       {onViewPortConfig && (
         <button 
-          className={`code-tab-port-config ${isPortConfigLoading ? 'loading' : ''}`}
+          className="code-tab-port-config"
           onClick={onViewPortConfig} 
           disabled={isPortConfigLoading}
           aria-label="View port configuration"
         >
           {isPortConfigLoading ? (
-            <>
+            <div className="code-tab-port-config-loading">
               <span className="spinner-small"></span>
               <span>Analyzing...</span>
-            </>
+            </div>
           ) : (
             'View Port Configuration'
           )}
