@@ -321,7 +321,7 @@
 
 /* VIEW CODE button -------------------------- */
 .code-btn {
-    margin:.4rem 0;
+    margin:.2rem 0;
     background:#277227;
     color:#fff;
     border:none;
@@ -329,10 +329,11 @@
     border-radius:6px;
     cursor:pointer;
     font-size:.75rem;
+    max-width: 12rem;
 }
 
 .console-btn {
-    margin:.4rem 0;
+    margin:.2rem 0;
     background:#002E6D;
     color:#fff;
     border:none;
@@ -343,7 +344,7 @@
 }
 
 .port-config-btn {
-    margin:.4rem 0;
+    margin: 0.2rem 0;
     background:#7B1FA2;
     color:#fff;
     border:none;
@@ -355,6 +356,7 @@
     align-items: center;
     justify-content: center;
     gap: 0.3rem;
+    max-width: 12rem;
 }
 
 .port-config-btn:disabled {
