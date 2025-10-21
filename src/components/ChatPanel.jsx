@@ -166,9 +166,9 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     }
 
     // Add conversation history
-    conversationHistory.forEach(msg => {
+    messages.forEach(msg => {
       conversation.push({
-        role: msg.role,
+        role: msg.role === 'user' ? 'user' : 'assistant',
         content: msg.content,
       });
     });
