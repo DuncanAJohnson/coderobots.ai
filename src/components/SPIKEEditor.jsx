@@ -41,6 +41,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const replContainerRef = useRef(null);
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
+  const isLocalChangeRef = useRef(false);
 
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
@@ -50,14 +51,15 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
 
   // Update code editor when current code content changes (from session load or tab switch)
   useEffect(() => {
-    if (editorRef.current?.setCode) {
+    if (!isLocalChangeRef.current && editorRef.current?.setCode) {
       editorRef.current.setCode(currentCodeContent);
     }
+    isLocalChangeRef.current = false;
   }, [currentCodeContent]);
 
   // Handle code changes in the editor (local state only, no database save)
   const handleCodeChange = (newCode) => {
-    // Update local state only - no database save on every keystroke
+    isLocalChangeRef.current = true;
     updateCurrentCodeContent(newCode);
   };
 
