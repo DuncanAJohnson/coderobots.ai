@@ -320,7 +320,6 @@ slot_dir_name = "${slotStr}"
 code_to_write = ${escapedCode}
 program_dir = "program"
 target_file = "program.py"
-chunk_size = 100
 
 # Ensure we are in the root directory
 if (not os.getcwd() == '/flash'):
@@ -345,8 +344,7 @@ for filename in ['program.mpy', 'program.py']:
 
 # Write the new program file in chunks of chunk_size characters
 with open(target_file, "w") as f:
-    for i in range(0, len(code_to_write), chunk_size):
-        f.write(code_to_write[i:i+chunk_size])
+    f.write(code_to_write)
 
 # Try to return to the root directory
 os.chdir('/flash')
