@@ -4,6 +4,7 @@
  */
 
 import './ChatConfiguration.css';
+import { getAvailableModels, getModelConfig, getModelsByProvider, isStreamingModel } from '../config/models';
 
 const ChatConfiguration = ({ 
   codingLevel, 
@@ -14,6 +15,9 @@ const ChatConfiguration = ({
   onAttachDocumentationChange,
   streamingModels 
 }) => {
+  const availableModels = getAvailableModels();
+  const modelsByProvider = getModelsByProvider();
+  
   return (
     <div className="chat-configuration">
       <div className="config-left">
@@ -36,11 +40,21 @@ const ChatConfiguration = ({
           value={selectedModel}
           onChange={(e) => onModelChange(e.target.value)}
         >
-          <option value="gpt-5-nano">gpt-5-nano (streaming)</option>
-          <option value="gpt-5-mini">gpt-5-mini (full response)</option>
-          <option value="gpt-5">gpt-5 (full response)</option>
+          {Object.entries(modelsByProvider).map(([provider, models]) => (
+            <optgroup key={provider} label={provider.toUpperCase()}>
+              {models.map(model => {
+                const config = getModelConfig(model);
+                const streamingLabel = config?.streaming ? ' (streaming)' : ' (full response)';
+                return (
+                  <option key={model} value={model}>
+                    {model}{streamingLabel}
+                  </option>
+                );
+              })}
+            </optgroup>
+          ))}
         </select>
-        {!streamingModels.has(selectedModel) && (
+        {!isStreamingModel(selectedModel) && (
           <span style={{ marginLeft: '10px', fontSize: '0.85em', color: '#666' }}>
             ⏱️ This model waits for the full response
           </span>

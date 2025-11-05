@@ -1,53 +1,50 @@
 """
 Modal serverless function for analyzing SPIKE PRIME code and determining port configuration.
-No budget tracking - uses gpt-5-nano for fast, cheap analysis.
+Model-agnostic implementation supporting multiple providers.
 """
 
 import modal
 import json
 import os
+import sys
 from typing import AsyncIterator
+
+# Add /root to Python path so imports work
+sys.path.insert(0, "/root")
+
+from model_config import get_provider_for_model
 
 # Create Modal app
 app = modal.App("coderobots-port-config")
 
 # Define the image with dependencies
-image = modal.Image.debian_slim().pip_install(
-    "openai",
-    "fastapi[standard]"
+image = (
+    modal.Image.debian_slim()
+    .pip_install(
+        "openai",
+        "fastapi[standard]",
+        "aiohttp",
+    )
+    .copy_local_dir("modal_functions/providers", "/root/providers")
+    .copy_local_file("modal_functions/model_config.py", "/root/model_config.py")
 )
 
+# TODO: WHY IS THIS IN BOTH THIS FILE AND CHAT WITH BUDGET
+# CAN WE MAKE HELPERS
+def get_provider(provider_name: str):
+    """Get provider instance based on provider name."""
+    if provider_name == "openai":
+        from providers.openai_provider import OpenAIProvider
+        return OpenAIProvider()
+    elif provider_name == "skolegpt":
+        from providers.skolegpt_provider import SkoleGPTProvider
+        return SkoleGPTProvider()
+    else:
+        raise ValueError(f"Unknown provider: {provider_name}")
 
-@app.function(
-    image=image,
-    secrets=[
-        modal.Secret.from_name("openai-api-key"),
-    ],
-    timeout=60,  # 1 minute timeout
-)
-async def analyze_port_configuration(
-    code: str,
-    model: str = "gpt-5-nano",
-) -> str:
-    """
-    Analyze SPIKE PRIME Python code and return port configuration.
-    
-    Args:
-        code: Python code to analyze
-        model: OpenAI model to use (default: gpt-5-nano)
-    
-    Returns:
-        JSON string with port configuration
-    """
-    from openai import AsyncOpenAI
-    
-    # Initialize OpenAI client
-    openai_client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-    print(f"Analyzing code: {code}")
-    
-    # System prompt for port configuration analysis
-    system_prompt = """You are an expert at analyzing SPIKE PRIME Python code to determine which sensors and motors are connected to which ports.
+# System prompt for port configuration analysis
+SYSTEM_PROMPT = """You are an expert at analyzing SPIKE PRIME Python code to determine which sensors and motors are connected to which ports.
 
 Your task is to analyze the provided Python code and identify which component is connected to each port (A, B, C, D, E, F) on the SPIKE PRIME hub.
 
@@ -83,39 +80,43 @@ Example output format:
 }
 
 Now analyze the code and return the port configuration as JSON only."""
+
+
+@app.function(
+    image=image,
+    secrets=[
+        modal.Secret.from_name("openai-api-key"),
+        modal.Secret.from_name("skolegpt-credentials"),
+    ],
+    timeout=60,  # 1 minute timeout
+)
+async def analyze_port_configuration(
+    code: str,
+    model: str = "gpt-5-nano",
+) -> str:
+    """
+    Analyze SPIKE PRIME Python code and return port configuration.
+    
+    Args:
+        code: Python code to analyze
+        model: Model name to use (default: gpt-5-nano)
+    
+    Returns:
+        JSON string with port configuration
+    """
+    print(f"Analyzing code with model {model}: {code}")
     
     try:
-        # Build request for new Responses API
-        input_messages = [
-            {
-                "type": "message",
-                "role": "user",
-                "content": f"Analyze this SPIKE PRIME code and return the port configuration as JSON:\n\n```python\n{code}\n```"
-            }
-        ]
+        # Get provider for this model
+        provider_name = get_provider_for_model(model)
+        provider = get_provider(provider_name)
         
-        # Call OpenAI with new Responses API (non-streaming for simplicity)
-        response = await openai_client.responses.create(
+        # Analyze using provider
+        result_text = await provider.analyze_port_config(
+            code=code,
             model=model,
-            instructions=system_prompt,
-            input=input_messages,
-            max_output_tokens=500,
-            stream=False,
-            text={
-                "format": {
-                    "type": "json_object"
-                }
-            }
+            system_prompt=SYSTEM_PROMPT
         )
-        
-        # Extract the response text
-        result_text = ""
-        if hasattr(response, 'output') and response.output:
-            for item in response.output:
-                if hasattr(item, 'content') and item.content:
-                    for content_item in item.content:
-                        if hasattr(content_item, 'text'):
-                            result_text += content_item.text
         
         # Parse and validate the JSON
         port_config = json.loads(result_text)
@@ -151,6 +152,7 @@ Now analyze the code and return the port configuration as JSON only."""
     image=image,
     secrets=[
         modal.Secret.from_name("openai-api-key"),
+        modal.Secret.from_name("skolegpt-credentials"),
     ],
 )
 @modal.fastapi_endpoint(method="POST")

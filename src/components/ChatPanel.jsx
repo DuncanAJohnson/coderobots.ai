@@ -9,8 +9,9 @@ import DOMPurify from 'dompurify';
 import { useAuth } from '../contexts/AuthContext';
 import { useSession } from '../contexts/SessionContext';
 import { logMessage, logConsole, updateMessagePortConfigurations } from '../services/dataLogger';
-import { streamChatCompletion, streamChatCompletionWithBudget } from '../utils/openaiStream';
+import { streamChatCompletion, streamChatCompletionWithBudget } from '../utils/chatStream';
 import { getUserAccessLevel } from '../services/aiUsage';
+import { STREAMING_MODELS as STREAMING_MODELS_SET, isStreamingModel, getAvailableModels } from '../config/models';
 import { 
   LEVEL_INSTRUCTION_PREFIX,
   beginnerPrompt,
@@ -22,6 +23,10 @@ import { spike2Documentation } from '../prompts/spike_2_documentation';
 import { analyzePortConfiguration } from '../utils/portConfigStream';
 import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
+import BudgetErrorModal from './BudgetErrorModal';
+import PortConfigModal from './PortConfigModal';
+import ChatConfiguration from './ChatConfiguration';
+import ChatTabs from './ChatTabs';
 import './ChatPanel.css';
 
 // Configure marked for better markdown rendering
@@ -47,7 +52,9 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [codingLevel, setCodingLevel] = useState('beginner');
-  const [selectedModel, setSelectedModel] = useState('gpt-5-nano');
+  // Initialize selected model from available models
+  const availableModelsList = getAvailableModels();
+  const [selectedModel, setSelectedModel] = useState(availableModelsList.length > 0 ? availableModelsList[0] : 'gpt-5-nano');
   const [modelName, setModelName] = useState(import.meta.env.VITE_DEFAULT_MODEL || 'gpt-4');
   const [isStreaming, setIsStreaming] = useState(false);
   const [attachedContext, setAttachedContext] = useState({ includeCode: false, includeConsole: false });
@@ -63,8 +70,8 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const [portConfigModalOpen, setPortConfigModalOpen] = useState(false);
   const [currentPortConfig, setCurrentPortConfig] = useState(null);
 
-  // Models that support streaming
-  const STREAMING_MODELS = new Set(['gpt-5-nano']);
+  // Models that support streaming - use config
+  const streamingModelsSet = STREAMING_MODELS_SET;
 
   const chatBodyRef = useRef(null);
   const streamingMessageRef = useRef(null);
@@ -506,11 +513,27 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     closeConsoleModal();
   };
 
+  const handleViewPortConfig = (codeKey) => {
+    const config = portConfigs.get(codeKey);
+    if (config) {
+      setCurrentPortConfig(config);
+      setPortConfigModalOpen(true);
+    }
+  };
+
+  const closePortConfigModal = () => {
+    setPortConfigModalOpen(false);
+    setCurrentPortConfig(null);
+  };
+
   const renderMessage = (message, index) => {
     const isUser = message.role === 'user';
     const label = isUser ? 'User' : message.role === 'system' ? 'System' : 'AI Bot';
     const color = isUser ? '#fbe2d7' : message.role === 'system' ? '#d7e4fb' : '#d8f6d8';
     const align = isUser ? 'align-right' : 'align-left';
+
+    // Use messageId from database for consistent keys, fallback to index for display
+    const messageKey = message.messageId || index;
 
     // First split by console blocks (4 backticks)
     const consoleSegments = message.content.split(/````([\s\S]*?)````/g);
@@ -540,8 +563,14 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
                 if (codeIdx % 2 === 0) {
                   // Markdown text
                   if (codeSeg.trim()) {
-                    const html = DOMPurify.sanitize(marked.parse(codeSeg));
-                    return <div key={`${consoleIdx}-${codeIdx}`} dangerouslySetInnerHTML={{ __html: html }} />;
+                    const html = DOMPurify.sanitize(marked.parse(codeSeg, { async: false }));
+                    return (
+                      <div 
+                        key={`${consoleIdx}-${codeIdx}`} 
+                        className="markdown-content"
+                        dangerouslySetInnerHTML={{ __html: html }} 
+                      />
+                    );
                   }
                 } else {
                   // Code block
@@ -556,14 +585,33 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
                     }
                   }
 
+                  // Create unique key for this code snippet using messageId from database
+                  const codeKey = `msg-${messageKey}-${consoleIdx}-${codeIdx}`;
+                  
+                  // Check if this is Python code from a bot message
+                  const isPython = lang === 'python' || lang === 'py';
+                  const isBot = !isUser && message.role !== 'system';
+                  
+                  // Port configs are loaded from database on mount
+                  const hasConfig = portConfigs.has(codeKey);
+
                   return (
-                    <button
-                      key={`${consoleIdx}-${codeIdx}`}
-                      className="code-btn"
-                      onClick={() => openCodeModal(codeText, lang)}
-                    >
-                      VIEW CODE SNIPPET
-                    </button>
+                    <div key={`${consoleIdx}-${codeIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <button
+                        className="code-btn"
+                        onClick={() => openCodeModal(codeText, lang)}
+                      >
+                        VIEW CODE SNIPPET
+                      </button>
+                      {isPython && isBot && hasConfig && (
+                        <button
+                          className="port-config-btn"
+                          onClick={() => handleViewPortConfig(codeKey)}
+                        >
+                          VIEW PORT CONFIGURATION
+                        </button>
+                      )}
+                    </div>
                   );
                 }
                 return null;
@@ -584,7 +632,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         onModelChange={setSelectedModel}
         attachDocumentation={attachDocumentation}
         onAttachDocumentationChange={setAttachDocumentation}
-        streamingModels={STREAMING_MODELS}
+        streamingModels={streamingModelsSet}
       />
 
       {activeSession && conversations.length > 0 && (
@@ -605,7 +653,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         {isStreaming && (
           <div className="chat-spinner" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div className="loader"></div>
-            {!STREAMING_MODELS.has(selectedModel) && (
+            {!isStreamingModel(selectedModel) && (
               <div style={{ marginTop: '10px', fontSize: '0.9em', color: '#666' }}>
                 Waiting for full response from {selectedModel}...
               </div>
@@ -672,6 +720,20 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         consoleContent={currentConsoleContent}
         onClose={closeConsoleModal}
         onCopy={handleCopyConsole}
+      />
+
+      {/* Budget Error Modal */}
+      <BudgetErrorModal
+        visible={budgetErrorVisible}
+        onClose={() => setBudgetErrorVisible(false)}
+        accessLevel={userAccessLevel}
+      />
+
+      {/* Port Configuration Modal */}
+      <PortConfigModal
+        isOpen={portConfigModalOpen}
+        portConfig={currentPortConfig}
+        onClose={closePortConfigModal}
       />
     </div>
   );
