@@ -22,10 +22,6 @@ import { spike2Documentation } from '../prompts/spike_2_documentation';
 import { analyzePortConfiguration } from '../utils/portConfigStream';
 import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
-import BudgetErrorModal from './BudgetErrorModal';
-import PortConfigModal from './PortConfigModal';
-import ChatConfiguration from './ChatConfiguration';
-import ChatTabs from './ChatTabs';
 import './ChatPanel.css';
 
 // Configure marked for better markdown rendering
@@ -510,27 +506,11 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     closeConsoleModal();
   };
 
-  const handleViewPortConfig = (codeKey) => {
-    const config = portConfigs.get(codeKey);
-    if (config) {
-      setCurrentPortConfig(config);
-      setPortConfigModalOpen(true);
-    }
-  };
-
-  const closePortConfigModal = () => {
-    setPortConfigModalOpen(false);
-    setCurrentPortConfig(null);
-  };
-
   const renderMessage = (message, index) => {
     const isUser = message.role === 'user';
     const label = isUser ? 'User' : message.role === 'system' ? 'System' : 'AI Bot';
     const color = isUser ? '#fbe2d7' : message.role === 'system' ? '#d7e4fb' : '#d8f6d8';
     const align = isUser ? 'align-right' : 'align-left';
-
-    // Use messageId from database for consistent keys, fallback to index for display
-    const messageKey = message.messageId || index;
 
     // First split by console blocks (4 backticks)
     const consoleSegments = message.content.split(/````([\s\S]*?)````/g);
@@ -560,14 +540,8 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
                 if (codeIdx % 2 === 0) {
                   // Markdown text
                   if (codeSeg.trim()) {
-                    const html = DOMPurify.sanitize(marked.parse(codeSeg, { async: false }));
-                    return (
-                      <div 
-                        key={`${consoleIdx}-${codeIdx}`} 
-                        className="markdown-content"
-                        dangerouslySetInnerHTML={{ __html: html }} 
-                      />
-                    );
+                    const html = DOMPurify.sanitize(marked.parse(codeSeg));
+                    return <div key={`${consoleIdx}-${codeIdx}`} dangerouslySetInnerHTML={{ __html: html }} />;
                   }
                 } else {
                   // Code block
@@ -582,33 +556,14 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
                     }
                   }
 
-                  // Create unique key for this code snippet using messageId from database
-                  const codeKey = `msg-${messageKey}-${consoleIdx}-${codeIdx}`;
-                  
-                  // Check if this is Python code from a bot message
-                  const isPython = lang === 'python' || lang === 'py';
-                  const isBot = !isUser && message.role !== 'system';
-                  
-                  // Port configs are loaded from database on mount
-                  const hasConfig = portConfigs.has(codeKey);
-
                   return (
-                    <div key={`${consoleIdx}-${codeIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                      <button
-                        className="code-btn"
-                        onClick={() => openCodeModal(codeText, lang)}
-                      >
-                        VIEW CODE SNIPPET
-                      </button>
-                      {isPython && isBot && hasConfig && (
-                        <button
-                          className="port-config-btn"
-                          onClick={() => handleViewPortConfig(codeKey)}
-                        >
-                          VIEW PORT CONFIGURATION
-                        </button>
-                      )}
-                    </div>
+                    <button
+                      key={`${consoleIdx}-${codeIdx}`}
+                      className="code-btn"
+                      onClick={() => openCodeModal(codeText, lang)}
+                    >
+                      VIEW CODE SNIPPET
+                    </button>
                   );
                 }
                 return null;
@@ -717,20 +672,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         consoleContent={currentConsoleContent}
         onClose={closeConsoleModal}
         onCopy={handleCopyConsole}
-      />
-
-      {/* Budget Error Modal */}
-      <BudgetErrorModal
-        visible={budgetErrorVisible}
-        onClose={() => setBudgetErrorVisible(false)}
-        accessLevel={userAccessLevel}
-      />
-
-      {/* Port Configuration Modal */}
-      <PortConfigModal
-        isOpen={portConfigModalOpen}
-        portConfig={currentPortConfig}
-        onClose={closePortConfigModal}
       />
     </div>
   );

@@ -396,16 +396,16 @@ for filename in ['program.mpy', 'program.py']:
     except OSError:
         pass # File didn't exist, which is fine
 
-# Write the new program file
+# Write the new program file in chunks of chunk_size characters
 with open(target_file, "w") as f:
-    length = f.write(code_to_write)
+    f.write(code_to_write)
 
 # Try to return to the root directory
 os.chdir('/flash')
 `;
 
     try {
-      await board.paste(script);
+      await board.paste(script, { hidden: false });
       await board.reset();
       setMode('program-slot');
       board.terminal?.focus();
