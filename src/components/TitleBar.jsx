@@ -3,60 +3,12 @@
  * Main navigation bar with session management, debug, and about features
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import AboutModal from './AboutModal';
-import AIUsageModal from './AIUsageModal';
-import { signOut } from '../services/auth';
 import './TitleBar.css';
 
-const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, onUpdateSessionName }) => {
+const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession }) => {
   const [showAbout, setShowAbout] = useState(false);
-  const [showAIUsage, setShowAIUsage] = useState(false);
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [editedName, setEditedName] = useState('');
-  const inputRef = useRef(null);
-
-  useEffect(() => {
-    if (isEditingName && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [isEditingName]);
-
-  const handleNameClick = () => {
-    if (activeSession) {
-      setEditedName(activeSession.name || '');
-      setIsEditingName(true);
-    }
-  };
-
-  const handleNameSave = async () => {
-    if (activeSession && onUpdateSessionName) {
-      await onUpdateSessionName(activeSession.id, editedName.trim());
-    }
-    setIsEditingName(false);
-  };
-
-  const handleNameKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      handleNameSave();
-    } else if (e.key === 'Escape') {
-      setIsEditingName(false);
-    }
-  };
-
-  const handleNameBlur = () => {
-    handleNameSave();
-  };
-
-  const handleLogOut = async () => {
-    try {
-      await signOut();
-      // The auth state listener will handle navigation/cleanup
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
-  };
 
   return (
     <>
@@ -65,34 +17,6 @@ const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, o
           <span className="logo-text">Tufts CEEO</span>
         </div>
         <div className="topbar-title">EN1 AI Editor</div>
-        {activeSession && (
-          <div className="topbar-session-name">
-            {isEditingName ? (
-              <input
-                ref={inputRef}
-                type="text"
-                className="topbar-session-name-input"
-                value={editedName}
-                onChange={(e) => setEditedName(e.target.value)}
-                onKeyDown={handleNameKeyDown}
-                onBlur={handleNameBlur}
-                placeholder="Enter session name"
-                maxLength={100}
-              />
-            ) : (
-              <div 
-                className="topbar-session-name-display"
-                onClick={handleNameClick}
-                title="Click to rename session"
-              >
-                <span>{activeSession.name || 'Unnamed Session'}</span>
-                <span className={`topbar-firmware-badge firmware-${activeSession.firmware_version || '3'}`}>
-                  {activeSession.firmware_version || '3'}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
         <div className="topbar-actions">
           {activeSession && onSaveSession && (
             <button 
@@ -114,13 +38,6 @@ const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, o
           )}
           <button 
             className="topbar-button" 
-            onClick={() => setShowAIUsage(true)}
-            title="View AI usage statistics"
-          >
-            AI USAGE
-          </button>
-          <button 
-            className="topbar-button" 
             onClick={() => setShowAbout(true)}
             title="About this application"
           >
@@ -135,18 +52,10 @@ const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, o
               DEBUG
             </button>
           )}
-          <button 
-            className="topbar-button logout" 
-            onClick={handleLogOut}
-            title="Sign out of your account"
-          >
-            LOG OUT
-          </button>
         </div>
       </div>
 
       <AboutModal visible={showAbout} onClose={() => setShowAbout(false)} />
-      <AIUsageModal visible={showAIUsage} onClose={() => setShowAIUsage(false)} />
     </>
   );
 };

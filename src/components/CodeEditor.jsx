@@ -33,7 +33,7 @@ const CodeEditor = forwardRef(({ initialCode = '# Start your project here!\n', o
 
   return (
     <CodeMirror
-      defaultValue={initialCode}
+      value={initialCode}
       height="100%"
       extensions={[
         python(),

@@ -8,46 +8,25 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { useAuth } from '../contexts/AuthContext';
 import { useSession } from '../contexts/SessionContext';
-import { logMessage, logConsole, updateMessagePortConfigurations } from '../services/dataLogger';
-import { streamChatCompletion, streamChatCompletionWithBudget } from '../utils/openaiStream';
-import { getUserAccessLevel } from '../services/aiUsage';
+import { logMessage, logCode, logConsole } from '../services/dataLogger';
+import { streamChatCompletion } from '../utils/openaiStream';
 import { 
   LEVEL_INSTRUCTION_PREFIX,
   beginnerPrompt,
   intermediatePrompt,
   experiencedPrompt,
 } from '../prompts/codingLevels';
-import { spike3Documentation } from '../prompts/spike_3_documentation';
-import { spike2Documentation } from '../prompts/spike_2_documentation';
-import { analyzePortConfiguration } from '../utils/portConfigStream';
 import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
 import './ChatPanel.css';
 
-// Configure marked for better markdown rendering
-marked.setOptions({
-  breaks: true,
-  gfm: true,
-});
-
 const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
-  const { 
-    activeSession, 
-    conversationHistory, 
-    conversations,
-    currentConversationId,
-    firmwareVersion,
-    getSystemPriming,
-    switchConversation,
-    createNewConversation,
-    updateConversationName,
-    createSnapshot,
-  } = useSession();
+  const { isAdmin } = useAuth();
+  const { activeSession, conversationHistory, getSystemPriming } = useSession();
   
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [codingLevel, setCodingLevel] = useState('beginner');
-  const [selectedModel, setSelectedModel] = useState('gpt-5-nano');
   const [modelName, setModelName] = useState(import.meta.env.VITE_DEFAULT_MODEL || 'gpt-4');
   const [isStreaming, setIsStreaming] = useState(false);
   const [attachedContext, setAttachedContext] = useState({ includeCode: false, includeConsole: false });
@@ -56,15 +35,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const [consoleModalOpen, setConsoleModalOpen] = useState(false);
   const [currentConsoleContent, setCurrentConsoleContent] = useState('');
   const [consoleHasContent, setConsoleHasContent] = useState(false);
-  const [budgetErrorVisible, setBudgetErrorVisible] = useState(false);
-  const [userAccessLevel, setUserAccessLevel] = useState('standard');
-  const [attachDocumentation, setAttachDocumentation] = useState(true);
-  const [portConfigs, setPortConfigs] = useState(new Map());
-  const [portConfigModalOpen, setPortConfigModalOpen] = useState(false);
-  const [currentPortConfig, setCurrentPortConfig] = useState(null);
-
-  // Models that support streaming
-  const STREAMING_MODELS = new Set(['gpt-5-nano']);
 
   const chatBodyRef = useRef(null);
   const streamingMessageRef = useRef(null);
@@ -78,24 +48,10 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         .map(msg => ({
           role: msg.role === 'user' ? 'user' : 'bot',
           content: msg.content,
-          messageId: msg.id, // Store message ID for port config lookup
         }));
       setMessages(displayMessages);
-      
-      // Load port configurations from database
-      const newPortConfigs = new Map();
-      conversationHistory.forEach((msg) => {
-        if (msg.port_configurations && typeof msg.port_configurations === 'object') {
-          // Restore port configurations from database
-          Object.entries(msg.port_configurations).forEach(([key, config]) => {
-            newPortConfigs.set(key, config);
-          });
-        }
-      });
-      setPortConfigs(newPortConfigs);
     } else {
       setMessages([]);
-      setPortConfigs(new Map());
     }
   }, [conversationHistory]);
 
@@ -114,19 +70,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     };
     checkConsole();
   }, [getConsoleContent]);
-
-  // Fetch user access level
-  useEffect(() => {
-    const fetchAccessLevel = async () => {
-      try {
-        const level = await getUserAccessLevel();
-        setUserAccessLevel(level);
-      } catch (err) {
-        console.error('Error fetching access level:', err);
-      }
-    };
-    fetchAccessLevel();
-  }, []);
 
   const scrollToBottom = () => {
     if (chatBodyRef.current) {
@@ -149,50 +92,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     }
   };
 
-  /**
-   * Extract Python code snippets from message content
-   * Returns array of { code, key } objects
-   * @param {string} content - The message content
-   * @param {string} messageId - The database message ID (used for consistent keys)
-   */
-  const extractPythonSnippets = (content, messageId) => {
-    const snippets = [];
-    
-    // Split by console blocks first (4 backticks)
-    const consoleSegments = content.split(/````([\s\S]*?)````/g);
-    
-    consoleSegments.forEach((consoleSeg, consoleIdx) => {
-      if (consoleIdx % 2 === 0) {
-        // Not a console block, check for code blocks (3 backticks)
-        const codeBlocks = consoleSeg.split(/```([\s\S]*?)```/g);
-        
-        for (let i = 1; i < codeBlocks.length; i += 2) {
-          const block = codeBlocks[i];
-          let codeText = block;
-          let lang = '';
-          
-          const firstNL = block.indexOf('\n');
-          if (firstNL !== -1) {
-            const firstLine = block.slice(0, firstNL).trim();
-            if (/^[a-zA-Z0-9+#-]+$/.test(firstLine)) {
-              lang = firstLine;
-              codeText = block.slice(firstNL + 1);
-            }
-          }
-          
-          const isPython = lang === 'python' || lang === 'py';
-          if (isPython && codeText.trim()) {
-            // Use messageId and match the rendering key format
-            const key = `msg-${messageId}-${consoleIdx}-${i}`;
-            snippets.push({ code: codeText, key });
-          }
-        }
-      }
-    });
-    
-    return snippets;
-  };
-
   const handleSendMessage = async () => {
     if (!activeSession) {
       alert('No active session. Please select or create a session first.');
@@ -205,12 +104,9 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     }
 
     // Fetch context at send time
-    let codeContextId = null;
     const finalContext = { code: null, console: null };
     if (attachedContext.includeCode && getCodeContent) {
       finalContext.code = await getCodeContent();
-      // Create snapshot when code is added to AI context
-      codeContextId = await createSnapshot('chat_context');
     }
     if (attachedContext.includeConsole && getConsoleContent) {
       finalContext.console = await getConsoleContent();
@@ -235,8 +131,12 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     // Log context to database
     const sessionId = activeSession.id;
     const conversationId = activeSession.current_conversation_id;
+    let codeContextId = null;
     let consoleContextId = null;
 
+    if (finalContext.code && finalContext.code.trim()) {
+      codeContextId = await logCode(finalContext.code, sessionId, 'chat_context');
+    }
     if (finalContext.console && finalContext.console.trim()) {
       consoleContextId = await logConsole(finalContext.console, sessionId, 'chat_context');
     }
@@ -261,21 +161,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       role: 'system',
       content: getSystemPriming(),
     });
-
-    // Add SPIKE documentation if checkbox is checked and firmware version is specified
-    if (attachDocumentation) {
-      if (firmwareVersion === '3') {
-        conversation.push({
-          role: 'system',
-          content: spike3Documentation,
-        });
-      } else if (firmwareVersion === '2') {
-        conversation.push({
-          role: 'system',
-          content: spike2Documentation,
-        });
-      }
-    }
 
     // Add coding level instructions
     const levelInstructions = getLevelPrompt(codingLevel);
@@ -317,41 +202,29 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
     try {
       let fullResponse = '';
-      let budgetStatus = null;
-      let usageData = null;
+      let promptTokens = 0;
+      let completionTokens = 0;
       let isFirstChunk = true;
 
-      // Determine which model to use
-      const actualModel = selectedModel;
-
-      for await (const event of streamChatCompletionWithBudget(conversation, actualModel)) {
-        if (event.type === 'content') {
-          fullResponse += event.content;
-          streamingMessageRef.current = fullResponse;
-          
-          if (isFirstChunk) {
-            // Add bot message only when first chunk arrives
-            isFirstChunk = false;
-            setMessages(prev => [...prev, { role: 'bot', content: fullResponse, streaming: true }]);
-          } else {
-            // Update last message
-            setMessages(prev => {
-              const newMessages = [...prev];
-              newMessages[newMessages.length - 1] = {
-                role: 'bot',
-                content: fullResponse,
-                streaming: true,
-              };
-              return newMessages;
-            });
-          }
-        } else if (event.type === 'usage_logged') {
-          // Capture usage data from the usage_logged event
-          usageData = event.usage;
-        } else if (event.type === 'budget_status') {
-          // Legacy support for budget_status events
-          budgetStatus = event;
-          usageData = event.usage;
+      for await (const chunk of streamChatCompletion(conversation, modelName)) {
+        fullResponse += chunk;
+        streamingMessageRef.current = fullResponse;
+        
+        if (isFirstChunk) {
+          // Add bot message only when first chunk arrives
+          isFirstChunk = false;
+          setMessages(prev => [...prev, { role: 'bot', content: fullResponse, streaming: true }]);
+        } else {
+          // Update last message
+          setMessages(prev => {
+            const newMessages = [...prev];
+            newMessages[newMessages.length - 1] = {
+              role: 'bot',
+              content: fullResponse,
+              streaming: true,
+            };
+            return newMessages;
+          });
         }
       }
 
@@ -366,87 +239,28 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         return newMessages;
       });
 
-      // Log assistant message first to get the message ID
-      const loggedMessage = await logMessage({
+      // Log assistant message
+      await logMessage({
         conversation_id: conversationId,
         role: 'assistant',
         content: fullResponse,
         coding_level: codingLevel,
-        ai_model: actualModel,
-        prompt_tokens: usageData?.input_tokens || 0,
-        completion_tokens: usageData?.output_tokens || 0,
+        ai_model: modelName,
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
       });
-
-      // Extract Python code snippets and analyze port configurations
-      if (loggedMessage && loggedMessage.id) {
-        const pythonSnippets = extractPythonSnippets(fullResponse, loggedMessage.id);
-        const portConfigurationsForDb = {};
-
-        if (pythonSnippets.length > 0) {
-          // Analyze all Python snippets
-          for (const snippet of pythonSnippets) {
-            try {
-              const config = await analyzePortConfiguration(snippet.code);
-              portConfigurationsForDb[snippet.key] = config;
-              
-              // Update local state immediately
-              setPortConfigs(prev => {
-                const newMap = new Map(prev);
-                newMap.set(snippet.key, config);
-                return newMap;
-              });
-            } catch (error) {
-              console.error(`Error analyzing port configuration for ${snippet.key}:`, error);
-            }
-          }
-
-          // Update the message with port configurations
-          if (Object.keys(portConfigurationsForDb).length > 0) {
-            await updateMessagePortConfigurations(loggedMessage.id, portConfigurationsForDb);
-          }
-        }
-
-        // Update the message in state with the ID
-        setMessages(prev => {
-          const newMessages = [...prev];
-          newMessages[newMessages.length - 1] = {
-            ...newMessages[newMessages.length - 1],
-            messageId: loggedMessage.id,
-          };
-          return newMessages;
-        });
-      }
-
-      // Check budget status and show modal if budget exceeded
-      if (budgetStatus && !budgetStatus.has_budget) {
-        setBudgetErrorVisible(true);
-      }
 
     } catch (error) {
       console.error('Streaming error:', error);
-      
-      // Check if this is a budget error
-      const isBudgetError = error.message && error.message.includes('exceeded their budget');
-      
-      if (isBudgetError) {
-        // Show budget error modal, don't add any bot message
-        setBudgetErrorVisible(true);
-      } else {
-        // For other errors, show error message only if we started streaming
-        if (!isFirstChunk) {
-          // We added a bot message, update it with the error
-          setMessages(prev => {
-            const newMessages = [...prev];
-            newMessages[newMessages.length - 1] = {
-              role: 'bot',
-              content: `Error: ${error.message}`,
-              streaming: false,
-            };
-            return newMessages;
-          });
-        }
-        // If we didn't start streaming yet, don't add any error message
-      }
+      setMessages(prev => {
+        const newMessages = [...prev];
+        newMessages[newMessages.length - 1] = {
+          role: 'bot',
+          content: `Error: ${error.message}`,
+          streaming: false,
+        };
+        return newMessages;
+      });
     } finally {
       setIsStreaming(false);
       streamingMessageRef.current = null;
@@ -577,24 +391,31 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
   return (
     <div className="chat-panel">
-      <ChatConfiguration
-        codingLevel={codingLevel}
-        onCodingLevelChange={setCodingLevel}
-        selectedModel={selectedModel}
-        onModelChange={setSelectedModel}
-        attachDocumentation={attachDocumentation}
-        onAttachDocumentationChange={setAttachDocumentation}
-        streamingModels={STREAMING_MODELS}
-      />
+      <div className="control-group">
+        <label htmlFor="coding-level-selector">Coding Level:</label>
+        <select
+          id="coding-level-selector"
+          className="chat-level-selector"
+          value={codingLevel}
+          onChange={(e) => setCodingLevel(e.target.value)}
+        >
+          <option value="beginner">Beginner</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="experienced">Experienced</option>
+        </select>
+      </div>
 
-      {activeSession && conversations.length > 0 && (
-        <ChatTabs
-          conversations={conversations}
-          currentConversationId={currentConversationId}
-          onSwitchConversation={switchConversation}
-          onCreateConversation={createNewConversation}
-          onRenameConversation={updateConversationName}
-        />
+      {isAdmin && (
+        <div className="admin-controls">
+          <label htmlFor="admin-model-input">Model Name:</label>
+          <input
+            type="text"
+            id="admin-model-input"
+            value={modelName}
+            onChange={(e) => setModelName(e.target.value)}
+          />
+          <button onClick={handleModelUpdate}>Update</button>
+        </div>
       )}
 
       <div className="chat-body" ref={chatBodyRef}>
@@ -603,13 +424,8 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         </div>
         {messages.map((msg, idx) => renderMessage(msg, idx))}
         {isStreaming && (
-          <div className="chat-spinner" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div className="chat-spinner" style={{ display: 'flex' }}>
             <div className="loader"></div>
-            {!STREAMING_MODELS.has(selectedModel) && (
-              <div style={{ marginTop: '10px', fontSize: '0.9em', color: '#666' }}>
-                Waiting for full response from {selectedModel}...
-              </div>
-            )}
           </div>
         )}
       </div>

@@ -1,39 +1,21 @@
 import { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import Board from '../utils/microRepl.js';
-import { STOP_CODE_SPIKE_2, STOP_CODE_SPIKE_3 } from '../utils/stopSpike.js';
+import { STOP_CODE } from '../utils/stopSpike.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
-import CodeTabs from './CodeTabs.jsx';
-import PortConfigModal from './PortConfigModal.jsx';
-import { useSession } from '../contexts/SessionContext';
-import { logConsole, logInteraction } from '../services/dataLogger';
-import { analyzePortConfiguration } from '../utils/portConfigStream';
+import { logCode, logConsole, logInteraction } from '../services/dataLogger';
 import './SPIKEEditor.css';
 
 const FIFO_SIZE = 10000;
 
 
-const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
+const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
   const [connected, setConnected] = useState(false);
   const [mode, setMode] = useState('disconnected');
+  const [code, setCode] = useState('# Start your project here!\n');
   const [isRunning, setIsRunning] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(0);
   const [buffer, setBuffer] = useState('');
-  const [portConfigModalOpen, setPortConfigModalOpen] = useState(false);
-  const [currentPortConfig, setCurrentPortConfig] = useState(null);
-  const [isPortConfigLoading, setIsPortConfigLoading] = useState(false);
-
-  const { 
-    codeRecords, 
-    currentCodeId, 
-    currentCodeContent,
-    firmwareVersion,
-    switchCode, 
-    createNewCode, 
-    updateCodeName,
-    updateCurrentCodeContent,
-    createSnapshot
-  } = useSession();
 
   const editorRef = useRef(null);
   const terminalRef = useRef(null);
@@ -41,27 +23,25 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const replContainerRef = useRef(null);
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
-  const isLocalChangeRef = useRef(false);
 
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
-    getCode: () => editorRef.current?.getCode() || currentCodeContent,
+    getCode: () => editorRef.current?.getCode() || code,
     getBuffer: () => buffer,
+    setCode: (newCode) => {
+      setCode(newCode);
+      if (editorRef.current?.setCode) {
+        editorRef.current.setCode(newCode);
+      }
+    },
   }));
 
-  // Update code editor when current code content changes (from session load or tab switch)
+  // Update code when initialCode prop changes (from session load)
   useEffect(() => {
-    if (!isLocalChangeRef.current && editorRef.current?.setCode) {
-      editorRef.current.setCode(currentCodeContent);
+    if (initialCode && initialCode !== code) {
+      setCode(initialCode);
     }
-    isLocalChangeRef.current = false;
-  }, [currentCodeContent]);
-
-  // Handle code changes in the editor (local state only, no database save)
-  const handleCodeChange = (newCode) => {
-    isLocalChangeRef.current = true;
-    updateCurrentCodeContent(newCode);
-  };
+  }, [initialCode]);
 
   // Initialize board on mount
   useEffect(() => {
@@ -203,14 +183,12 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     const board = boardRef.current;
     if (!board || !connected) return;
 
-    const codeToRun = editorRef.current?.getCode() || currentCodeContent;
-    
-    // Create snapshot before running
-    await createSnapshot('run_device');
+    const currentCode = editorRef.current?.getCode() || code;
     
     // Log interaction and code before running
     if (sessionId) {
       await logInteraction('run_device', sessionId);
+      await logCode(currentCode, sessionId, 'run_device');
     }
     
     // Stop any running code first
@@ -221,7 +199,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
 
     setIsRunning(true);
     try {
-      await board.paste(codeToRun, { hidden: false });
+      await board.paste(currentCode, { hidden: false });
       board.terminal?.focus();
     } catch (error) {
       console.error('Run failed:', error);
@@ -243,13 +221,9 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     // Give a moment for buffer to update
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    // Stop motors based on firmware version
+    // Stop motors
     try {
-      if (firmwareVersion === '2') {
-        await board.eval(STOP_CODE_SPIKE_2, { hidden: true });
-      } else if (firmwareVersion === '3') {
-        await board.eval(STOP_CODE_SPIKE_3, { hidden: true });
-      }
+      await board.eval(STOP_CODE, { hidden: true });
     } catch (error) {
       console.error('Failed to stop motors:', error);
     }
@@ -315,32 +289,6 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     board.terminal?.focus();
   };
 
-  const handleViewPortConfig = async () => {
-    const codeToAnalyze = editorRef.current?.getCode() || currentCodeContent;
-    
-    if (!codeToAnalyze.trim()) {
-      alert('No code to analyze. Please write some code first.');
-      return;
-    }
-
-    setIsPortConfigLoading(true);
-
-    try {
-      const config = await analyzePortConfiguration(codeToAnalyze);
-      setCurrentPortConfig(config);
-      setPortConfigModalOpen(true);
-    } catch (error) {
-      console.error('Error analyzing port configuration:', error);
-      alert('Failed to analyze port configuration. Please try again.');
-    } finally {
-      setIsPortConfigLoading(false);
-    }
-  };
-
-  const closePortConfigModal = () => {
-    setPortConfigModalOpen(false);
-  };
-
   const handleSaveToSlot = async () => {
     const board = boardRef.current;
     if (!board || !connected) {
@@ -348,14 +296,12 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
       return;
     }
 
-    const codeToSave = editorRef.current?.getCode() || currentCodeContent;
-    
-    // Create snapshot before saving to slot
-    await createSnapshot(`save_to_slot_${selectedSlot}`);
+    const currentCode = editorRef.current?.getCode() || code;
     
     // Log interaction and code before saving to slot
     if (sessionId) {
       await logInteraction(`save_to_slot_${selectedSlot}`, sessionId);
+      await logCode(currentCode, sessionId, 'save_to_slot');
     }
     
     const slotStr = String(selectedSlot).padStart(2, '0');
@@ -363,7 +309,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     console.log(`Saving code to SPIKE program slot ${selectedSlot}...`);
 
     // Escape the code content to be a valid Python string literal
-    const escapedCode = JSON.stringify(codeToSave);
+    const escapedCode = JSON.stringify(currentCode);
 
     // Construct the Python script to save to the slot
     const script = `
@@ -417,22 +363,13 @@ os.chdir('/flash')
 
   return (
     <div className="spike-editor">
-      <CodeTabs
-        codeRecords={codeRecords}
-        currentCodeId={currentCodeId}
-        onSwitchCode={switchCode}
-        onCreateCode={createNewCode}
-        onRenameCode={updateCodeName}
-        onViewPortConfig={handleViewPortConfig}
-        isPortConfigLoading={isPortConfigLoading}
-      />
       <div className="parent" ref={containerRef}>
         <div className="child top-child">
           <div className="editor-wrapper">
             <CodeEditor
               ref={editorRef}
-              initialCode={currentCodeContent}
-              onChange={handleCodeChange}
+              initialCode={code}
+              onChange={setCode}
             />
           </div>
         </div>
@@ -459,13 +396,6 @@ os.chdir('/flash')
           </div>
         </div>
       </div>
-
-      {/* Port Configuration Modal */}
-      <PortConfigModal
-        isOpen={portConfigModalOpen}
-        portConfig={currentPortConfig}
-        onClose={closePortConfigModal}
-      />
     </div>
   );
 });

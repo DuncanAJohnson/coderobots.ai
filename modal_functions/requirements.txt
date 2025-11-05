@@ -1,5 +1,2 @@
 openai>=1.0.0
-fastapi[standard]
-supabase
-pytz
 
