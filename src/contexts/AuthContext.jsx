@@ -14,6 +14,7 @@ import {
   isEmailAuthorized,
   isAdmin as checkIsAdmin,
   isShowcaseMode,
+  ensureAccessLevel,
 } from '../services/auth';
 
 const AuthContext = createContext();
@@ -27,19 +28,22 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // Check active session on mount
-    getSession().then((session) => {
+    getSession().then(async (session) => {
       if (session?.user) {
         const email = session.user.email;
         
         // Validate email authorization
         if (isEmailAuthorized(email)) {
+          // Ensure access level is set (especially for OAuth users)
+          await ensureAccessLevel(session.user);
+          
           setSession(session);
           setUser(session.user);
           setIsAdmin(checkIsAdmin(email));
           setAuthError(null);
         } else {
           // Unauthorized email - sign out
-          setAuthError(`Access denied. Please sign in with a @tufts.edu email or whitelisted account.`);
+          setAuthError(`Access denied. Please sign in with a @tufts.edu, @purdue.edu email or whitelisted account.`);
           signOut();
         }
       }
@@ -55,12 +59,15 @@ export const AuthProvider = ({ children }) => {
         
         // Validate on every auth change
         if (isEmailAuthorized(email)) {
+          // Ensure access level is set (especially for OAuth users)
+          await ensureAccessLevel(session.user);
+          
           setSession(session);
           setUser(session.user);
           setIsAdmin(checkIsAdmin(email));
           setAuthError(null);
         } else {
-          setAuthError(`Access denied. Please sign in with a @tufts.edu email or whitelisted account.`);
+          setAuthError(`Access denied. Please sign in with a @tufts.edu, @purdue.edu email or whitelisted account.`);
           await signOut();
           setSession(null);
           setUser(null);

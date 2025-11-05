@@ -10,7 +10,6 @@
 }
 
 /* --- Top control groups for selectors and admin tools --- */
-.control-group,
 .admin-controls {
     display: flex;
     align-items: center;
@@ -21,8 +20,7 @@
     flex-shrink: 0;
 }
 
-.admin-controls label,
-.control-group label {
+.admin-controls label {
     font-size: 0.8rem;
     font-weight: 600;
 }
@@ -98,18 +96,128 @@
     white-space: normal;
 }
 
+.chat-bubble .markdown-content {
+    line-height: 1.6;
+}
+
 .chat-bubble p{
     margin: .25rem 0;
+}
+
+.chat-bubble p:first-child {
+    margin-top: 0;
+}
+
+.chat-bubble p:last-child {
+    margin-bottom: 0;
 }
 
 .chat-bubble ul,
 .chat-bubble ol{
     margin: .25rem 0 .25rem 1.2rem;    /* tighter & consistent */
-    padding: 0;                       /* remove default left-pad in Chrome */
+    padding-left: 1rem;                /* space for bullets/numbers */
+}
+
+.chat-bubble ul {
+    list-style-type: disc;             /* show bullet points */
+}
+
+.chat-bubble ol {
+    list-style-type: decimal;          /* show numbers */
 }
 
 .chat-bubble li{
     margin: .15rem 0;
+    display: list-item;                /* ensure list item display */
+}
+
+.chat-bubble h1,
+.chat-bubble h2,
+.chat-bubble h3,
+.chat-bubble h4,
+.chat-bubble h5,
+.chat-bubble h6 {
+    margin: .5rem 0 .3rem 0;
+    font-weight: 600;
+}
+
+.chat-bubble h1 { font-size: 1.4rem; }
+.chat-bubble h2 { font-size: 1.2rem; }
+.chat-bubble h3 { font-size: 1.1rem; }
+.chat-bubble h4 { font-size: 1rem; }
+.chat-bubble h5 { font-size: 0.9rem; }
+.chat-bubble h6 { font-size: 0.85rem; }
+
+.chat-bubble strong,
+.chat-bubble b {
+    font-weight: 600;
+}
+
+.chat-bubble em,
+.chat-bubble i {
+    font-style: italic;
+}
+
+.chat-bubble code {
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+.chat-bubble pre {
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 0.5rem;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 0.4rem 0;
+}
+
+.chat-bubble pre code {
+    background-color: transparent;
+    padding: 0;
+}
+
+.chat-bubble blockquote {
+    border-left: 3px solid rgba(0, 0, 0, 0.2);
+    padding-left: 0.8rem;
+    margin: 0.4rem 0;
+    color: #555;
+    font-style: italic;
+}
+
+.chat-bubble a {
+    color: #002E6D;
+    text-decoration: underline;
+}
+
+.chat-bubble a:hover {
+    color: #004499;
+}
+
+.chat-bubble hr {
+    border: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.2);
+    margin: 0.5rem 0;
+}
+
+.chat-bubble table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.4rem 0;
+}
+
+.chat-bubble table th,
+.chat-bubble table td {
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    padding: 0.3rem 0.5rem;
+    text-align: left;
+}
+
+.chat-bubble table th {
+    background-color: rgba(0, 0, 0, 0.05);
+    font-weight: 600;
 }
 
 .chat-disclaimer {
@@ -213,7 +321,7 @@
 
 /* VIEW CODE button -------------------------- */
 .code-btn {
-    margin:.4rem 0;
+    margin:.2rem 0;
     background:#277227;
     color:#fff;
     border:none;
@@ -221,6 +329,49 @@
     border-radius:6px;
     cursor:pointer;
     font-size:.75rem;
+    max-width: 12rem;
+}
+
+.console-btn {
+    margin:.2rem 0;
+    background:#002E6D;
+    color:#fff;
+    border:none;
+    padding:.35rem .8rem;
+    border-radius:6px;
+    cursor:pointer;
+    font-size:.75rem;
+}
+
+.port-config-btn {
+    margin: 0.2rem 0;
+    background:#7B1FA2;
+    color:#fff;
+    border:none;
+    padding:.35rem .8rem;
+    border-radius:6px;
+    cursor:pointer;
+    font-size:.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    max-width: 12rem;
+}
+
+.port-config-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.spinner-small {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
 }
 
 .console-btn {

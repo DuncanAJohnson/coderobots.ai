@@ -1,0 +1,203 @@
+/* --- AI Usage Modal Overlay --- */
+
+.ai-usage-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: none; /* Hidden by default */
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.ai-usage-modal-box {
+  background-color: #d3d3d3;
+  color: #ffffff;
+  padding: 25px;
+  border-radius: 14px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 80vh;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow: hidden;
+}
+
+.ai-usage-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.ai-usage-modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #000000;
+}
+
+.ai-usage-modal-close-btn {
+  background: none;
+  border: none;
+  color: #000000;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.ai-usage-modal-close-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.ai-usage-modal-body {
+  flex: 1;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 5px; /* For scrollbar spacing */
+}
+
+/* Custom scrollbar for a modern look */
+.ai-usage-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ai-usage-modal-body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.ai-usage-modal-body::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+.ai-usage-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+.ai-usage-modal-footer {
+  margin-top: 10px;
+  text-align: center;
+}
+
+.budget-info {
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 25px;
+  background-color: #f8f9fa;
+  border-left: 4px solid #1971c2;
+}
+
+.budget-info.en1 {
+  background-color: #e7f5ff;
+  border-left-color: #1971c2;
+  color: #2e2d2d;
+}
+
+.budget-info.standard {
+  background-color: #fff3cd;
+  border-left-color: #ffc107;
+  color: #2e2d2d;
+}
+
+.budget-info p {
+  margin: 5px 0;
+  font-size: 14px;
+}
+
+.usage-section {
+  margin-bottom: 30px;
+}
+
+.usage-section h3 {
+  margin-bottom: 15px;
+  color: #333;
+  font-size: 18px;
+  border-bottom: 2px solid #e9ecef;
+  padding-bottom: 8px;
+}
+
+.no-usage {
+  padding: 20px;
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.usage-table thead {
+  background-color: #002E6D;
+  color: white;
+}
+
+.usage-table th {
+  padding: 12px 8px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.usage-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #e9ecef;
+  color: #2e2d2d;
+}
+
+.usage-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.usage-table .model-name {
+  font-weight: 600;
+  color: #1971c2;
+}
+
+.usage-table .cost {
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+  color: #2f9e44;
+}
+
+.usage-table .total-row {
+  background-color: #f8f9fa;
+  border-top: 2px solid #002E6D;
+}
+
+.usage-table .total-row td {
+  padding: 12px 8px;
+  border-bottom: none;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #6c757d;
+}
+
+.error {
+  text-align: center;
+  padding: 40px;
+  color: #dc3545;
+}
+

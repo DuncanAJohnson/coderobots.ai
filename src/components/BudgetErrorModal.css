@@ -1,0 +1,121 @@
+/* --- Budget Error Modal Overlay --- */
+
+.budget-error-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: none; /* Hidden by default */
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.budget-error-modal-box {
+  background-color: #ffffff;
+  color: #333;
+  padding: 25px;
+  border-radius: 14px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.budget-error-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.budget-error-modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.budget-error-modal-close-btn {
+  background: none;
+  border: none;
+  color: #333;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.budget-error-modal-close-btn:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.budget-error-modal-body {
+  flex: 1;
+}
+
+.budget-error-modal-footer {
+  margin-top: 10px;
+  text-align: center;
+}
+
+.budget-error-message {
+  font-size: 16px;
+  line-height: 1.6;
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.budget-error-suggestion {
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 15px;
+  background-color: #e7f5ff;
+  border-left: 4px solid #1971c2;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.budget-error-suggestion strong {
+  color: #1971c2;
+}
+
+.budget-error-reset {
+  font-size: 18px;
+  text-align: center;
+  padding: 20px;
+  background-color: #fff3cd;
+  border-radius: 8px;
+  margin: 15px 0;
+}
+
+.budget-error-reset strong {
+  color: #856404;
+  font-size: 24px;
+  display: block;
+  margin-top: 10px;
+  font-weight: 700;
+}
+
+.budget-error-info {
+  font-size: 14px;
+  color: #666;
+  text-align: center;
+  font-style: italic;
+}
+
+.modal-btn {
+  background-color: #002E6D;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+}

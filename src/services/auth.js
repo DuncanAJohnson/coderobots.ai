@@ -6,7 +6,8 @@
 import { supabase } from './supabase';
 
 // Configuration
-const ALLOWED_EMAIL_DOMAIN = 'tufts.edu';
+const ALLOWED_EMAIL_DOMAINS = ['tufts.edu', 'purdue.edu'];
+const EN1_EMAIL_DOMAINS = ['tufts.edu', 'purdue.edu'];
 const WHITELISTED_EMAILS = [
   'bill@crcs.works',
   'williamchurch17@gmail.com',
@@ -36,9 +37,11 @@ export const isEmailAuthorized = (email) => {
     return true;
   }
 
-  // Check domain
-  if (ALLOWED_EMAIL_DOMAIN && lowerEmail.endsWith(`@${ALLOWED_EMAIL_DOMAIN.toLowerCase()}`)) {
-    return true;
+  // Check allowed domains
+  for (const domain of ALLOWED_EMAIL_DOMAINS) {
+    if (lowerEmail.endsWith(`@${domain.toLowerCase()}`)) {
+      return true;
+    }
   }
 
   return false;
@@ -51,6 +54,26 @@ export const isAdmin = (email) => {
   if (!email) return false;
   const lowerEmail = email.toLowerCase();
   return WHITELISTED_EMAILS.some((e) => e.toLowerCase() === lowerEmail);
+};
+
+/**
+ * Determine access level based on email domain
+ * @param {string} email - User's email address
+ * @returns {string} - 'en1' or 'standard'
+ */
+export const getAccessLevelFromEmail = (email) => {
+  if (!email) return 'standard';
+  
+  const lowerEmail = email.toLowerCase();
+  
+  // Check if email domain matches EN1 domains
+  for (const domain of EN1_EMAIL_DOMAINS) {
+    if (lowerEmail.endsWith(`@${domain.toLowerCase()}`)) {
+      return 'en1';
+    }
+  }
+  
+  return 'standard';
 };
 
 /**
@@ -106,9 +129,17 @@ export const signUpWithPassword = async (email, password) => {
     throw new Error('Password authentication is only available in SHOWCASE mode');
   }
 
+  // Determine access level based on email domain
+  const accessLevel = getAccessLevelFromEmail(email);
+
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
+    options: {
+      data: {
+        access_level: accessLevel,
+      },
+    },
   });
 
   if (error) {
@@ -159,5 +190,56 @@ export const getUser = async () => {
  */
 export const onAuthStateChange = (callback) => {
   return supabase.auth.onAuthStateChange(callback);
+};
+
+/**
+ * Check and set access level for OAuth users (called after sign-in)
+ * This ensures OAuth users get their access_level set based on email domain
+ * @param {Object} user - Optional user object (if already available from session)
+ */
+export const ensureAccessLevel = async (user = null) => {
+  try {
+    // If user not provided, fetch it (with timeout)
+    if (!user) {
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('getUser timeout')), 5000)
+      );
+      
+      const getUserPromise = supabase.auth.getUser();
+      
+      const result = await Promise.race([getUserPromise, timeoutPromise]);
+      user = result.data?.user;
+    }
+    
+    if (!user) {
+      return;
+    }
+
+    // Check if user already has access_level set
+    if (user.user_metadata?.access_level) {
+      return; // Already set, no need to update
+    }
+
+    // Determine access level from email
+    const accessLevel = getAccessLevelFromEmail(user.email);
+
+    console.log('Setting access level to:', accessLevel);
+
+    // Update user metadata
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        access_level: accessLevel,
+      },
+    });
+
+    if (error) {
+      console.error('Error setting access level:', error);
+    } else {
+      console.log(`Access level set to '${accessLevel}' for ${user.email}`);
+    }
+  } catch (error) {
+    console.error('Error in ensureAccessLevel:', error);
+    // Don't throw - we don't want to block auth flow
+  }
 };
 

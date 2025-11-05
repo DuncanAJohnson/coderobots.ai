@@ -8,17 +8,16 @@ import TitleBar from './components/TitleBar';
 import DebugManager, { debugLog } from './components/DebugManager';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SessionProvider, useSession } from './contexts/SessionContext';
-import { getLatestCode, logCode, logConsole } from './services/dataLogger';
+import { logConsole } from './services/dataLogger';
 
 function AppContent() {
   const { user, loading: authLoading } = useAuth();
-  const { activeSession, sessions, loadSessions, setActiveSessionById, loading: sessionLoading } = useSession();
+  const { activeSession, sessions, loadSessions, setActiveSessionById, updateSessionName, currentCodeContent, updateCurrentCodeContent, createSnapshot } = useSession();
   
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [sessionModalCancellable, setSessionModalCancellable] = useState(false);
   const [showDebugModal, setShowDebugModal] = useState(false);
-  const [editorCode, setEditorCode] = useState('# Start your project here!\n');
   const [sessionsInitialized, setSessionsInitialized] = useState(false);
 
   const resizerRef = useRef(null);
@@ -50,21 +49,6 @@ function AppContent() {
       });
     }
   }, [user, authLoading, sessionsInitialized, loadSessions, setActiveSessionById]);
-
-  // Load code when active session changes
-  useEffect(() => {
-    if (activeSession?.id) {
-      getLatestCode(activeSession.id).then((code) => {
-        if (code) {
-          setEditorCode(code);
-          // Update SPIKE editor code
-          if (spikeEditorRef.current) {
-            spikeEditorRef.current.setCode(code);
-          }
-        }
-      });
-    }
-  }, [activeSession?.id]);
 
   // Resizable pane logic
   useEffect(() => {
@@ -112,28 +96,24 @@ function AppContent() {
     };
   }, [user, activeSession]);
 
-  const handleSessionSelect = async (sessionId) => {
+  const handleSessionSelect = async (sessionId, firmwareVersion) => {
     setShowSessionModal(false);
-    await setActiveSessionById(sessionId);
+    await setActiveSessionById(sessionId, firmwareVersion);
   };
 
   const handleReplaceCode = async (newCode) => {
-    setEditorCode(newCode);
-    if (spikeEditorRef.current) {
-      spikeEditorRef.current.setCode(newCode);
-    }
+    // Create snapshot for AI replacement with the new code
+    await createSnapshot('ai_replace', newCode);
     
-    // Log the AI replacement
-    if (activeSession?.id) {
-      await logCode(newCode, activeSession.id, 'ai_replace');
-    }
+    // Update the current code in session context (local state)
+    await updateCurrentCodeContent(newCode);
   };
 
   const getCodeContent = async () => {
     if (spikeEditorRef.current) {
       return spikeEditorRef.current.getCode();
     }
-    return editorCode;
+    return currentCodeContent;
   };
 
   const getConsoleContent = async () => {
@@ -156,15 +136,11 @@ function AppContent() {
     }
 
     try {
+      // Create code snapshot for manual save
+      await createSnapshot('manual_save');
+      
       // Get current code and console content
-      const currentCode = await getCodeContent();
       const currentConsole = await getConsoleContent();
-
-      // Log code
-      if (currentCode) {
-        await logCode(currentCode, activeSession.id, 'manual_save');
-        debugLog(`Saved code (${currentCode.length} characters)`);
-      }
 
       // Log console
       if (currentConsole) {
@@ -223,13 +199,13 @@ function AppContent() {
           onOpenSessions={openSessionSelector}
           onShowDebug={() => setShowDebugModal(true)}
           activeSession={activeSession}
+          onUpdateSessionName={updateSessionName}
         />
         <div className="main-content" ref={containerRef}>
           <div className="left-panel">
             <SPIKEEditor 
               ref={spikeEditorRef}
               sessionId={activeSession?.id}
-              initialCode={editorCode}
             />
           </div>
           <div className="horizontal-resizer" ref={resizerRef}></div>

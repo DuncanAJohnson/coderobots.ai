@@ -86,62 +86,6 @@ export const logInteraction = async (buttonName, sessionId) => {
 };
 
 /**
- * Log code snippet and optionally update session's current_code_id
- */
-export const logCode = async (codeContent, sessionId, saveSource) => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user || !sessionId) {
-      console.error('Cannot log code without user and session ID');
-      return null;
-    }
-
-    const payload = {
-      user_id: user.id,
-      session_id: sessionId,
-      content: codeContent,
-      save_source: saveSource,
-    };
-
-    const { data, error } = await supabase
-      .from(CODE_TABLE)
-      .insert(payload)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error logging code:', error);
-      return null;
-    }
-
-    const newCodeId = data.id;
-
-    // Update session pointer if not a context log
-    if (saveSource !== 'chat_context') {
-      const { error: updateError } = await supabase
-        .from(SESSIONS_TABLE)
-        .update({
-          current_code_id: newCodeId,
-          last_updated: new Date().toISOString(),
-        })
-        .eq('id', sessionId);
-
-      if (updateError) {
-        console.error('Error updating session code pointer:', updateError);
-      } else {
-        console.log(`✅ Code saved (source: ${saveSource}) and session ${sessionId} updated`);
-      }
-    }
-
-    return newCodeId;
-  } catch (error) {
-    console.error('Error in logCode:', error);
-    return null;
-  }
-};
-
-/**
  * Log console output and optionally update session's current_console_id
  */
 export const logConsole = async (consoleContent, sessionId, saveSource) => {
@@ -347,10 +291,33 @@ export const updateSessionOnLoad = async (sessionId) => {
     if (updateError) {
       console.error('Failed to update session timestamps:', updateError);
     } else {
-      console.log(`Updated timestamps for session ${sessionId}`);
+      console.log(`✅ Updated timestamps for session ${sessionId}`);
     }
   } catch (error) {
     console.error('Error in updateSessionOnLoad:', error);
+  }
+};
+
+/**
+ * Update message with port configurations
+ */
+export const updateMessagePortConfigurations = async (messageId, portConfigurations) => {
+  try {
+    const { error } = await supabase
+      .from(MESSAGES_TABLE)
+      .update({ port_configurations: portConfigurations })
+      .eq('id', messageId);
+
+    if (error) {
+      console.error('Error updating message port configurations:', error);
+      return false;
+    }
+
+    console.log(`✅ Updated port configurations for message ${messageId}`);
+    return true;
+  } catch (error) {
+    console.error('Error in updateMessagePortConfigurations:', error);
+    return false;
   }
 };
 
