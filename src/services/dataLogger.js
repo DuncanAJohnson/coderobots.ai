@@ -5,13 +5,15 @@
  */
 
 import { supabase } from './supabase';
-
-// Table names
-const MESSAGES_TABLE = 'messages';
-const CODE_TABLE = 'code';
-const CONSOLE_TABLE = 'console';
-const SESSIONS_TABLE = 'sessions';
-const INTERACTIONS_TABLE = 'interactions';
+import {
+  TABLES,
+  messageInsertSchema,
+  interactionInsertSchema,
+  consoleInsertSchema,
+  sessionUpdateSchema,
+  messageUpdateSchema,
+  validate,
+} from './dbSchemas';
 
 /**
  * Log a chat message (system, user, or assistant)
@@ -30,9 +32,16 @@ export const logMessage = async (messageData) => {
       user_id: user.id,
     };
 
+    // Validate payload against schema
+    const validation = validate(messageInsertSchema, payload);
+    if (!validation.success) {
+      console.error('Message validation failed:', validation.error.issues);
+      return null;
+    }
+
     const { data, error } = await supabase
-      .from(MESSAGES_TABLE)
-      .insert(payload)
+      .from(TABLES.MESSAGES)
+      .insert(validation.data)
       .select()
       .single();
 
@@ -66,9 +75,16 @@ export const logInteraction = async (buttonName, sessionId) => {
       button_name: buttonName,
     };
 
+    // Validate payload against schema
+    const validation = validate(interactionInsertSchema, payload);
+    if (!validation.success) {
+      console.error('Interaction validation failed:', validation.error.issues);
+      return null;
+    }
+
     const { data, error } = await supabase
-      .from(INTERACTIONS_TABLE)
-      .insert(payload)
+      .from(TABLES.INTERACTIONS)
+      .insert(validation.data)
       .select()
       .single();
 
@@ -104,9 +120,16 @@ export const logConsole = async (consoleContent, sessionId, saveSource) => {
       save_source: saveSource,
     };
 
+    // Validate payload against schema
+    const validation = validate(consoleInsertSchema, payload);
+    if (!validation.success) {
+      console.error('Console validation failed:', validation.error.issues);
+      return null;
+    }
+
     const { data, error } = await supabase
-      .from(CONSOLE_TABLE)
-      .insert(payload)
+      .from(TABLES.CONSOLE)
+      .insert(validation.data)
       .select()
       .single();
 
@@ -119,18 +142,26 @@ export const logConsole = async (consoleContent, sessionId, saveSource) => {
 
     // Update session pointer if not a context log
     if (saveSource !== 'chat_context') {
-      const { error: updateError } = await supabase
-        .from(SESSIONS_TABLE)
-        .update({
-          current_console_id: newConsoleId,
-          last_updated: new Date().toISOString(),
-        })
-        .eq('id', sessionId);
+      const updatePayload = {
+        current_console_id: newConsoleId,
+        last_updated: new Date().toISOString(),
+      };
 
-      if (updateError) {
-        console.error('Error updating session console pointer:', updateError);
+      // Validate update payload
+      const updateValidation = validate(sessionUpdateSchema, updatePayload);
+      if (!updateValidation.success) {
+        console.error('Session update validation failed:', updateValidation.error.issues);
       } else {
-        console.log(`✅ Console saved (source: ${saveSource}) and session ${sessionId} updated`);
+        const { error: updateError } = await supabase
+          .from(TABLES.SESSIONS)
+          .update(updateValidation.data)
+          .eq('id', sessionId);
+
+        if (updateError) {
+          console.error('Error updating session console pointer:', updateError);
+        } else {
+          console.log(`✅ Console saved (source: ${saveSource}) and session ${sessionId} updated`);
+        }
       }
     }
 
@@ -154,7 +185,7 @@ export const getConversationHistory = async (conversationId) => {
     }
 
     const { data, error } = await supabase
-      .from(MESSAGES_TABLE)
+      .from(TABLES.MESSAGES)
       .select('*')
       .eq('conversation_id', conversationId)
       .order('timestamp', { ascending: true });
@@ -185,7 +216,7 @@ export const getLatestCode = async (sessionId) => {
 
     // First get the session to find current_code_id
     const { data: sessionData, error: sessionError } = await supabase
-      .from(SESSIONS_TABLE)
+      .from(TABLES.SESSIONS)
       .select('current_code_id')
       .eq('id', sessionId)
       .single();
@@ -197,7 +228,7 @@ export const getLatestCode = async (sessionId) => {
 
     // Now get the code content
     const { data: codeData, error: codeError } = await supabase
-      .from(CODE_TABLE)
+      .from(TABLES.CODE)
       .select('content')
       .eq('id', sessionData.current_code_id)
       .single();
@@ -228,7 +259,7 @@ export const getLatestConsole = async (sessionId) => {
 
     // First get the session to find current_console_id
     const { data: sessionData, error: sessionError } = await supabase
-      .from(SESSIONS_TABLE)
+      .from(TABLES.SESSIONS)
       .select('current_console_id')
       .eq('id', sessionId)
       .single();
@@ -240,7 +271,7 @@ export const getLatestConsole = async (sessionId) => {
 
     // Now get the console content
     const { data: consoleData, error: consoleError } = await supabase
-      .from(CONSOLE_TABLE)
+      .from(TABLES.CONSOLE)
       .select('content')
       .eq('id', sessionData.current_console_id)
       .single();
@@ -264,7 +295,7 @@ export const updateSessionOnLoad = async (sessionId) => {
   try {
     // Read existing timestamps
     const { data: sessionData, error: readError } = await supabase
-      .from(SESSIONS_TABLE)
+      .from(TABLES.SESSIONS)
       .select('loaded_timestamps')
       .eq('id', sessionId)
       .single();
@@ -279,13 +310,22 @@ export const updateSessionOnLoad = async (sessionId) => {
     const newTimestamp = new Date().toISOString();
     existingTimestamps.push(newTimestamp);
 
+    const updatePayload = {
+      loaded_timestamps: existingTimestamps,
+      last_updated: newTimestamp,
+    };
+
+    // Validate update payload
+    const validation = validate(sessionUpdateSchema, updatePayload);
+    if (!validation.success) {
+      console.error('Session update validation failed:', validation.error.issues);
+      return;
+    }
+
     // Write back
     const { error: updateError } = await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        loaded_timestamps: existingTimestamps,
-        last_updated: newTimestamp,
-      })
+      .from(TABLES.SESSIONS)
+      .update(validation.data)
       .eq('id', sessionId);
 
     if (updateError) {
@@ -303,9 +343,18 @@ export const updateSessionOnLoad = async (sessionId) => {
  */
 export const updateMessagePortConfigurations = async (messageId, portConfigurations) => {
   try {
+    const updatePayload = { port_configurations: portConfigurations };
+
+    // Validate update payload
+    const validation = validate(messageUpdateSchema, updatePayload);
+    if (!validation.success) {
+      console.error('Message update validation failed:', validation.error.issues);
+      return false;
+    }
+
     const { error } = await supabase
-      .from(MESSAGES_TABLE)
-      .update({ port_configurations: portConfigurations })
+      .from(TABLES.MESSAGES)
+      .update(validation.data)
       .eq('id', messageId);
 
     if (error) {
@@ -320,4 +369,3 @@ export const updateMessagePortConfigurations = async (messageId, portConfigurati
     return false;
   }
 };
-
