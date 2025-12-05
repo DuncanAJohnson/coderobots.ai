@@ -7,7 +7,7 @@ import AuthModal from './components/AuthModal';
 import SessionModal from './components/SessionModal';
 import TitleBar from './components/TitleBar';
 import DebugManager, { debugLog } from './components/DebugManager';
-import DataExtractor from './components/DataExtractor';
+import DataExtractor from './components/data_extractor/DataExtractor';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SessionProvider, useSession } from './contexts/SessionContext';
 import { logConsole } from './services/dataLogger';

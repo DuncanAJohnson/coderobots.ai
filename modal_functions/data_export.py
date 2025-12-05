@@ -28,9 +28,8 @@ image = (
 )
 
 
-def get_message_columns() -> List[str]:
-    """Load valid message columns from the schema file."""
-    # Check if running in Modal (file mounted at /app) or locally
+def get_table_columns(table: str) -> List[str]:
+    """Load valid table columns from the schema file."""
     if os.path.exists("/app/db_schemas.json"):
         schema_path = "/app/db_schemas.json"
     else:
@@ -39,7 +38,20 @@ def get_message_columns() -> List[str]:
     with open(schema_path, "r") as f:
         schema = json.load(f)
     
-    return list(schema["schemas"]["message"]["properties"].keys())
+    # Map table names to schema keys (table names are plural, schema keys are singular/camelCase)
+    table_to_schema_key = {
+        "sessions": "session",
+        "conversations": "conversation",
+        "messages": "message",
+        "code": "code",
+        "code_snapshots": "codeSnapshot",
+        "console": "console",
+        "interactions": "interaction",
+    }
+    
+    schema_key = table_to_schema_key.get(table, table)
+    
+    return list(schema["schemas"][schema_key]["properties"].keys())
 
 
 async def verify_admin(supabase_client, user_id: str, auth_token: str) -> bool:
@@ -85,19 +97,20 @@ async def emails_to_user_ids(supabase_client, emails: List[str]) -> List[str]:
     return user_ids
 
 
-async def export_messages(
+async def fetch_table_data(
     supabase_client,
+    table: str,
     start_time: Optional[str] = None,
     end_time: Optional[str] = None,
     emails: Optional[List[str]] = None,
     columns: Optional[List[str]] = None,
 ) -> List[dict]:
-    """Export messages with filters."""
-    valid_columns = get_message_columns()
-    
+    """Export data with filters."""
+    valid_columns = get_table_columns(table)
+    print("valid_columns", valid_columns)
     # Use specified columns or all columns
     selected_columns = columns if columns else valid_columns
-    
+    print("selected_columns", selected_columns)
     # Validate columns
     for col in selected_columns:
         if col not in valid_columns:
@@ -111,24 +124,29 @@ async def export_messages(
             # No matching users found - return empty result
             return []
     
+    # Determine time column: sessions and conversations use start_time, others use timestamp
+    time_column = 'start_time' if table in ('sessions', 'conversations') else 'timestamp'
+    
     # Build query
-    query = supabase_client.table('messages').select(','.join(selected_columns))
+    query = supabase_client.table(table).select(','.join(selected_columns))
     
     # Apply time filters
     if start_time:
-        query = query.gte('timestamp', start_time)
+        query = query.gte(time_column, start_time)
     if end_time:
-        query = query.lte('timestamp', end_time)
+        query = query.lte(time_column, end_time)
     
     # Apply user filter
     if user_ids and len(user_ids) > 0:
         query = query.in_('user_id', user_ids)
     
-    # Order by timestamp
-    query = query.order('timestamp', desc=False)
+    # Order by time column
+    query = query.order(time_column, desc=False)
     
     # Execute query
     result = query.execute()
+
+    print("fetch_table_data result.data", result.data)
     
     return result.data
 
@@ -155,11 +173,11 @@ def convert_to_csv(data: List[dict], columns: List[str]) -> str:
 async def export_data(
     user_id: str,
     auth_token: str,
+    table: str,
+    columns: List[str],
     start_time: Optional[str] = None,
     end_time: Optional[str] = None,
     emails: Optional[List[str]] = None,
-    columns: Optional[List[str]] = None,
-    format: str = "json",  # "json" or "csv"
 ) -> dict:
     """
     Export message data with filters.
@@ -168,11 +186,11 @@ async def export_data(
     Args:
         user_id: Admin user ID
         auth_token: Admin auth token
+        table: Table to export
+        columns: List of columns to include
         start_time: ISO timestamp filter (inclusive)
         end_time: ISO timestamp filter (inclusive)
         emails: List of user emails to filter by
-        columns: List of columns to include
-        format: Output format ("json" or "csv")
     
     Returns:
         dict with success status and data/error
@@ -188,34 +206,25 @@ async def export_data(
         # Verify admin access
         await verify_admin(supabase_client, user_id, auth_token)
         
-        # Use provided columns or default to all
-        selected_columns = columns if columns else get_message_columns()
-        
-        # Export messages
-        data = await export_messages(
+        # Export data
+        data = await fetch_table_data(
             supabase_client,
+            table=table,
             start_time=start_time,
             end_time=end_time,
             emails=emails,
-            columns=selected_columns,
+            columns=columns,
         )
-        
-        # Format output
-        if format == "csv":
-            csv_data = convert_to_csv(data, selected_columns)
-            return {
-                "success": True,
-                "format": "csv",
-                "data": csv_data,
-                "row_count": len(data),
-            }
-        else:
-            return {
-                "success": True,
-                "format": "json",
-                "data": data,
-                "row_count": len(data),
-            }
+
+        print(data)
+        # Format data as CSV
+        csv_data = convert_to_csv(data, columns)
+
+        return {
+            "success": True,
+            "data": csv_data,
+            "row_count": len(data),
+        }
     except Exception as e:
         return {
             "success": False,
@@ -235,23 +244,32 @@ async def export_data(
 async def export_endpoint(request: dict):
     """HTTP endpoint for data export."""
     user_id = request.get("user_id")
+    table = request.get("table")
+    columns = request.get("columns")
     auth_token = request.get("auth_token")
     start_time = request.get("start_time")
     end_time = request.get("end_time")
     emails = request.get("emails")
-    columns = request.get("columns")
-    format = request.get("format", "json")
     
     if not user_id or not auth_token:
         return {"success": False, "error": "Missing authentication"}
     
+
+    print("Calling export_data")
+    print(user_id)
+    print(auth_token)
+    print(table)
+    print(columns)
+    print(start_time)
+    print(end_time)
+    print(emails)
     return export_data.remote(
         user_id=user_id,
         auth_token=auth_token,
+        table=table,
+        columns=columns,
         start_time=start_time,
         end_time=end_time,
         emails=emails,
-        columns=columns,
-        format=format,
     )
 
