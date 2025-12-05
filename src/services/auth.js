@@ -48,7 +48,15 @@ export const isEmailAuthorized = (email) => {
 };
 
 /**
- * Check if user is admin (in whitelist)
+ * Check if user is admin (client-side check using whitelist)
+ * Note: This is for UI gating only. The authoritative admin check
+ * happens server-side via the Modal function, which queries the
+ * 'admins' table in the database. This ensures security even if
+ * client-side code is modified.
+ * 
+ * To add/remove admins, use the Supabase Dashboard to insert/delete
+ * rows in the 'admins' table, and update WHITELISTED_EMAILS here
+ * to keep the client-side UI in sync.
  */
 export const isAdmin = (email) => {
   if (!email) return false;

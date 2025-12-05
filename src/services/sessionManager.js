@@ -5,13 +5,18 @@
  */
 
 import { supabase } from './supabase';
-
-// Table names
-const SESSIONS_TABLE = 'sessions';
-const CONVERSATIONS_TABLE = 'conversations';
-const CODE_TABLE = 'code';
-const CODE_SNAPSHOTS_TABLE = 'code_snapshots';
-const CONSOLE_TABLE = 'console';
+import {
+  TABLES,
+  sessionInsertSchema,
+  sessionUpdateSchema,
+  conversationInsertSchema,
+  conversationUpdateSchema,
+  codeInsertSchema,
+  codeUpdateSchema,
+  codeSnapshotInsertSchema,
+  consoleInsertSchema,
+  validate,
+} from './dbSchemas';
 
 /**
  * Get all sessions for the current user
@@ -26,7 +31,7 @@ export const getUserSessions = async () => {
     }
 
     const { data, error } = await supabase
-      .from(SESSIONS_TABLE)
+      .from(TABLES.SESSIONS)
       .select('*')
       .order('start_time', { ascending: false });
 
@@ -58,12 +63,20 @@ export const createNewSession = async (firmwareVersion = '3') => {
     console.log('Creating new session...');
 
     // Step 1: Create placeholder session to get ID
+    const sessionPayload = { 
+      user_id: user.id,
+      firmware_version: firmwareVersion 
+    };
+
+    const sessionValidation = validate(sessionInsertSchema, sessionPayload);
+    if (!sessionValidation.success) {
+      console.error('Session validation failed:', sessionValidation.error.issues);
+      return null;
+    }
+
     const { data: placeholderSession, error: placeholderError } = await supabase
-      .from(SESSIONS_TABLE)
-      .insert({ 
-        user_id: user.id,
-        firmware_version: firmwareVersion 
-      })
+      .from(TABLES.SESSIONS)
+      .insert(sessionValidation.data)
       .select()
       .single();
 
@@ -75,12 +88,20 @@ export const createNewSession = async (firmwareVersion = '3') => {
     const sessionId = placeholderSession.id;
 
     // Step 2: Create conversation
+    const convoPayload = {
+      user_id: user.id,
+      session_id: sessionId,
+    };
+
+    const convoValidation = validate(conversationInsertSchema, convoPayload);
+    if (!convoValidation.success) {
+      console.error('Conversation validation failed:', convoValidation.error.issues);
+      return null;
+    }
+
     const { data: newConvo, error: convoError } = await supabase
-      .from(CONVERSATIONS_TABLE)
-      .insert({
-        user_id: user.id,
-        session_id: sessionId,
-      })
+      .from(TABLES.CONVERSATIONS)
+      .insert(convoValidation.data)
       .select()
       .single();
 
@@ -92,14 +113,22 @@ export const createNewSession = async (firmwareVersion = '3') => {
     const convoId = newConvo.id;
 
     // Step 3: Create initial code record
+    const codePayload = {
+      user_id: user.id,
+      session_id: sessionId,
+      content: '# Start your new project here!',
+      save_source: 'init',
+    };
+
+    const codeValidation = validate(codeInsertSchema, codePayload);
+    if (!codeValidation.success) {
+      console.error('Code validation failed:', codeValidation.error.issues);
+      return null;
+    }
+
     const { data: newCode, error: codeError } = await supabase
-      .from(CODE_TABLE)
-      .insert({
-        user_id: user.id,
-        session_id: sessionId,
-        content: '# Start your new project here!',
-        save_source: 'init',
-      })
+      .from(TABLES.CODE)
+      .insert(codeValidation.data)
       .select()
       .single();
 
@@ -111,14 +140,22 @@ export const createNewSession = async (firmwareVersion = '3') => {
     const codeId = newCode.id;
 
     // Step 4: Create initial console record
+    const consolePayload = {
+      user_id: user.id,
+      session_id: sessionId,
+      content: '',
+      save_source: 'init',
+    };
+
+    const consoleValidation = validate(consoleInsertSchema, consolePayload);
+    if (!consoleValidation.success) {
+      console.error('Console validation failed:', consoleValidation.error.issues);
+      return null;
+    }
+
     const { data: newConsole, error: consoleError } = await supabase
-      .from(CONSOLE_TABLE)
-      .insert({
-        user_id: user.id,
-        session_id: sessionId,
-        content: '',
-        save_source: 'init',
-      })
+      .from(TABLES.CONSOLE)
+      .insert(consoleValidation.data)
       .select()
       .single();
 
@@ -130,13 +167,21 @@ export const createNewSession = async (firmwareVersion = '3') => {
     const consoleId = newConsole.id;
 
     // Step 5: Update session with foreign keys
+    const updatePayload = {
+      current_conversation_id: convoId,
+      current_code_id: codeId,
+      current_console_id: consoleId,
+    };
+
+    const updateValidation = validate(sessionUpdateSchema, updatePayload);
+    if (!updateValidation.success) {
+      console.error('Session update validation failed:', updateValidation.error.issues);
+      return null;
+    }
+
     const { data: updatedSession, error: updateError } = await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        current_conversation_id: convoId,
-        current_code_id: codeId,
-        current_console_id: consoleId,
-      })
+      .from(TABLES.SESSIONS)
+      .update(updateValidation.data)
       .eq('id', sessionId)
       .select()
       .single();
@@ -164,12 +209,20 @@ export const updateSessionCode = async (sessionId, newCodeId) => {
       return null;
     }
 
+    const updatePayload = {
+      current_code_id: newCodeId,
+      last_updated: new Date().toISOString(),
+    };
+
+    const validation = validate(sessionUpdateSchema, updatePayload);
+    if (!validation.success) {
+      console.error('Session update validation failed:', validation.error.issues);
+      return null;
+    }
+
     const { data, error } = await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        current_code_id: newCodeId,
-        last_updated: new Date().toISOString(),
-      })
+      .from(TABLES.SESSIONS)
+      .update(validation.data)
       .eq('id', sessionId)
       .select()
       .single();
@@ -198,12 +251,20 @@ export const updateSessionConsole = async (sessionId, newConsoleId) => {
       return null;
     }
 
+    const updatePayload = {
+      current_console_id: newConsoleId,
+      last_updated: new Date().toISOString(),
+    };
+
+    const validation = validate(sessionUpdateSchema, updatePayload);
+    if (!validation.success) {
+      console.error('Session update validation failed:', validation.error.issues);
+      return null;
+    }
+
     const { data, error } = await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        current_console_id: newConsoleId,
-        last_updated: new Date().toISOString(),
-      })
+      .from(TABLES.SESSIONS)
+      .update(validation.data)
       .eq('id', sessionId)
       .select()
       .single();
@@ -231,12 +292,20 @@ export const updateSessionName = async (sessionId, name) => {
       return null;
     }
 
+    const updatePayload = {
+      name: name || null,
+      last_updated: new Date().toISOString(),
+    };
+
+    const validation = validate(sessionUpdateSchema, updatePayload);
+    if (!validation.success) {
+      console.error('Session update validation failed:', validation.error.issues);
+      return null;
+    }
+
     const { data, error } = await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        name: name || null,
-        last_updated: new Date().toISOString(),
-      })
+      .from(TABLES.SESSIONS)
+      .update(validation.data)
       .eq('id', sessionId)
       .select()
       .single();
@@ -265,7 +334,7 @@ export const getSessionConversations = async (sessionId) => {
     }
 
     const { data, error } = await supabase
-      .from(CONVERSATIONS_TABLE)
+      .from(TABLES.CONVERSATIONS)
       .select('*')
       .eq('session_id', sessionId)
       .order('start_time', { ascending: true });
@@ -294,13 +363,21 @@ export const createConversation = async (sessionId) => {
       return null;
     }
 
+    const payload = {
+      user_id: user.id,
+      session_id: sessionId,
+      name: 'Unnamed Chat',
+    };
+
+    const validation = validate(conversationInsertSchema, payload);
+    if (!validation.success) {
+      console.error('Conversation validation failed:', validation.error.issues);
+      return null;
+    }
+
     const { data, error } = await supabase
-      .from(CONVERSATIONS_TABLE)
-      .insert({
-        user_id: user.id,
-        session_id: sessionId,
-        name: 'Unnamed Chat',
-      })
+      .from(TABLES.CONVERSATIONS)
+      .insert(validation.data)
       .select()
       .single();
 
@@ -327,12 +404,20 @@ export const updateConversationName = async (conversationId, name) => {
       return null;
     }
 
+    const updatePayload = {
+      name: name || 'Unnamed Chat',
+      last_updated: new Date().toISOString(),
+    };
+
+    const validation = validate(conversationUpdateSchema, updatePayload);
+    if (!validation.success) {
+      console.error('Conversation update validation failed:', validation.error.issues);
+      return null;
+    }
+
     const { data, error } = await supabase
-      .from(CONVERSATIONS_TABLE)
-      .update({
-        name: name || 'Unnamed Chat',
-        last_updated: new Date().toISOString(),
-      })
+      .from(TABLES.CONVERSATIONS)
+      .update(validation.data)
       .eq('id', conversationId)
       .select()
       .single();
@@ -360,12 +445,20 @@ export const updateSessionConversation = async (sessionId, conversationId) => {
       return null;
     }
 
+    const updatePayload = {
+      current_conversation_id: conversationId,
+      last_updated: new Date().toISOString(),
+    };
+
+    const validation = validate(sessionUpdateSchema, updatePayload);
+    if (!validation.success) {
+      console.error('Session update validation failed:', validation.error.issues);
+      return null;
+    }
+
     const { data, error } = await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        current_conversation_id: conversationId,
-        last_updated: new Date().toISOString(),
-      })
+      .from(TABLES.SESSIONS)
+      .update(validation.data)
       .eq('id', sessionId)
       .select()
       .single();
@@ -394,7 +487,7 @@ export const getSessionCode = async (sessionId) => {
     }
 
     const { data, error } = await supabase
-      .from(CODE_TABLE)
+      .from(TABLES.CODE)
       .select('*')
       .eq('session_id', sessionId)
       .order('timestamp', { ascending: true });
@@ -423,15 +516,23 @@ export const createCode = async (sessionId, name = 'Code Tab', content = '# Star
       return null;
     }
 
+    const payload = {
+      user_id: user.id,
+      session_id: sessionId,
+      name: name,
+      content: content,
+      save_source: 'tab_create',
+    };
+
+    const validation = validate(codeInsertSchema, payload);
+    if (!validation.success) {
+      console.error('Code validation failed:', validation.error.issues);
+      return null;
+    }
+
     const { data, error } = await supabase
-      .from(CODE_TABLE)
-      .insert({
-        user_id: user.id,
-        session_id: sessionId,
-        name: name,
-        content: content,
-        save_source: 'tab_create',
-      })
+      .from(TABLES.CODE)
+      .insert(validation.data)
       .select()
       .single();
 
@@ -458,11 +559,19 @@ export const updateCodeName = async (codeId, name) => {
       return null;
     }
 
+    const updatePayload = {
+      name: name || 'Code Tab',
+    };
+
+    const validation = validate(codeUpdateSchema, updatePayload);
+    if (!validation.success) {
+      console.error('Code update validation failed:', validation.error.issues);
+      return null;
+    }
+
     const { data, error } = await supabase
-      .from(CODE_TABLE)
-      .update({
-        name: name || 'Code Tab',
-      })
+      .from(TABLES.CODE)
+      .update(validation.data)
       .eq('id', codeId)
       .select()
       .single();
@@ -490,12 +599,20 @@ export const updateCodeContent = async (codeId, content) => {
       return null;
     }
 
+    const updatePayload = {
+      content: content,
+      save_source: 'live_edit',
+    };
+
+    const validation = validate(codeUpdateSchema, updatePayload);
+    if (!validation.success) {
+      console.error('Code update validation failed:', validation.error.issues);
+      return null;
+    }
+
     const { data, error } = await supabase
-      .from(CODE_TABLE)
-      .update({
-        content: content,
-        save_source: 'live_edit',
-      })
+      .from(TABLES.CODE)
+      .update(validation.data)
       .eq('id', codeId)
       .select()
       .single();
@@ -525,15 +642,23 @@ export const createCodeSnapshot = async (codeId, sessionId, content, saveSource)
       return null;
     }
 
+    const payload = {
+      user_id: user.id,
+      code_id: codeId,
+      session_id: sessionId,
+      content: content,
+      save_source: saveSource,
+    };
+
+    const validation = validate(codeSnapshotInsertSchema, payload);
+    if (!validation.success) {
+      console.error('Code snapshot validation failed:', validation.error.issues);
+      return null;
+    }
+
     const { data, error } = await supabase
-      .from(CODE_SNAPSHOTS_TABLE)
-      .insert({
-        user_id: user.id,
-        code_id: codeId,
-        session_id: sessionId,
-        content: content,
-        save_source: saveSource,
-      })
+      .from(TABLES.CODE_SNAPSHOTS)
+      .insert(validation.data)
       .select()
       .single();
 
@@ -561,7 +686,7 @@ export const getCodeSnapshots = async (codeId) => {
     }
 
     const { data, error } = await supabase
-      .from(CODE_SNAPSHOTS_TABLE)
+      .from(TABLES.CODE_SNAPSHOTS)
       .select('*')
       .eq('code_id', codeId)
       .order('timestamp', { ascending: false });
@@ -589,7 +714,7 @@ export const getFirmwareVersion = async (sessionId) => {
     }
 
     const { data, error } = await supabase
-      .from(SESSIONS_TABLE)
+      .from(TABLES.SESSIONS)
       .select('firmware_version')
       .eq('id', sessionId)
       .single();
@@ -616,12 +741,20 @@ export const updateFirmwareVersion = async (sessionId, version) => {
       return null;
     }
 
+    const updatePayload = {
+      firmware_version: version,
+      last_updated: new Date().toISOString(),
+    };
+
+    const validation = validate(sessionUpdateSchema, updatePayload);
+    if (!validation.success) {
+      console.error('Session update validation failed:', validation.error.issues);
+      return null;
+    }
+
     const { data, error } = await supabase
-      .from(SESSIONS_TABLE)
-      .update({
-        firmware_version: version,
-        last_updated: new Date().toISOString(),
-      })
+      .from(TABLES.SESSIONS)
+      .update(validation.data)
       .eq('id', sessionId)
       .select()
       .single();
@@ -638,4 +771,3 @@ export const updateFirmwareVersion = async (sessionId, version) => {
     return null;
   }
 };
-
