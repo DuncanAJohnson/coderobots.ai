@@ -46,10 +46,11 @@ const dependencies = ({ ownerDocument }) => {
     );
   }
   return [
-    import(`${CDN}/codedent@${CODEDENT}/+esm`),
-    import(`${CDN}/xterm@${XTERM}/+esm`),
-    import(`${CDN}/@xterm/addon-fit@${ADDON_FIT}/+esm`),
-    import(`${CDN}/@xterm/addon-web-links@${ADDON_WEB_LINKS}/+esm`),
+    
+    import(/* @vite-ignore */ `${CDN}/codedent@${CODEDENT}/+esm`),
+    import(/* @vite-ignore */ `${CDN}/xterm@${XTERM}/+esm`),
+    import(/* @vite-ignore */ `${CDN}/@xterm/addon-fit@${ADDON_FIT}/+esm`),
+    import(/* @vite-ignore */ `${CDN}/@xterm/addon-web-links@${ADDON_WEB_LINKS}/+esm`),
   ];
 };
 

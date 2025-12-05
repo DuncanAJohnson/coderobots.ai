@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import './App.css';
 import SPIKEEditor from './components/SPIKEEditor';
 import ChatPanel from './components/ChatPanel';
@@ -6,6 +7,7 @@ import AuthModal from './components/AuthModal';
 import SessionModal from './components/SessionModal';
 import TitleBar from './components/TitleBar';
 import DebugManager, { debugLog } from './components/DebugManager';
+import DataExtractor from './components/DataExtractor';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SessionProvider, useSession } from './contexts/SessionContext';
 import { logConsole } from './services/dataLogger';
@@ -231,7 +233,10 @@ function App() {
   return (
     <AuthProvider>
       <SessionProvider>
-        <AppContent />
+        <Routes>
+          <Route path="/" element={<AppContent />} />
+          <Route path="/data" element={<DataExtractor />} />
+        </Routes>
       </SessionProvider>
     </AuthProvider>
   );
