@@ -1,33 +1,32 @@
 /**
  * Chat Panel Component
  * Handles AI chat with streaming, markdown rendering, and code snippets
+ * Uses localStorage for conversation persistence (no cloud storage)
  */
 
 import { useState, useRef, useEffect } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { useAuth } from '../contexts/AuthContext';
-import { useSession } from '../contexts/SessionContext';
-import { logMessage, logCode, logConsole } from '../services/dataLogger';
-import { streamChatCompletion } from '../utils/openaiStream';
+import { streamChatCompletion } from '../utils/aiStream';
 import { 
   LEVEL_INSTRUCTION_PREFIX,
   beginnerPrompt,
   intermediatePrompt,
   experiencedPrompt,
 } from '../prompts/codingLevels';
+import { spikePriming } from '../prompts/spike_priming';
 import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
 import './ChatPanel.css';
 
+const STORAGE_KEY = 'coderobots_chat_history';
+const SETTINGS_KEY = 'coderobots_chat_settings';
+
 const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
-  const { isAdmin } = useAuth();
-  const { activeSession, conversationHistory, getSystemPriming } = useSession();
   
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [codingLevel, setCodingLevel] = useState('beginner');
-  const [modelName, setModelName] = useState(import.meta.env.VITE_DEFAULT_MODEL || 'gpt-4');
   const [isStreaming, setIsStreaming] = useState(false);
   const [attachedContext, setAttachedContext] = useState({ includeCode: false, includeConsole: false });
   const [codeModalOpen, setCodeModalOpen] = useState(false);
@@ -35,25 +34,55 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const [consoleModalOpen, setConsoleModalOpen] = useState(false);
   const [currentConsoleContent, setCurrentConsoleContent] = useState('');
   const [consoleHasContent, setConsoleHasContent] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const chatBodyRef = useRef(null);
   const streamingMessageRef = useRef(null);
 
-  // Load conversation history from session
+  // Load conversation history from localStorage on mount
   useEffect(() => {
-    if (conversationHistory && conversationHistory.length > 0) {
-      // Filter out system messages for display
-      const displayMessages = conversationHistory
-        .filter(msg => msg.role !== 'system')
-        .map(msg => ({
-          role: msg.role === 'user' ? 'user' : 'bot',
-          content: msg.content,
-        }));
-      setMessages(displayMessages);
-    } else {
-      setMessages([]);
+    try {
+      const savedMessages = localStorage.getItem(STORAGE_KEY);
+      if (savedMessages) {
+        const parsed = JSON.parse(savedMessages);
+        if (Array.isArray(parsed)) {
+          setMessages(parsed);
+        }
+      }
+
+      const savedSettings = localStorage.getItem(SETTINGS_KEY);
+      if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+        if (settings.codingLevel) {
+          setCodingLevel(settings.codingLevel);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load chat history from localStorage:', error);
     }
-  }, [conversationHistory]);
+    // Mark as loaded after attempting to restore state
+    setIsLoaded(true);
+  }, []);
+
+  // Save conversation history to localStorage when messages change (only after initial load)
+  useEffect(() => {
+    if (!isLoaded) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    } catch (error) {
+      console.warn('Failed to save chat history to localStorage:', error);
+    }
+  }, [messages, isLoaded]);
+
+  // Save settings when coding level changes (only after initial load)
+  useEffect(() => {
+    if (!isLoaded) return;
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ codingLevel }));
+    } catch (error) {
+      console.warn('Failed to save settings to localStorage:', error);
+    }
+  }, [codingLevel, isLoaded]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -92,12 +121,14 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!activeSession) {
-      alert('No active session. Please select or create a session first.');
-      return;
+  const handleClearHistory = () => {
+    if (confirm('Are you sure you want to clear the conversation history?')) {
+      setMessages([]);
+      localStorage.removeItem(STORAGE_KEY);
     }
+  };
 
+  const handleSendMessage = async () => {
     let text = inputText.trim();
     if (!text && !attachedContext.includeCode && !attachedContext.includeConsole) {
       return;
@@ -128,38 +159,13 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     setInputText('');
     setAttachedContext({ includeCode: false, includeConsole: false });
 
-    // Log context to database
-    const sessionId = activeSession.id;
-    const conversationId = activeSession.current_conversation_id;
-    let codeContextId = null;
-    let consoleContextId = null;
-
-    if (finalContext.code && finalContext.code.trim()) {
-      codeContextId = await logCode(finalContext.code, sessionId, 'chat_context');
-    }
-    if (finalContext.console && finalContext.console.trim()) {
-      consoleContextId = await logConsole(finalContext.console, sessionId, 'chat_context');
-    }
-
-    // Log user message
-    if (text) {
-      await logMessage({
-        conversation_id: conversationId,
-        role: 'user',
-        content: text,
-        coding_level: codingLevel,
-        code_context_id: codeContextId,
-        console_context_id: consoleContextId,
-      });
-    }
-
     // Build conversation for AI
     const conversation = [];
     
     // Add system priming
     conversation.push({
       role: 'system',
-      content: getSystemPriming(),
+      content: spikePriming,
     });
 
     // Add coding level instructions
@@ -202,11 +208,9 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
     try {
       let fullResponse = '';
-      let promptTokens = 0;
-      let completionTokens = 0;
       let isFirstChunk = true;
 
-      for await (const chunk of streamChatCompletion(conversation, modelName)) {
+      for await (const chunk of streamChatCompletion(conversation)) {
         fullResponse += chunk;
         streamingMessageRef.current = fullResponse;
         
@@ -239,40 +243,28 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         return newMessages;
       });
 
-      // Log assistant message
-      await logMessage({
-        conversation_id: conversationId,
-        role: 'assistant',
-        content: fullResponse,
-        coding_level: codingLevel,
-        ai_model: modelName,
-        prompt_tokens: promptTokens,
-        completion_tokens: completionTokens,
-      });
-
     } catch (error) {
       console.error('Streaming error:', error);
       setMessages(prev => {
         const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = {
-          role: 'bot',
-          content: `Error: ${error.message}`,
-          streaming: false,
-        };
+        if (newMessages.length > 0 && newMessages[newMessages.length - 1].streaming) {
+          newMessages[newMessages.length - 1] = {
+            role: 'bot',
+            content: `Error: ${error.message}`,
+            streaming: false,
+          };
+        } else {
+          newMessages.push({
+            role: 'bot',
+            content: `Error: ${error.message}`,
+            streaming: false,
+          });
+        }
         return newMessages;
       });
     } finally {
       setIsStreaming(false);
       streamingMessageRef.current = null;
-    }
-  };
-
-  const handleModelUpdate = () => {
-    const newModel = prompt('Enter new model name:', modelName);
-    if (newModel && newModel.trim()) {
-      setModelName(newModel.trim());
-      setMessages([]);
-      alert(`Model updated to: ${newModel}`);
     }
   };
 
@@ -403,24 +395,18 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
           <option value="intermediate">Intermediate</option>
           <option value="experienced">Experienced</option>
         </select>
+        <button 
+          className="clear-history-btn"
+          onClick={handleClearHistory}
+          title="Clear conversation history"
+        >
+          Clear Chat
+        </button>
       </div>
-
-      {isAdmin && (
-        <div className="admin-controls">
-          <label htmlFor="admin-model-input">Model Name:</label>
-          <input
-            type="text"
-            id="admin-model-input"
-            value={modelName}
-            onChange={(e) => setModelName(e.target.value)}
-          />
-          <button onClick={handleModelUpdate}>Update</button>
-        </div>
-      )}
 
       <div className="chat-body" ref={chatBodyRef}>
         <div className="chat-disclaimer">
-          All activity is stored and may be reviewed by course staff.
+          Conversation is stored locally in your browser.
         </div>
         {messages.map((msg, idx) => renderMessage(msg, idx))}
         {isStreaming && (
@@ -494,4 +480,3 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 };
 
 export default ChatPanel;
-

@@ -1,18 +1,16 @@
 /**
- * OpenAI Streaming Utility
+ * LLM API Streaming Utility
  * Connects to Modal serverless function and handles SSE streaming
  */
 
 const MODAL_ENDPOINT_URL = import.meta.env.VITE_MODAL_ENDPOINT_URL;
 
 /**
- * Stream chat completion from Modal endpoint
+ * Stream LLM API completion from Modal endpoint
  * @param {Array} messages - Array of message objects with role and content
- * @param {String} model - OpenAI model name
- * @param {Number} maxTokens - Maximum tokens to generate
  * @returns {AsyncGenerator} - Yields chunks of content as they arrive
  */
-export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxTokens = 100000) {
+export async function* streamChatCompletion(messages) {
   if (!MODAL_ENDPOINT_URL) {
     throw new Error('VITE_MODAL_ENDPOINT_URL is not configured in .env.local');
   }
@@ -25,8 +23,6 @@ export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxT
       },
       body: JSON.stringify({
         messages,
-        model,
-        max_tokens: maxTokens,
       }),
     });
 

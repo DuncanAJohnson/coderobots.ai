@@ -7,35 +7,14 @@ import { useState } from 'react';
 import AboutModal from './AboutModal';
 import './TitleBar.css';
 
-const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession }) => {
+const TitleBar = ({ onShowDebug }) => {
   const [showAbout, setShowAbout] = useState(false);
 
   return (
     <>
       <div className="topbar">
-        <div className="topbar-logo">
-          <span className="logo-text">Tufts CEEO</span>
-        </div>
-        <div className="topbar-title">EN1 AI Editor</div>
+        <div className="topbar-title">Code Robots with SkoleGPT</div>
         <div className="topbar-actions">
-          {activeSession && onSaveSession && (
-            <button 
-              className="topbar-button save" 
-              onClick={onSaveSession}
-              title="Save current code and console"
-            >
-              SAVE SESSION
-            </button>
-          )}
-          {onOpenSessions && (
-            <button 
-              className="topbar-button" 
-              onClick={onOpenSessions}
-              title="Switch between editor sessions"
-            >
-              EDITOR SESSIONS
-            </button>
-          )}
           <button 
             className="topbar-button" 
             onClick={() => setShowAbout(true)}

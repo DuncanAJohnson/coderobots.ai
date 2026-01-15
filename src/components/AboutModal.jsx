@@ -12,16 +12,16 @@ const AboutModal = ({ visible, onClose }) => {
     <div className="about-modal-overlay" onClick={onClose}>
       <div className="about-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="about-header">
-          <h1 className="about-title">EN1 AI Editor</h1>
+          <h1 className="about-title">Code Robots with SkoleGPT</h1>
           <p className="about-subtitle">
-            An AI-powered environment for working with LEGO® SPIKE™ Prime robots.
+            An AI-powered environment for working with LEGO® SPIKE™ Prime robots using SkoleGPT.
           </p>
         </div>
 
         <div className="about-info-section">
           <div className="about-info-row">
             <span className="about-info-label">Version</span>
-            <span className="about-info-value">October 10, 2025</span>
+            <span className="about-info-value">January 14, 2026</span>
           </div>
 
           <div className="about-info-row">
@@ -34,7 +34,7 @@ const AboutModal = ({ visible, onClose }) => {
 
         <div className="about-footer">
           <p className="about-contact">
-            Send bug reports, feature requests, and Frog & Toad quotes to{' '}
+            Send bug reports and feature requests to{' '}
             <a 
               href="mailto:duncan.johnson@tufts.edu" 
               className="about-link"

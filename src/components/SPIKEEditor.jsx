@@ -3,13 +3,12 @@ import Board from '../utils/microRepl.js';
 import { STOP_CODE } from '../utils/stopSpike.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
-import { logCode, logConsole, logInteraction } from '../services/dataLogger';
 import './SPIKEEditor.css';
 
 const FIFO_SIZE = 10000;
+const CODE_STORAGE_KEY = 'coderobots_editor_code';
 
-
-const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
+const SPIKEEditor = forwardRef(({ initialCode }, ref) => {
   const [connected, setConnected] = useState(false);
   const [mode, setMode] = useState('disconnected');
   const [code, setCode] = useState('# Start your project here!\n');
@@ -33,15 +32,45 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
       if (editorRef.current?.setCode) {
         editorRef.current.setCode(newCode);
       }
+      // Save to localStorage
+      saveCodeToStorage(newCode);
     },
   }));
 
-  // Update code when initialCode prop changes (from session load)
+  // Load code from localStorage on mount
   useEffect(() => {
-    if (initialCode && initialCode !== code) {
-      setCode(initialCode);
+    try {
+      const savedCode = localStorage.getItem(CODE_STORAGE_KEY);
+      if (savedCode) {
+        setCode(savedCode);
+      } else if (initialCode) {
+        setCode(initialCode);
+      }
+    } catch (error) {
+      console.warn('Failed to load code from localStorage:', error);
+      if (initialCode) {
+        setCode(initialCode);
+      }
     }
-  }, [initialCode]);
+  }, []);
+
+  // Save code to localStorage helper
+  const saveCodeToStorage = (codeToSave) => {
+    try {
+      localStorage.setItem(CODE_STORAGE_KEY, codeToSave);
+    } catch (error) {
+      console.warn('Failed to save code to localStorage:', error);
+    }
+  };
+
+  // Save code when it changes (debounced via effect)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      saveCodeToStorage(code);
+    }, 1000); // Debounce saves by 1 second
+
+    return () => clearTimeout(timeoutId);
+  }, [code]);
 
   // Initialize board on mount
   useEffect(() => {
@@ -158,16 +187,10 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
 
     if (connected) {
       // Disconnect
-      if (sessionId) {
-        await logInteraction('disconnect', sessionId);
-      }
       await board.reset();
       await board.disconnect();
     } else {
       // Connect
-      if (sessionId) {
-        await logInteraction('connect', sessionId);
-      }
       try {
         await board.connect(replContainerRef.current, true);
       } catch (error) {
@@ -184,12 +207,6 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
     if (!board || !connected) return;
 
     const currentCode = editorRef.current?.getCode() || code;
-    
-    // Log interaction and code before running
-    if (sessionId) {
-      await logInteraction('run_device', sessionId);
-      await logCode(currentCode, sessionId, 'run_device');
-    }
     
     // Stop any running code first
     if (isRunning) {
@@ -211,10 +228,6 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
     const board = boardRef.current;
     if (!board || !connected) return;
 
-    if (sessionId) {
-      await logInteraction('send_ctrl_c', sessionId);
-    }
-
     setIsRunning(false);
     await board.write('\x03');
     
@@ -233,10 +246,6 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
     const board = boardRef.current;
     if (!board || !connected) return;
 
-    if (sessionId) {
-      await logInteraction('reset_device', sessionId);
-    }
-
     setIsRunning(false);
     await board.reset();
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -246,14 +255,6 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
   };
 
   const handleClear = async () => {
-    // Log interaction and console before clearing
-    if (sessionId) {
-      await logInteraction('clear_console', sessionId);
-      if (buffer) {
-        await logConsole(buffer, sessionId, 'clear_console');
-      }
-    }
-    
     if (terminalRef.current) {
       terminalRef.current.clear();
     }
@@ -267,10 +268,6 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
     const board = boardRef.current;
     if (!board || !connected) return;
 
-    if (sessionId) {
-      await logInteraction('switch_to_repl_mode', sessionId);
-    }
-
     await board.write('\x03');
     setMode('repl');
   };
@@ -278,10 +275,6 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
   const handleEnterProgramSlot = async () => {
     const board = boardRef.current;
     if (!board || !connected) return;
-
-    if (sessionId) {
-      await logInteraction('switch_to_program_slot_mode', sessionId);
-    }
 
     setIsRunning(false);
     await board.reset();
@@ -297,12 +290,6 @@ const SPIKEEditor = forwardRef(({ sessionId, initialCode }, ref) => {
     }
 
     const currentCode = editorRef.current?.getCode() || code;
-    
-    // Log interaction and code before saving to slot
-    if (sessionId) {
-      await logInteraction(`save_to_slot_${selectedSlot}`, sessionId);
-      await logCode(currentCode, sessionId, 'save_to_slot');
-    }
     
     const slotStr = String(selectedSlot).padStart(2, '0');
     
@@ -403,4 +390,3 @@ os.chdir('/flash')
 SPIKEEditor.displayName = 'SPIKEEditor';
 
 export default SPIKEEditor;
-

@@ -44,6 +44,21 @@
     font-size: 0.8rem;
 }
 
+.clear-history-btn {
+    margin-left: auto;
+    padding: 4px 10px;
+    background: #c44;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.clear-history-btn:hover {
+    background: #a33;
+}
+
 /* conversation area */
 .chat-body{
     flex:1 1 0;
