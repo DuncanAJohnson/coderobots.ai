@@ -1,0 +1,52 @@
+Okay, lad os dykke ned i `distance_sensor` modulet i SPIKE 3 Micropython. Her er en forklaring på, hvad det er, hvad det kan gøre, og hvordan du bruger det, skrevet på dansk.
+
+**Hvad er `distance_sensor` modulet?**
+
+`distance_sensor` modulet giver dig mulighed for at interagere med en afstandssensor (distance sensor) tilsluttet din SPIKE 3 hub. Denne sensor kan måle afstanden til et objekt foran den. Den er nyttig til at lave robotter, der kan undgå forhindringer, følge linjer, eller reagere på objekter i nærheden.
+
+**Hvilke funktioner er der i modulet?**
+
+Der er primært én vigtig funktion: `distance(port)`.
+
+*   **`distance(port)`**: Denne funktion måler afstanden til det nærmeste objekt og returnerer en værdi i millimeter.
+
+    *   `port`:  Dette er en konstant fra `hub.port` modulet, der angiver, hvilken port sensoren er tilsluttet. For eksempel `port.C`.
+    *   Returnerer:
+        *   En integer, der repræsenterer afstanden i millimeter.
+        *   `-1`, hvis der ikke er en gyldig måling (ingen genstand i rækkevidde, eller der er en fejl).
+
+**Hvor stor er rækkevidden af sensoren?**
+
+Sensoren kan pålideligt detektere objekter op til omkring 2,5 meter (8 fod). Ud over dette kan den returnere meget høje tal (i tusindvis), eller -1, da målingerne bliver upålidelige.
+
+**Eksempel på kode**
+
+Her er et simpelt eksempel på, hvordan du bruger `distance_sensor` modulet:
+
+```python
+# Importerer modulet til at styre afstandssensoren
+import distance_sensor
+from hub import port
+
+# Definerer porten, hvor afstandssensoren er tilsluttet
+DISTANCE_PORT = port.C
+
+# Løber i en uendelig løkke for at læse afstand kontinuerligt
+while True:
+    # Læser afstanden fra sensoren
+    distance_mm = distance_sensor.distance(DISTANCE_PORT)
+
+    # Udskriver afstanden til konsollen (hvis du kører koden i et miljø, hvor det er muligt)
+    print(f"Afstand: {distance_mm} mm")
+
+    # Pauser i 100 millisekunder for at undgå at overbelaste processoren
+    import time
+    time.sleep_ms(100)
+```
+
+**Vigtige overvejelser**
+
+*   **Enheden:** Afstanden returneres i millimeter.
+*   **Fejlhåndtering:** Det er en god idé at tjekke for `-1` return-værdien for at håndtere situationer, hvor der ikke er en gyldig måling.
+*   **Lysforhold:**  Ydeevnen af sensoren kan påvirkes af lysforholdene.
+*   **Overfladetyper:**  Forskellige overfladetyper (glatte, matte, farvede) kan påvirke sensorens nøjagtighed.

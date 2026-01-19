@@ -1,0 +1,16 @@
+Okay, her er et program, der får din SPIKE 3 hub til at smile ved hjælp af lysmatrixen. Det er et meget simpelt program, der bare viser smile-billedet på lysmatrixen.
+
+```python
+# Importerer modulen som styrer lysmatrixen på hub'en.
+from hub import light_matrix
+
+# Viser smile-billedet på lysmatrixen.
+light_matrix.show_image(light_matrix.IMAGE_SMILE)
+```
+
+**Forklaring:**
+
+*   `from hub import light_matrix`:  Denne linje importerer `light_matrix` modulet fra `hub` modulet. Dette giver dig adgang til funktionerne, der styrer lysmatrixen.
+*   `light_matrix.show_image(light_matrix.IMAGE_SMILE)`:  Denne linje kalder funktionen `show_image` fra `light_matrix` modulet.  `IMAGE_SMILE` er en konstant defineret i `light_matrix` modulet, som repræsenterer smile-billedet.  Funktionen viser dette billede på lysmatrixen.
+
+Det er det! Din robot smiler nu.

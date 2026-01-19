@@ -1,0 +1,36 @@
+Okay, lad os se på fejlen "ENODEV" og hvad der kan forårsage den i din SPIKE 3 kode. Fejlen "ENODEV" betyder "No such device" på engelsk, og i din kontekst betyder det, at SPIKE 3 systemet ikke kan finde den hardware-enhed, du prøver at bruge. Det er en ret almindelig fejl, og der er flere mulige årsager. Her er en liste over de mest sandsynlige problemer og hvordan du kan tjekke dem:
+
+1. **Hub'en er ikke tændt eller tilsluttet:** Den mest simple forklaring er, at SPIKE 3 hub'en ikke er tændt, eller at den ikke er korrekt tilsluttet det miljø, du kører din kode i (f.eks. SPIKE appen eller et andet udviklingsmiljø). Sørg for, at hub'en er tændt og at den er synlig og korrekt forbundet til din computer eller til SPIKE appen.
+
+2. **Ingen motor tilsluttet porten:** Tjek, at der rent faktisk er en motor tilsluttet den port, du prøver at bruge i din kode.  Hub'en kan ikke finde en motor, hvis den ikke er tilsluttet. Prøv at teste hver port individuelt for at se, om den bliver detekteret.
+
+3. **Problemer med forbindelsen:** Hvis du bruger en USB-forbindelse, så sørg for, at kablet er godt tilsluttet både hub'en og computeren.  Prøv et andet USB-kabel for at udelukke et defekt kabel.
+
+4. **Kodefejl:** Selvom det er mindre sandsynligt, kan en fejl i din kode forhindre, at hub'en korrekt initialiseres eller finder de tilsluttede enheder.  Dobbelttjek din kode for at sikre, at du bruger de korrekte port-konstanter (f.eks. `port.A`, `port.B`) og at du har importeret de nødvendige moduler korrekt (f.eks. `from hub import port`).
+
+5. **Interferens:** I sjældne tilfælde kan der være elektromagnetisk interferens, der forstyrrer kommunikationen mellem hub'en og din computer. Prøv at flytte hub'en væk fra andre elektroniske enheder.
+
+Her er et kodeeksempel, der viser, hvordan du kan teste, om en motor er tilsluttet en bestemt port:
+
+```python
+# Importerer modulen som styrer motorene
+import motor
+# Importerer port-konstanterne
+from hub import port
+
+# Definer porten du vil teste
+test_port = port.A
+
+# Forsøg at køre motoren på porten. Hvis der er en fejl, betyder det, at porten ikke er detekteret.
+try:
+    motor.run(test_port, 100) # Kør motoren i 1 sekund
+    print(f"Motor fundet på port {test_port}")
+    motor.stop(test_port) # Stop motoren igen
+except OSError as e:
+    if e.errno == 19: # ENODEV
+        print(f"Motor ikke fundet på port {test_port}. Tjek tilslutningen.")
+    else:
+        print(f"En anden fejl opstod: {e}")
+```
+
+**Vigtigt:** Start med at tjekke de mest simple årsager (hub'en er tændt, motor er tilsluttet) før du kigger på mere komplicerede problemer. Test hver port individuelt for at isolere problemet.

@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 # Create Modal app
 app = modal.App("coderobots-skolegpt-stream")
 
-# Define the image with aiohttp
-image = modal.Image.debian_slim().pip_install("aiohttp")
+# Define the image dependencies used at runtime inside Modal containers
+image = modal.Image.debian_slim().pip_install("aiohttp", "fastapi")
 
 
 @app.function(
@@ -22,6 +22,7 @@ image = modal.Image.debian_slim().pip_install("aiohttp")
     secrets=[modal.Secret.from_name("skolegpt-credentials")],
     timeout=300,  # 5 minute timeout
 )
+@modal.concurrent(max_inputs=100, target_inputs=80)
 async def stream_skolegpt_completion(
     messages: list[dict],
 ) -> AsyncIterator[str]:
@@ -35,6 +36,8 @@ async def stream_skolegpt_completion(
         JSON-formatted chunks for SSE streaming
     """
     import aiohttp
+
+    input_id = modal.current_input_id()
     
     api_url = os.environ.get("SKOLEGPT_API_URL")
     api_key = os.environ.get("SKOLEGPT_API_KEY")
@@ -75,12 +78,13 @@ async def stream_skolegpt_completion(
         
         async with aiohttp.ClientSession() as session:
             async with session.post(api_url, json=payload, headers=headers) as response:
-                if not response.ok:
+                if response.status >= 400:
                     error_text = await response.text()
                     error_data = json.dumps({
                         "type": "error",
                         "error": f"SkoleGPT API error: {response.status} - {error_text}"
                     })
+                    logger.warning(f"{input_id}: Upstream error {response.status}: {error_text[:200]}")
                     yield f"data: {error_data}\n\n"
                     return
                 
@@ -102,7 +106,7 @@ async def stream_skolegpt_completion(
                             data_str = line_str[6:]  # Remove "data: " prefix
                             
                             if data_str == '[DONE]':
-                                logger.debug("SkoleGPT stream: Received [DONE] marker")
+                                logger.debug(f"{input_id}: SkoleGPT stream: Received [DONE] marker")
                                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
                                 return
                             
@@ -126,12 +130,17 @@ async def stream_skolegpt_completion(
                                     
                                     # Handle finish reason (stream complete)
                                     if finish_reason:
-                                        logger.debug(f"SkoleGPT stream finished: finish_reason={finish_reason}")
+                                        logger.debug(
+                                            f"{input_id}: SkoleGPT stream finished: finish_reason={finish_reason}"
+                                        )
                                         yield f"data: {json.dumps({'type': 'done'})}\n\n"
                                         return
                                         
                             except json.JSONDecodeError as e:
-                                logger.warning(f"SkoleGPT stream: Failed to parse JSON: {data_str[:100]}... Error: {e}")
+                                logger.warning(
+                                    f"{input_id}: SkoleGPT stream: Failed to parse JSON: "
+                                    f"{data_str[:100]}... Error: {e}"
+                                )
                                 continue
         
         # Send completion signal if we reach here
@@ -150,6 +159,7 @@ async def stream_skolegpt_completion(
     image=image,
     secrets=[modal.Secret.from_name("skolegpt-credentials")],
 )
+@modal.concurrent(max_inputs=100, target_inputs=80)
 @modal.fastapi_endpoint(method="POST")
 async def chat_endpoint(request: dict):
     """

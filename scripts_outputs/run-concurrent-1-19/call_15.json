@@ -1,0 +1,12 @@
+{
+  "index": 15,
+  "ok": true,
+  "message": "forklare motormodulet",
+  "startedAt": "2026-01-19T16:41:00.193Z",
+  "endedAt": "2026-01-19T16:41:41.218Z",
+  "durationMs": 41025.842207,
+  "ttftMs": 1821.837949,
+  "isSse": true,
+  "outputFile": "call_15.txt",
+  "error": null
+}

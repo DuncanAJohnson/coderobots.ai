@@ -1,0 +1,12 @@
+{
+  "index": 11,
+  "ok": true,
+  "message": "Lav mig til en robot, der smiler",
+  "startedAt": "2026-01-19T16:40:48.194Z",
+  "endedAt": "2026-01-19T16:41:00.530Z",
+  "durationMs": 12336.295805,
+  "ttftMs": 2112.36144,
+  "isSse": true,
+  "outputFile": "call_11.txt",
+  "error": null
+}

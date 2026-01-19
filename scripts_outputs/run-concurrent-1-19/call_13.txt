@@ -1,0 +1,22 @@
+Okay, lad os antage, at du har skrevet kode til din robot, og du ønsker en afsluttende linje. Her er nogle muligheder, afhængigt af hvad du vil opnå:
+
+**Mulighed 1: Afslutte programmet pænt (anbefales):**
+
+```python
+# Stop alle motorer for at sikre, at de stopper ordentligt
+motor.stop(port.A)
+motor.stop(port.B)
+```
+
+**Forklaring:**
+
+*   `motor.stop(port.A)`: Stopper motoren, der er tilsluttet port A.
+*   `motor.stop(port.B)`: Stopper motoren, der er tilsluttet port B.
+
+Det er en god idé at stoppe motorene, når programmet er færdigt, så de ikke fortsætter med at køre.
+
+**Mulighed 2: Hvis du bruger `runloop.run()` (mere avanceret):**
+
+Hvis du bruger `runloop.run()` til at køre din kode asynkront, vil du *ikke* nødvendigvis have en afsluttende linje som denne. `runloop.run()` holder programmet kørende, indtil det stoppes manuelt.  Hvis du *skal* stoppe det, kan du overveje at tilføje en mekanisme til at sætte en "stop"-flag og tjekke det regelmæssigt i din kode.
+
+**Vigtigt:** Husk at definere `port.A` og `port.B` korrekt, afhængigt af hvilke porte dine motorer er tilsluttet.

@@ -1,0 +1,12 @@
+{
+  "index": 13,
+  "ok": true,
+  "message": "skriv en linje til mig efter robotten",
+  "startedAt": "2026-01-19T16:40:54.193Z",
+  "endedAt": "2026-01-19T16:41:12.447Z",
+  "durationMs": 18253.92058,
+  "ttftMs": 1838.424845,
+  "isSse": true,
+  "outputFile": "call_13.txt",
+  "error": null
+}

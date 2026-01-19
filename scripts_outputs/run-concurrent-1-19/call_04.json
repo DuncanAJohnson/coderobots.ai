@@ -1,0 +1,12 @@
+{
+  "index": 4,
+  "ok": true,
+  "message": "Skriv en musikspillende robot til mig",
+  "startedAt": "2026-01-19T16:40:27.193Z",
+  "endedAt": "2026-01-19T16:41:10.147Z",
+  "durationMs": 42953.78118,
+  "ttftMs": 2118.311688,
+  "isSse": true,
+  "outputFile": "call_04.txt",
+  "error": null
+}

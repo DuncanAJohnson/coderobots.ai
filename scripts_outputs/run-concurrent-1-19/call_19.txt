@@ -1,0 +1,54 @@
+Okay, lad os kigge på fejlen "ENODEV" i forbindelse med din SPIKE 3 robot. Fejlen "ENODEV" betyder "No such device" på engelsk, og i din kontekst indikerer det, at din robot ikke kan finde den hardwareenhed, du prøver at bruge.  Det kan være en motor, en sensor, eller noget andet. Her er en række mulige årsager og hvad du kan gøre for at løse problemet:
+
+**Mulige Årsager og Løsninger:**
+
+1.  **Hub'en er ikke tændt/tilsluttet:**
+    *   **Tjek:** Er din hub tændt? Er den korrekt tilsluttet til den app, du bruger (SPIKE App, eller andet miljø)?
+    *   **Løsning:** Sørg for, at hub'en er tændt, og at forbindelsen er stabil. Genstart appen og prøv igen.
+
+2.  **Ingen motor/sensor er tilsluttet:**
+    *   **Tjek:** Er der en motor tilsluttet den port, du forsøger at bruge? Gælder det samme for din sensor?
+    *   **Løsning:** Sørg for, at motoren/sensoren er korrekt tilsluttet porten. Prøv at afbryde og tilslutte igen.
+
+3.  **Du forsøger at tilgå begge porte samtidigt, og hub'en genkender ikke den ene:**
+    *   **Tjek:**  Prøver du at bruge flere motorer eller sensorer samtidigt?
+    *   **Løsning:** Prøv at teste hver port individuelt først for at bekræfte, at den er genkendt. Start med at teste port A, så port B, osv.
+
+4.  **Firmware-problem:**
+    *   **Tjek:** Er din SPIKE 3 hub opdateret med den nyeste firmware?
+    *   **Løsning:** Opdater firmwaren via LEGO Education appen eller SPIKE appen.
+
+5.  **Forstyrrelser:**
+    *   **Tjek:** Er der andre enheder i nærheden, der kan forstyrre signalet?
+    *   **Løsning:** Flyt robotten væk fra potentielle kilder til interferens, som f.eks. trådløse routere eller mikrobølgeovne.
+
+**Fejlfindingstrin:**
+
+1.  **Start simpelt:** Skriv et simpelt program, der kun bruger én motor eller sensor ad gangen. Dette hjælper med at isolere problemet.
+2.  **Test hver port individuelt:** Kør et program, der kun bruger port A, så et program der kun bruger port B, osv. Dette vil afsløre, om en specifik port ikke virker.
+3.  **Genstart alt:** Genstart din hub, din computer/tablet og din app.
+4.  **Tjek forbindelsen:** Sørg for, at alle kabler er korrekt tilsluttet.
+
+**Eksempelkode til at teste en port (port A):**
+
+```python
+# Test om port A er aktiv
+
+import motor
+from hub import port
+
+# Prøv at køre motoren på port A kortvarigt
+try:
+    motor.run(port.A, 100)
+    print("Motor på port A kører!")
+    motor.stop(port.A)
+except OSError as e:
+    print(f"Fejl: {e}")
+    print("Port A er muligvis ikke aktiv. Tjek forbindelsen og firmware.")
+```
+
+Hvis du stadig har problemer, så giv mig flere detaljer:
+
+*   Hvilken port giver fejlen?
+*   Hvilken type enhed er tilsluttet den port?
+*   Hvilken kode prøver du at køre, når fejlen opstår?

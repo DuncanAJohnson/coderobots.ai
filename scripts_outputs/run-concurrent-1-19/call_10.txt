@@ -1,0 +1,76 @@
+Okay, lad os dykke ned i `distance_sensor` modulet i SPIKE 3 Micropython. Her er en forklaring på, hvad det gør, hvordan man bruger det, og hvad man skal være opmærksom på.
+
+**Hvad gør `distance_sensor` modulet?**
+
+`distance_sensor` modulet giver dig mulighed for at læse afstandsmålinger fra LEGO SPIKE 3 afstandssensor. Denne sensor kan måle afstanden til et objekt, der er foran den, og returnerer en numerisk værdi, der repræsenterer afstanden.  Den kan bruges til at lave robotter, der reagerer på deres omgivelser, såsom at stoppe, når de er tæt på en væg, eller følge en linje.
+
+**Hvordan bruger man `distance_sensor` modulet?**
+
+1.  **Importer modulet:** Først skal du importere `distance_sensor` modulet i din kode:
+
+    ```python
+    import distance_sensor
+    from hub import port
+    ```
+
+2.  **Læs afstanden:** Brug funktionen `distance_sensor.distance(port)` til at læse afstanden. `port` argumentet angiver hvilken port på SPIKE hub’en, afstandssensoren er tilsluttet.  Eksempel:
+
+    ```python
+    afstand = distance_sensor.distance(port.C)
+    print(afstand)
+    ```
+
+    Denne kode læser afstanden fra port C og udskriver den til konsollen.
+
+**Returneringsværdier og hvad de betyder:**
+
+*   **Tal (f.eks. 250, 100, 500):**  Disse repræsenterer afstanden i millimeter.  En værdi på 250 betyder for eksempel, at der er 250 millimeter (25 cm) til det nærmeste objekt.
+*   **-1:**  Dette indikerer, at der ikke er nogen gyldig måling. Dette kan skyldes, at sensoren ikke kan detektere noget, eller at der er for langt væk (over ca. 3 fod/900mm).  Det er vigtigt at håndtere denne situation i din kode.
+*   **Meget store tal (f.eks. 10000):** Disse er generelt ugyldige målinger. De kan forekomme, når der er forstyrrelser eller når sensoren ikke kan måle korrekt. Det er også en god idé at håndtere disse i din kode.
+
+**Eksempel på kode, der håndterer forskellige scenarier:**
+
+```python
+import motor
+from hub import port
+import distance_sensor
+import time
+
+# Konfigurer portene
+LEFT_MOTOR = port.A
+RIGHT_MOTOR = port.B
+DISTANCE_PORT = port.C
+
+# Motorhastighed
+MOTOR_SPEED = 600
+
+while True:
+    # Læs afstanden
+    afstand = distance_sensor.distance(DISTANCE_PORT)
+
+    if afstand == -1:
+        print("Ingen afstand målt")
+        motor.run(LEFT_MOTOR, MOTOR_SPEED) # kør venstre motor
+        motor.stop(RIGHT_MOTOR)
+    elif afstand >= 900: # 900mm er ca 3 fod
+        print("Afstand for stor")
+        motor.stop(LEFT_MOTOR)
+        motor.run(RIGHT_MOTOR, MOTOR_SPEED)
+    else:
+        print("Afstand: ", afstand, "mm")
+        motor.stop(LEFT_MOTOR)
+        motor.stop(RIGHT_MOTOR)
+
+    time.sleep_ms(100)
+```
+
+**Vigtige punkter at huske:**
+
+*   **Enheder:** Afstanden returneres i millimeter.
+*   **Rækkevidde:** Sensoren har en begrænset rækkevidde.  Den kan ikke måle afstande, der er for tæt på eller for langt væk.
+*   **Forstyrrelser:**  Lysforhold og reflekterende overflader kan påvirke nøjagtigheden af målingerne.
+*   **Håndtering af fejl:** Det er vigtigt at håndtere tilfælde, hvor sensoren ikke kan måle en afstand (returnerer -1) eller returnerer meget store tal.
+
+**Opsummering:**
+
+`distance_sensor` modulet er et kraftfuldt værktøj til at få din robot til at reagere på dens omgivelser. Ved at forstå

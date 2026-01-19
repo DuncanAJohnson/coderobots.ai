@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "modal:batch": "node scripts/modal_batch_calls.mjs"
   },
   "dependencies": {
     "@babel/runtime": "^7.28.4",

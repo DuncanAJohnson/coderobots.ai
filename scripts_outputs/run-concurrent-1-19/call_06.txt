@@ -1,0 +1,43 @@
+Okay, her er et program, der flytter motorer på portene C og D. Jeg har kommenteret koden grundigt på dansk for at gøre det nemmere at forstå.
+
+```python
+# Importerer modulen som styrer motorene
+import motor
+# Importerer port-konstanterne fra hub-modulen
+from hub import port
+
+# Konfigurerer hastighed og varighed
+hastighed = 300  # Grader pr. sekund (positiv = fremad)
+varighed_ms = 5000  # Tid i millisekunder (5000 ms = 5 sekunder)
+
+# Kører motor på port C fremad
+motor.run(port.C, hastighed)
+
+# Kører motor på port D baglæns (negativ hastighed)
+motor.run(port.D, -hastighed)
+
+# Venter i 5 sekunder (brug await hvis du er i en async funktion)
+import time
+time.sleep_ms(varighed_ms)
+
+# Stopper begge motorer
+motor.stop(port.C)
+motor.stop(port.D)
+
+# Programmet er slut
+```
+
+**Forklaring:**
+
+*   **`import motor`**:  Importerer `motor`-modulet, som giver os adgang til funktioner til at styre motorerne.
+*   **`from hub import port`**: Importerer `port`-konstanterne fra `hub`-modulet.  Dette giver os mulighed for at referere til portene A, B, C, D osv. på en klar og læsbar måde.
+*   **`hastighed = 300`**:  Definerer en variabel `hastighed`, som repræsenterer den ønskede hastighed for motorene i grader per sekund.  En positiv værdi betyder, at motoren kører fremad, og en negativ værdi betyder, at den kører baglæns.
+*   **`varighed_ms = 5000`**: Definerer en variabel `varighed_ms` som repræsenterer den tid motoren skal køre i millisekunder.
+*   **`motor.run(port.C, hastighed)`**:  Start motoren på port C med den definerede hastighed.
+*   **`motor.run(port.D, -hastighed)`**: Start motoren på port D med den definerede hastighed, men i modsat retning (baglæns) ved at bruge en negativ hastighed.
+*   **`import time`**: Importerer `time`-modulet, der indeholder funktioner til at håndtere tid.
+*   **`time.sleep_ms(varighed_ms)`**: Pauser programmet i den angivne varighed (5000 millisekunder). Dette er nødvendigt for at give motorene tid til at køre.  Bemærk: `time.sleep()` tager argumentet i sekunder, ikke millisekunder.
+*   **`motor.stop(port.C)`**: Stopper motoren på port C.
+*   **`motor.stop(port.D)`**: Stopper motoren på port D.
+
+Dette program vil få motorene på port C og D til at køre i 5 sekunder. Port C vil køre fremad, og Port D vil køre baglæns.  Husk at tilpasse `hastighed` og `varighed_ms` efter dine behov.

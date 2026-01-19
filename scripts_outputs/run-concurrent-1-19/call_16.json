@@ -1,0 +1,12 @@
+{
+  "index": 16,
+  "ok": true,
+  "message": "Skriv et program til mig, der bevæger motorer på portene c og d",
+  "startedAt": "2026-01-19T16:41:03.192Z",
+  "endedAt": "2026-01-19T16:41:32.115Z",
+  "durationMs": 28922.852777,
+  "ttftMs": 1838.999897,
+  "isSse": true,
+  "outputFile": "call_16.txt",
+  "error": null
+}

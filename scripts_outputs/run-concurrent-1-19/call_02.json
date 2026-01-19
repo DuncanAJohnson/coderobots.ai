@@ -1,0 +1,12 @@
+{
+  "index": 2,
+  "ok": true,
+  "message": "Jeg får fejlen \"ENODEV\". Hvad kan problemet være?",
+  "startedAt": "2026-01-19T16:40:21.192Z",
+  "endedAt": "2026-01-19T16:40:56.306Z",
+  "durationMs": 35113.662183,
+  "ttftMs": 2020.954432,
+  "isSse": true,
+  "outputFile": "call_02.txt",
+  "error": null
+}
