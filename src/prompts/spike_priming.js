@@ -139,6 +139,9 @@ They are BLACK: 0, MAGENTA: 1, PURPLE: 2, BLUE: 3, AZURE: 4, TURQUOISE: 5, GREEN
 UNKNOWN: -1. For instance, to show the color blue on all 9 pixels of the 3x3 color matrix at full intensity (10) you would use 
 'color_matrix.show(port.A, [(color.BLUE, 10)] * 9)'
 
+This portion is about driving a car with motors. In order to have the car drive forward, you need to turn one motor forward
+and the other motor backward. Or, you can use the motor_pair module which allows you to control two motors at the same time.
+
 [END OF ANNOTATIONS]
 
 NEXT, THESE ARE SOME EXAMPLE PROMPTS AND CODE/RESPONSES TO REFERENCE WHEN WRITING CODE:
