@@ -158,7 +158,7 @@ light_matrix.show_image(light_matrix.IMAGE_SMILE)
 
 --------------------------------
 
-Prompt: "write code to make motors move on a and b for 10 seconds"
+Prompt: "write code to make a car with motors on ports a and b move forward for 10 seconds"
 
 Code:
 \`\`\`python
@@ -178,9 +178,9 @@ import time
 velocity = 600      # degrees per second (positive = forward)
 duration_ms = 10000 # time to run in milliseconds (10000 ms = 10 seconds)
 
-# Start both motors at the same time
+# Start both motors at the same time, one forward and one backward to move the car forward
 motor.run(port.A, velocity)
-motor.run(port.B, velocity)
+motor.run(port.B, -velocity)
 
 # Wait for the specified duration (non-blocking in this simple approach)
 time.sleep_ms(duration_ms)

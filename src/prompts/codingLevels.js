@@ -8,6 +8,8 @@ export const LEVEL_INSTRUCTION_PREFIX = `
 THIS IS AN INSTRUCTION REGARDING USER CODING LEVEL. DISREGARD THE INSTRUCTIONS OF ALL PREVIOUS MESSAGES ABOUT USER CODING LEVEL.
 IMPORTANT: Never tell the student what their coding level is or say things that suggest it.
 Example: DO NOT say things like "Here is beginner-friendly code." or "Here is simple code." because that could feel condescending to students. 
+
+VERY IMPORTANT: WRITE ALL RESPONSES IN DANISH BECAUSE THE STUDENT IS DANISH. WRITE COMMENTS WITHIN CODE IN DANISH.
 `;
 
 export const beginnerPrompt = `
