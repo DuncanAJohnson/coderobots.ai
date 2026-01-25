@@ -22,7 +22,7 @@ import './ChatPanel.css';
 const STORAGE_KEY = 'coderobots_chat_history';
 const SETTINGS_KEY = 'coderobots_chat_settings';
 
-const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
+const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent, isRobotConnected }) => {
   
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
@@ -33,7 +33,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const [currentCodeSnippet, setCurrentCodeSnippet] = useState({ code: '', lang: '' });
   const [consoleModalOpen, setConsoleModalOpen] = useState(false);
   const [currentConsoleContent, setCurrentConsoleContent] = useState('');
-  const [consoleHasContent, setConsoleHasContent] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
   const chatBodyRef = useRef(null);
@@ -88,17 +87,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  // Check console content availability
-  useEffect(() => {
-    const checkConsole = async () => {
-      if (getConsoleContent) {
-        const content = await getConsoleContent();
-        setConsoleHasContent(content && content.trim().length > 0);
-      }
-    };
-    checkConsole();
-  }, [getConsoleContent]);
 
   const scrollToBottom = () => {
     if (chatBodyRef.current) {
@@ -427,7 +415,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
           <button
             className="context-btn"
             onClick={() => setAttachedContext(prev => ({ ...prev, includeConsole: true }))}
-            disabled={!consoleHasContent}
+            disabled={!isRobotConnected}
           >
             Add Console to Chat
           </button>

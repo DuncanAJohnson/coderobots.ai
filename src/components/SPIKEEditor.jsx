@@ -8,7 +8,7 @@ import './SPIKEEditor.css';
 const FIFO_SIZE = 10000;
 const CODE_STORAGE_KEY = 'coderobots_editor_code';
 
-const SPIKEEditor = forwardRef(({ initialCode }, ref) => {
+const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
   const [connected, setConnected] = useState(false);
   const [mode, setMode] = useState('disconnected');
   const [code, setCode] = useState('# Start your project here!\n');
@@ -82,6 +82,7 @@ const SPIKEEditor = forwardRef(({ initialCode }, ref) => {
           console.log('Device connected');
           setConnected(true);
           setMode('repl');
+          onConnectionChange?.(true);
         },
         ondisconnect: () => {
           console.log('Device disconnected');
@@ -89,6 +90,7 @@ const SPIKEEditor = forwardRef(({ initialCode }, ref) => {
           setMode('disconnected');
           setBuffer('');
           setIsRunning(false);
+          onConnectionChange?.(false);
         },
         onerror: (error) => {
           console.error('Board error:', error);

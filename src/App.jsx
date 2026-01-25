@@ -10,6 +10,7 @@ const CODE_STORAGE_KEY = 'coderobots_editor_code';
 function App() {
   const [showDebugModal, setShowDebugModal] = useState(false);
   const [editorCode, setEditorCode] = useState('# Start your project here!\n');
+  const [isRobotConnected, setIsRobotConnected] = useState(false);
 
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
@@ -106,6 +107,7 @@ function App() {
             <SPIKEEditor 
               ref={spikeEditorRef}
               initialCode={editorCode}
+              onConnectionChange={setIsRobotConnected}
             />
           </div>
           <div className="horizontal-resizer" ref={resizerRef}></div>
@@ -114,6 +116,7 @@ function App() {
               onReplaceCode={handleReplaceCode}
               getCodeContent={getCodeContent}
               getConsoleContent={getConsoleContent}
+              isRobotConnected={isRobotConnected}
             />
           </div>
         </div>
