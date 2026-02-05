@@ -25,8 +25,8 @@ image = (
         "fastapi[standard]",
         "aiohttp",
     )
-    .copy_local_dir("modal_functions/providers", "/root/providers")
-    .copy_local_file("modal_functions/model_config.py", "/root/model_config.py")
+    .add_local_dir("modal_functions/providers", "/root/providers")
+    .add_local_file("modal_functions/model_config.py", "/root/model_config.py")
 )
 
 # TODO: WHY IS THIS IN BOTH THIS FILE AND CHAT WITH BUDGET
