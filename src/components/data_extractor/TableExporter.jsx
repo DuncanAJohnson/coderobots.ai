@@ -1,4 +1,10 @@
 import { useState } from 'react';
+import {
+  normalizeTableName,
+  fetchAllRowsForExport,
+  convertRowsToCsv,
+  downloadCsvFile,
+} from '../../services/dataExport';
 
 /**
  * TableExporter Component
@@ -9,8 +15,6 @@ import { useState } from 'react';
  * @param {string} startTime - Start time filter value (from parent)
  * @param {string} endTime - End time filter value (from parent)
  * @param {Array} emails - Parsed email list (from parent)
- * @param {Function} getAuthHeaders - Function to get auth headers
- * @param {string} modalBaseUrl - Base URL for the Modal export endpoint
  */
 function TableExporter({
   tableName,
@@ -18,8 +22,6 @@ function TableExporter({
   startTime,
   endTime,
   emails,
-  getAuthHeaders,
-  modalBaseUrl,
 }) {
   // Internal state for this table's column selection
   const [selectedColumns, setSelectedColumns] = useState(
@@ -48,44 +50,25 @@ function TableExporter({
     setExportResult(null);
 
     try {
-      const auth = await getAuthHeaders();
-
-      const response = await fetch(modalBaseUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...auth,
-          table: tableName.toLowerCase().replace(/ /g, '_'),
-          columns: selectedColumns,
-          start_time: startTime ? new Date(startTime).toISOString() : null,
-          end_time: endTime ? new Date(endTime).toISOString() : null,
-          emails: emails.length > 0 ? emails : null,
-        }),
+      const table = normalizeTableName(tableName);
+      const rows = await fetchAllRowsForExport({
+        table,
+        columns: selectedColumns,
+        startTime,
+        endTime,
+        emails,
       });
-      const data = await response.json();
 
+      const csvText = convertRowsToCsv(rows, selectedColumns);
+      downloadCsvFile(
+        csvText,
+        `${tableName.toLowerCase()}_export_${new Date().toISOString().split('T')[0]}.csv`
+      );
 
-      console.log(data);
-      
-      if (data.success) {
-        // Trigger CSV download
-        const blob = new Blob([data.data], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${tableName.toLowerCase()}_export_${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        setExportResult({
-          success: true,
-          rowCount: data.row_count,
-        });
-      } else {
-        setError(data.error || 'Export failed');
-      }
+      setExportResult({
+        success: true,
+        rowCount: rows.length,
+      });
     } catch (err) {
       setError(`Export failed: ${err.message}`);
     } finally {
