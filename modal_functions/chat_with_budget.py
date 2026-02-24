@@ -12,15 +12,12 @@ from typing import AsyncIterator
 # Add /root to Python path so imports work
 sys.path.insert(0, "/root")
 
-from model_config import get_provider_for_model, is_streaming_model
 from budget_manager import (
     verify_auth_and_get_access_level,
     check_budget,
     log_usage,
     calculate_cost,
-    get_weekly_spend,
-    EN1_WEEKLY_BUDGET,
-    STANDARD_WEEKLY_BUDGET,
+    get_model_config,
 )
 
 # Create Modal app
@@ -38,7 +35,6 @@ image = (
         "aiohttp",
     )
     .add_local_dir("modal_functions/providers", "/root/providers")
-    .add_local_file("modal_functions/model_config.py", "/root/model_config.py")
     .add_local_file("modal_functions/budget_manager.py", "/root/budget_manager.py")
 )
 
@@ -65,7 +61,6 @@ def get_provider(provider_name: str):
         modal.Secret.from_name("openai-api-key"),
         modal.Secret.from_name("supabase-en1-credentials"),
         modal.Secret.from_name("supabase-showcase-credentials"),
-        modal.Secret.from_name("skolegpt-credentials"),
     ],
     timeout=300,  # 5 minute timeout
 )
@@ -93,17 +88,6 @@ async def stream_chat_completion_with_budget(
     """
     from supabase import create_client
     
-    # Get provider for this model
-    try:
-        provider_name = get_provider_for_model(model)
-    except ValueError as e:
-        error_data = json.dumps({
-            "type": "error",
-            "error": str(e)
-        })
-        yield f"data: {error_data}\n\n"
-        return
-    
     # Configure Supabase based on environment parameter
     if environment == "EN1":
         supabase_url = os.environ["SUPABASE_EN1_URL"]
@@ -124,6 +108,11 @@ async def stream_chat_completion_with_budget(
     usage_data = None
     
     try:
+        # Look up model config (provider, pricing, flags) from the database
+        model_cfg = await get_model_config(supabase_client, model)
+        provider_name = model_cfg["provider"]
+        should_stream = model_cfg["streamable"]
+        
         # Verify authentication and get access level
         access_level = await verify_auth_and_get_access_level(
             supabase_client, user_id, auth_token
@@ -134,9 +123,6 @@ async def stream_chat_completion_with_budget(
         
         # Get provider instance
         provider = get_provider(provider_name)
-        
-        # Determine if this model should stream
-        should_stream = is_streaming_model(model)
         
         # Stream response from provider
         async for event in provider.stream_chat_completion(
@@ -159,8 +145,10 @@ async def stream_chat_completion_with_budget(
         # Log usage and calculate cost (only for OpenAI models)
         if usage_data and provider_name == "openai":
             try:
-                cost = calculate_cost(
+                cost = await calculate_cost(
+                    supabase_client,
                     model,
+                    provider_name,
                     usage_data['input_tokens'],
                     usage_data['output_tokens'],
                     usage_data['cached_input_tokens'],

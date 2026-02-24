@@ -9,44 +9,20 @@ import pytz
 from typing import Optional, Dict, Any
 
 
-# Budget configuration (in USD per week)
-EN1_WEEKLY_BUDGET = float(os.environ.get("EN1_WEEKLY_BUDGET", "1.00"))
-STANDARD_WEEKLY_BUDGET = float(os.environ.get("STANDARD_WEEKLY_BUDGET", "0.50"))
-
-# Token pricing (per 1M tokens in USD) - only for OpenAI models
-TOKEN_PRICING = {
-    "gpt-5": {
-        "input": 1.25,
-        "cached_input": 0.13,
-        "output": 10.00,
-    },
-    "gpt-5-mini": {
-        "input": 0.25,
-        "cached_input": 0.03,
-        "output": 2.00,
-    },
-    "gpt-5-nano": {
-        "input": 0.05,
-        "cached_input": 0.01,
-        "output": 0.40,
-    },
-}
+# Budget configuration (in USD per day)
+CAMPS_DAILY_BUDGET = float(os.environ.get("CAMPS_DAILY_BUDGET", "0.50"))
+STANDARD_DAILY_BUDGET = float(os.environ.get("STANDARD_DAILY_BUDGET", "0.125"))
 
 
-def get_week_boundaries_et():
-    """Get the start and end of the current week (Monday-Sunday) in Eastern Time."""
+def get_day_boundaries_et():
+    """Get the start and end of the current day in Eastern Time."""
     et_tz = pytz.timezone('US/Eastern')
     now_et = datetime.now(et_tz)
-    
-    # Get Monday of current week (weekday 0 = Monday)
-    days_since_monday = now_et.weekday()
-    week_start = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
-    week_start = week_start - timedelta(days=days_since_monday)
-    
-    # Get Sunday end of week
-    week_end = week_start + timedelta(days=7)
-    
-    return week_start, week_end
+
+    day_start = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+
+    return day_start, day_end
 
 
 async def verify_auth_and_get_access_level(supabase_client, user_id: str, auth_token: str):
@@ -66,36 +42,66 @@ async def verify_auth_and_get_access_level(supabase_client, user_id: str, auth_t
         raise ValueError(f"Authentication failed: {str(e)}")
 
 
-async def get_weekly_spend(supabase_client, user_id: str):
-    """Get total spend for the current week."""
-    week_start, week_end = get_week_boundaries_et()
+async def get_daily_spend(supabase_client, user_id: str):
+    """Get total spend for the current day."""
+    day_start, day_end = get_day_boundaries_et()
     
     # Query ai_usage table with service role to bypass RLS
     result = supabase_client.table('ai_usage') \
         .select('cost_usd') \
         .eq('user_id', user_id) \
-        .gte('timestamp', week_start.isoformat()) \
-        .lt('timestamp', week_end.isoformat()) \
+        .gte('timestamp', day_start.isoformat()) \
+        .lt('timestamp', day_end.isoformat()) \
         .execute()
     
     total_spend = sum(row['cost_usd'] for row in result.data)
     return float(total_spend)
 
 
-def calculate_cost(model: str, input_tokens: int, output_tokens: int, 
-                   cached_input_tokens: int, reasoning_tokens: int) -> float:
-    """Calculate cost in USD based on token usage. Only works for OpenAI models."""
-    if model not in TOKEN_PRICING:
-        raise ValueError(f"Cost calculation not supported for model: {model}")
-    
-    pricing = TOKEN_PRICING[model]
+async def get_model_config(supabase_client, model: str, provider: str = None) -> Dict[str, Any]:
+    """Fetch model config (provider, pricing, flags) from ai_models."""
+    query = supabase_client.table('ai_models') \
+        .select('provider,input_price,cached_input_price,output_price,unlimited,streamable') \
+        .eq('model_name', model)
+
+    if provider:
+        query = query.eq('provider', provider)
+
+    result = query.limit(1).execute()
+
+    if not result.data:
+        raise ValueError(f"Unknown model: {model}")
+
+    config = result.data[0]
+    return {
+        "provider": config["provider"],
+        "input_price": float(config["input_price"]),
+        "cached_input_price": float(config["cached_input_price"]) if config.get("cached_input_price") is not None else float(config["input_price"]),
+        "output_price": float(config["output_price"]),
+        "unlimited": bool(config.get("unlimited", False)),
+        "streamable": bool(config.get("streamable", True)),
+    }
+
+
+async def calculate_cost(
+    supabase_client,
+    model: str,
+    provider: str,
+    input_tokens: int,
+    output_tokens: int,
+    cached_input_tokens: int,
+    reasoning_tokens: int,
+) -> float:
+    """Calculate cost in USD based on ai_models pricing (per 1M tokens)."""
+    pricing = await get_model_config(supabase_client, model, provider)
     
     # Calculate costs (divide by 1M since pricing is per 1M tokens)
-    regular_input_cost = (input_tokens - cached_input_tokens) * pricing["input"] / 1_000_000
-    cached_cost = cached_input_tokens * pricing["cached_input"] / 1_000_000
-    output_cost = output_tokens * pricing["output"] / 1_000_000
+    regular_input_cost = (input_tokens - cached_input_tokens) * pricing["input_price"] / 1_000_000
+    cached_cost = cached_input_tokens * pricing["cached_input_price"] / 1_000_000
+    output_cost = output_tokens * pricing["output_price"] / 1_000_000
+
     # Reasoning tokens are charged at output rate
-    reasoning_cost = reasoning_tokens * pricing["output"] / 1_000_000
+    reasoning_cost = reasoning_tokens * pricing["output_price"] / 1_000_000
     
     total_cost = regular_input_cost + cached_cost + output_cost + reasoning_cost
     return round(total_cost, 6)
@@ -125,26 +131,21 @@ async def log_usage(supabase_client, user_id: str, model: str,
 async def check_budget(supabase_client, user_id: str, access_level: str, model: str, provider: str):
     """
     Check if user has budget remaining for the request.
-    SkoleGPT models bypass budget checks.
     
     Returns:
-        bool: True if request should proceed, False if budget exceeded
+        bool: True if request should proceed, otherwise raises an error
     """
-    # SkoleGPT models bypass budget checks
-    if provider == "skolegpt":
-        return True
     
-    # Check budget for OpenAI models
     if access_level == 'standard':
-        weekly_spend = await get_weekly_spend(supabase_client, user_id)
-        if weekly_spend >= STANDARD_WEEKLY_BUDGET:
+        daily_spend = await get_daily_spend(supabase_client, user_id)
+        if daily_spend >= STANDARD_DAILY_BUDGET:
             raise ValueError("User has exceeded their budget")
-    elif access_level == 'en1':
-        if model != 'gpt-5-nano':
-            weekly_spend = await get_weekly_spend(supabase_client, user_id)
-            if weekly_spend >= EN1_WEEKLY_BUDGET:
+    elif access_level == 'camps' or access_level == 'en1':
+        model_config = await get_model_config(supabase_client, model, provider)
+        if not model_config["unlimited"]:
+            daily_spend = await get_daily_spend(supabase_client, user_id)
+            if daily_spend >= CAMPS_DAILY_BUDGET:
                 raise ValueError("User has exceeded their budget")
-        # EN1 users have unlimited gpt-5-nano
     else:
         raise ValueError("Invalid access level")
     
