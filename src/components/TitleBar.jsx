@@ -5,13 +5,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 import AboutModal from './AboutModal';
-import AIUsageModal from './AIUsageModal';
 import { signOut } from '../services/auth';
 import './TitleBar.css';
 
 const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, onUpdateSessionName }) => {
   const [showAbout, setShowAbout] = useState(false);
-  const [showAIUsage, setShowAIUsage] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
   const inputRef = useRef(null);
@@ -114,13 +112,6 @@ const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, o
           )}
           <button 
             className="topbar-button" 
-            onClick={() => setShowAIUsage(true)}
-            title="View AI usage statistics"
-          >
-            AI USAGE
-          </button>
-          <button 
-            className="topbar-button" 
             onClick={() => setShowAbout(true)}
             title="About this application"
           >
@@ -146,7 +137,6 @@ const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, o
       </div>
 
       <AboutModal visible={showAbout} onClose={() => setShowAbout(false)} />
-      <AIUsageModal visible={showAIUsage} onClose={() => setShowAIUsage(false)} />
     </>
   );
 };

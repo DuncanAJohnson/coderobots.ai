@@ -6,12 +6,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { useAuth } from '../contexts/AuthContext';
 import { useSession } from '../contexts/SessionContext';
 import { logMessage, logConsole, updateMessagePortConfigurations } from '../services/dataLogger';
-import { streamChatCompletion, streamChatCompletionWithBudget } from '../utils/chatStream';
-import { getUserAccessLevel } from '../services/aiUsage';
-import { STREAMING_MODELS as STREAMING_MODELS_SET, isStreamingModel, getAvailableModels } from '../config/models';
+import { streamChatCompletionWithBudget } from '../utils/chatStream';
+import { getUserAccessLevel, getDailyBudgetUsage } from '../services/aiUsage';
+import { fetchModelMetadata } from '../services/aiModels';
 import { 
   LEVEL_INSTRUCTION_PREFIX,
   beginnerPrompt,
@@ -35,6 +34,16 @@ marked.setOptions({
   gfm: true,
 });
 
+const EMPTY_MODEL_METADATA = {
+  rows: [],
+  allModels: [],
+  modelsByProvider: {},
+  streamableByModel: {},
+  unlimitedByModel: {},
+  premiumModels: [],
+  nonPremiumModels: [],
+};
+
 const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const { 
     activeSession, 
@@ -52,10 +61,10 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [codingLevel, setCodingLevel] = useState('beginner');
-  // Initialize selected model from available models
-  const availableModelsList = getAvailableModels();
-  const [selectedModel, setSelectedModel] = useState(availableModelsList.length > 0 ? availableModelsList[0] : 'gpt-5-nano');
-  const [modelName, setModelName] = useState(import.meta.env.VITE_DEFAULT_MODEL || 'gpt-4');
+  const [modelMetadata, setModelMetadata] = useState(EMPTY_MODEL_METADATA);
+  const [selectedModel, setSelectedModel] = useState('');
+  const [dailyUsagePercentage, setDailyUsagePercentage] = useState(0);
+  const [dailyUsageLoading, setDailyUsageLoading] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
   const [attachedContext, setAttachedContext] = useState({ includeCode: false, includeConsole: false });
   const [codeModalOpen, setCodeModalOpen] = useState(false);
@@ -70,8 +79,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const [portConfigModalOpen, setPortConfigModalOpen] = useState(false);
   const [currentPortConfig, setCurrentPortConfig] = useState(null);
 
-  // Models that support streaming - use config
-  const streamingModelsSet = STREAMING_MODELS_SET;
+  const selectedModelStreaming = modelMetadata.streamableByModel[selectedModel] ?? false;
 
   const chatBodyRef = useRef(null);
   const streamingMessageRef = useRef(null);
@@ -134,6 +142,51 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     };
     fetchAccessLevel();
   }, []);
+
+  // Fetch model metadata from database
+  useEffect(() => {
+    const loadModelMetadata = async () => {
+      try {
+        const metadata = await fetchModelMetadata();
+        setModelMetadata(metadata);
+      } catch (error) {
+        console.error('Unable to load AI model metadata:', error);
+        setModelMetadata(EMPTY_MODEL_METADATA);
+      }
+    };
+    loadModelMetadata();
+  }, []);
+
+  // Keep selected model valid as available models change
+  useEffect(() => {
+    const allModels = modelMetadata.allModels || [];
+    if (!selectedModel && allModels.length > 0) {
+      setSelectedModel(allModels[0]);
+      return;
+    }
+    if (selectedModel && !allModels.includes(selectedModel)) {
+      setSelectedModel(allModels[0] || '');
+    }
+  }, [modelMetadata, selectedModel]);
+
+  const refreshDailyUsage = async () => {
+    if (!userAccessLevel) return;
+
+    setDailyUsageLoading(true);
+    try {
+      const usage = await getDailyBudgetUsage(userAccessLevel);
+      setDailyUsagePercentage(usage.percentage);
+    } catch (error) {
+      console.error('Error fetching daily usage percentage:', error);
+      setDailyUsagePercentage(0);
+    } finally {
+      setDailyUsageLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshDailyUsage();
+  }, [userAccessLevel]);
 
   const scrollToBottom = () => {
     if (chatBodyRef.current) {
@@ -203,6 +256,10 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const handleSendMessage = async () => {
     if (!activeSession) {
       alert('No active session. Please select or create a session first.');
+      return;
+    }
+    if (!selectedModel) {
+      alert('No AI model is available right now. Please try again in a moment.');
       return;
     }
 
@@ -321,12 +378,12 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     // Stream response
     setIsStreaming(true);
     streamingMessageRef.current = '';
+    let isFirstChunk = true;
 
     try {
       let fullResponse = '';
       let budgetStatus = null;
       let usageData = null;
-      let isFirstChunk = true;
 
       // Determine which model to use
       const actualModel = selectedModel;
@@ -457,15 +514,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     } finally {
       setIsStreaming(false);
       streamingMessageRef.current = null;
-    }
-  };
-
-  const handleModelUpdate = () => {
-    const newModel = prompt('Enter new model name:', modelName);
-    if (newModel && newModel.trim()) {
-      setModelName(newModel.trim());
-      setMessages([]);
-      alert(`Model updated to: ${newModel}`);
+      await refreshDailyUsage();
     }
   };
 
@@ -632,7 +681,11 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         onModelChange={setSelectedModel}
         attachDocumentation={attachDocumentation}
         onAttachDocumentationChange={setAttachDocumentation}
-        streamingModels={streamingModelsSet}
+        modelsByProvider={modelMetadata.modelsByProvider}
+        streamableByModel={modelMetadata.streamableByModel}
+        selectedModelStreaming={selectedModelStreaming}
+        dailyUsagePercentage={dailyUsagePercentage}
+        dailyUsageLoading={dailyUsageLoading}
       />
 
       {activeSession && conversations.length > 0 && (
@@ -653,7 +706,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         {isStreaming && (
           <div className="chat-spinner" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div className="loader"></div>
-            {!isStreamingModel(selectedModel) && (
+            {!selectedModelStreaming && (
               <div style={{ marginTop: '10px', fontSize: '0.9em', color: '#666' }}>
                 Waiting for full response from {selectedModel}...
               </div>
@@ -727,6 +780,8 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         visible={budgetErrorVisible}
         onClose={() => setBudgetErrorVisible(false)}
         accessLevel={userAccessLevel}
+        premiumModels={modelMetadata.premiumModels}
+        nonPremiumModels={modelMetadata.nonPremiumModels}
       />
 
       {/* Port Configuration Modal */}

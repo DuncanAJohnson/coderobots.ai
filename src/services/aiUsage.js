@@ -5,151 +5,174 @@
 
 import { supabase } from './supabase';
 
+const ET_TIMEZONE = 'America/New_York';
+const DEFAULT_CAMPS_BUDGET = Number(import.meta.env.VITE_CAMPS_DAILY_BUDGET || 0.5);
+const DEFAULT_STANDARD_BUDGET = Number(import.meta.env.VITE_STANDARD_DAILY_BUDGET || 0.125);
+
 /**
- * Get the start and end of the current week (Monday-Sunday) in Eastern Time
+ * Extract numeric value from app_config jsonb value
  */
-export function getWeekBoundariesET() {
-  // Get current time in Eastern timezone
-  const now = new Date();
-  
-  // Convert to ET (approximation using offset)
-  // Note: This is a simplified approach. For production, consider using a library like date-fns-tz
-  const etOffset = -5; // EST offset (adjust for EDT if needed)
-  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const etTime = new Date(utcTime + (3600000 * etOffset));
-  
-  // Get Monday of current week
-  const dayOfWeek = etTime.getDay();
-  const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Adjust for Sunday (0)
-  
-  const weekStart = new Date(etTime);
-  weekStart.setDate(etTime.getDate() - daysSinceMonday);
-  weekStart.setHours(0, 0, 0, 0);
-  
-  // Get Sunday end of week
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 7);
-  weekEnd.setHours(0, 0, 0, 0);
-  
-  return { weekStart, weekEnd };
+function parseBudgetValue(val) {
+  if (typeof val === 'number' && !Number.isNaN(val)) return val;
+  if (typeof val === 'object' && val !== null && typeof val.value === 'number') return val.value;
+  if (typeof val === 'string') return Number(val) || 0;
+  return 0;
 }
 
 /**
- * Get next Monday at midnight ET for countdown
+ * Fetch budget limits from app_config table
  */
-export function getNextMondayET() {
-  const { weekEnd } = getWeekBoundariesET();
-  return weekEnd; // Week end is Monday midnight
-}
-
-/**
- * Fetch all AI usage records for the current user
- */
-export async function fetchUserUsage() {
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
-    throw new Error('User not authenticated');
-  }
-  
+async function fetchBudgetConfig() {
   const { data, error } = await supabase
-    .from('ai_usage')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('timestamp', { ascending: false });
-  
+    .from('app_config')
+    .select('key, value')
+    .in('key', ['STANDARD_DAILY_BUDGET', 'CAMPS_DAILY_BUDGET']);
+
   if (error) {
     throw error;
   }
-  
-  return data;
-}
 
-/**
- * Calculate usage statistics broken down by model
- * @param {Array} usageRecords - Array of usage records from database
- * @param {Date|null} startDate - Optional start date filter
- * @param {Date|null} endDate - Optional end date filter
- */
-export function calculateUsageStats(usageRecords, startDate = null, endDate = null) {
-  // Filter by date range if provided
-  let filteredRecords = usageRecords;
-  
-  if (startDate || endDate) {
-    filteredRecords = usageRecords.filter(record => {
-      const recordDate = new Date(record.timestamp);
-      if (startDate && recordDate < startDate) return false;
-      if (endDate && recordDate >= endDate) return false;
-      return true;
-    });
+  const config = {
+    STANDARD_DAILY_BUDGET: DEFAULT_STANDARD_BUDGET,
+    CAMPS_DAILY_BUDGET: DEFAULT_CAMPS_BUDGET,
+  };
+
+  for (const row of data || []) {
+    const num = parseBudgetValue(row.value);
+    if (row.key === 'STANDARD_DAILY_BUDGET') config.STANDARD_DAILY_BUDGET = num;
+    if (row.key === 'CAMPS_DAILY_BUDGET') config.CAMPS_DAILY_BUDGET = num;
   }
-  
-  // Group by model
-  const statsByModel = {};
-  
-  filteredRecords.forEach(record => {
-    const model = record.model;
-    
-    if (!statsByModel[model]) {
-      statsByModel[model] = {
-        input_tokens: 0,
-        output_tokens: 0,
-        cached_input_tokens: 0,
-        reasoning_tokens: 0,
-        total_cost: 0,
-        request_count: 0,
-      };
-    }
-    
-    statsByModel[model].input_tokens += record.input_tokens || 0;
-    statsByModel[model].output_tokens += record.output_tokens || 0;
-    statsByModel[model].cached_input_tokens += record.cached_input_tokens || 0;
-    statsByModel[model].reasoning_tokens += record.reasoning_tokens || 0;
-    statsByModel[model].total_cost += parseFloat(record.cost_usd || 0);
-    statsByModel[model].request_count += 1;
+
+  return config;
+}
+
+/**
+ * Parse timezone offset in minutes from short offset strings like GMT-5 or GMT-04:00
+ */
+function parseOffsetMinutes(offsetText) {
+  const match = offsetText.match(/GMT([+-])(\d{1,2})(?::?(\d{2}))?/);
+  if (!match) return -300;
+
+  const sign = match[1] === '+' ? 1 : -1;
+  const hours = Number(match[2] || 0);
+  const minutes = Number(match[3] || 0);
+  return sign * (hours * 60 + minutes);
+}
+
+/**
+ * Get current Eastern date components
+ */
+function getEtDateParts(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: ET_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   });
-  
-  // Calculate totals across all models
-  const totals = {
-    input_tokens: 0,
-    output_tokens: 0,
-    cached_input_tokens: 0,
-    reasoning_tokens: 0,
-    total_cost: 0,
-    request_count: 0,
-  };
-  
-  Object.values(statsByModel).forEach(stats => {
-    totals.input_tokens += stats.input_tokens;
-    totals.output_tokens += stats.output_tokens;
-    totals.cached_input_tokens += stats.cached_input_tokens;
-    totals.reasoning_tokens += stats.reasoning_tokens;
-    totals.total_cost += stats.total_cost;
-    totals.request_count += stats.request_count;
+  const parts = formatter.formatToParts(date);
+  const year = Number(parts.find((part) => part.type === 'year')?.value);
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  const day = Number(parts.find((part) => part.type === 'day')?.value);
+  return { year, month, day };
+}
+
+/**
+ * Convert ET local date/time to UTC Date.
+ * Uses a short iterative solve to ensure DST-safe conversion.
+ */
+function etLocalToUtc(year, month, day, hour = 0, minute = 0, second = 0) {
+  const offsetFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: ET_TIMEZONE,
+    timeZoneName: 'shortOffset',
   });
-  
+
+  let utcGuess = Date.UTC(year, month - 1, day, hour, minute, second);
+  for (let i = 0; i < 3; i += 1) {
+    const tzParts = offsetFormatter.formatToParts(new Date(utcGuess));
+    const offsetText = tzParts.find((part) => part.type === 'timeZoneName')?.value || 'GMT-5';
+    const offsetMinutes = parseOffsetMinutes(offsetText);
+    utcGuess = Date.UTC(year, month - 1, day, hour, minute, second) - (offsetMinutes * 60 * 1000);
+  }
+
+  return new Date(utcGuess);
+}
+
+/**
+ * Get start and end of current ET day in UTC.
+ */
+export function getDayBoundariesET() {
+  const { year, month, day } = getEtDateParts();
+  const dayStart = etLocalToUtc(year, month, day, 0, 0, 0);
+  const nextLocalDate = new Date(Date.UTC(year, month - 1, day + 1));
+  const dayEnd = etLocalToUtc(
+    nextLocalDate.getUTCFullYear(),
+    nextLocalDate.getUTCMonth() + 1,
+    nextLocalDate.getUTCDate(),
+    0,
+    0,
+    0,
+  );
+
   return {
-    byModel: statsByModel,
-    totals,
+    dayStart,
+    dayEnd,
   };
 }
 
 /**
- * Get this week's usage statistics
+ * Get next ET midnight countdown target.
  */
-export async function getWeeklyUsage() {
-  const usageRecords = await fetchUserUsage();
-  const { weekStart, weekEnd } = getWeekBoundariesET();
-  
-  return calculateUsageStats(usageRecords, weekStart, weekEnd);
+export function getNextDayET() {
+  const { dayEnd } = getDayBoundariesET();
+  return dayEnd;
 }
 
 /**
- * Get all-time usage statistics
+ * Get active user's daily spend in USD.
  */
-export async function getAllTimeUsage() {
-  const usageRecords = await fetchUserUsage();
-  return calculateUsageStats(usageRecords);
+export async function getDailySpend() {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const { dayStart, dayEnd } = getDayBoundariesET();
+
+  const { data, error } = await supabase
+    .from('ai_usage')
+    .select('cost_usd')
+    .eq('user_id', user.id)
+    .gte('timestamp', dayStart.toISOString())
+    .lt('timestamp', dayEnd.toISOString());
+
+  if (error) {
+    throw error;
+  }
+
+  return (data || []).reduce((sum, row) => sum + Number(row.cost_usd || 0), 0);
+}
+
+export async function getDailyBudgetLimit(accessLevel) {
+  const config = await fetchBudgetConfig();
+  return accessLevel === 'standard'
+    ? config.STANDARD_DAILY_BUDGET
+    : config.CAMPS_DAILY_BUDGET;
+}
+
+/**
+ * Get daily budget usage summary.
+ */
+export async function getDailyBudgetUsage(accessLevel) {
+  const spent = await getDailySpend();
+  const limit = await getDailyBudgetLimit(accessLevel);
+  const percentage = limit > 0 ? (spent / limit) * 100 : 0;
+
+  return {
+    spent,
+    limit,
+    percentage,
+  };
 }
 
 /**

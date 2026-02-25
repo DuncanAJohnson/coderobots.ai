@@ -1,52 +1,21 @@
 /**
  * Budget Error Modal Component
- * Displays budget exceeded messages with countdown to reset
+ * Displays budget exceeded messages
  */
 
 import { useState, useEffect } from 'react';
-import { getNextMondayET } from '../services/aiUsage';
 import './BudgetErrorModal.css';
 
-const BudgetErrorModal = ({ visible, onClose, accessLevel }) => {
-  const [countdown, setCountdown] = useState('');
+const BudgetErrorModal = ({ visible, onClose, accessLevel, premiumModels = [], nonPremiumModels = [] }) => {
 
   useEffect(() => {
     if (!visible) return;
 
-    const updateCountdown = () => {
-      const nextMonday = getNextMondayET();
-      const now = new Date();
-      const diff = nextMonday - now;
-
-      if (diff <= 0) {
-        setCountdown('Budget has reset!');
-        return;
-      }
-
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-      let countdownStr = '';
-      if (days > 0) countdownStr += `${days}d `;
-      if (hours > 0 || days > 0) countdownStr += `${hours}h `;
-      if (minutes > 0 || hours > 0 || days > 0) countdownStr += `${minutes}m `;
-      countdownStr += `${seconds}s`;
-
-      setCountdown(countdownStr);
-    };
-
-    // Update immediately and then every second
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-
-    return () => clearInterval(interval);
   }, [visible]);
 
   if (!visible) return null;
 
-  const isEN1 = accessLevel === 'en1';
+  const isCamps = accessLevel === 'en1';
 
   const handleOverlayClick = (e) => {
     // Only close if clicking the overlay itself (not the modal content)
@@ -63,29 +32,35 @@ const BudgetErrorModal = ({ visible, onClose, accessLevel }) => {
     >
       <div className="budget-error-modal-box">
         <div className="budget-error-modal-header">
-          <h2>⚠️ Budget Limit Reached</h2>
-          <button className="budget-error-modal-close-btn" onClick={onClose}>×</button>
+          <h2>Daily LLM Usage Limit Reached</h2>
         </div>
         <div className="budget-error-modal-body">
-          {isEN1 ? (
+          {isCamps ? (
             <>
               <p className="budget-error-message">
-                You've reached your weekly budget for premium models (gpt-5 and gpt-5-mini).
+                Every message sent to a Large Language Model (LLM) uses power and water. To ensure everyone is using these resources respectfully, there is a daily usage limit for premium models.
               </p>
-              <p className="budget-error-suggestion">
-                <strong>Please use gpt-5-nano</strong>, which has unlimited usage for upgraded users.
+              <div className="budget-error-suggestion-block">
+                <p className="budget-error-suggestion">
+                  <strong>{nonPremiumModels.length > 1 ? 'Please use one of these non-premium models:' : 'Please use the non-premium model:'}</strong>
+                </p>
+                <ul className="budget-error-model-list">
+                  {nonPremiumModels.map((model) => (
+                    <li key={model}>{model}</li>
+                  ))}
+                </ul>
+              </div>
+              <p className="budget-error-info">
+                You can use premium models again at midnight Eastern Time.
               </p>
             </>
           ) : (
             <>
               <p className="budget-error-message">
-                You've reached your weekly AI usage budget.
-              </p>
-              <p className="budget-error-reset">
-                Your budget will reset in: <strong>{countdown}</strong>
+              Every message sent to a Large Language Model (LLM) uses power and water. To ensure everyone is using these resources respectfully, there is a daily usage limit.
               </p>
               <p className="budget-error-info">
-                Budget resets every Monday at midnight Eastern Time.
+                You can use LLMs again at midnight Eastern Time.
               </p>
             </>
           )}
