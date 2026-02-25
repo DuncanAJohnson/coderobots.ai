@@ -8,6 +8,7 @@ import SessionModal from './components/SessionModal';
 import TitleBar from './components/TitleBar';
 import DebugManager, { debugLog } from './components/DebugManager';
 import DataExtractor from './components/data_extractor/DataExtractor';
+import AdminUsageDashboard from './components/admin_usage/AdminUsageDashboard';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SessionProvider, useSession } from './contexts/SessionContext';
 import { logConsole } from './services/dataLogger';
@@ -236,6 +237,7 @@ function App() {
         <Routes>
           <Route path="/" element={<AppContent />} />
           <Route path="/data" element={<DataExtractor />} />
+          <Route path="/usage" element={<AdminUsageDashboard />} />
         </Routes>
       </SessionProvider>
     </AuthProvider>

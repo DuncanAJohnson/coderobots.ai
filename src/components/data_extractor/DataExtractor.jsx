@@ -6,10 +6,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../services/supabase';
 import TableExporter from './TableExporter';
-
-const MODAL_BASE_URL = import.meta.env.VITE_MODAL_DATA_EXPORT_URL || '';
 
 const MESSAGE_COLUMNS = [
   { key: 'id', label: 'ID', default: true },
@@ -91,14 +88,6 @@ function DataExtractor() {
       navigate('/');
     }
   }, [user, isAdmin, authLoading, navigate]);
-
-  const getAuthHeaders = async () => {
-    const { data: { session: currentSession } } = await supabase.auth.getSession();
-    return {
-      user_id: currentSession?.user?.id,
-      auth_token: currentSession?.access_token,
-    };
-  };
 
   if (authLoading) {
     return (
@@ -225,8 +214,6 @@ function DataExtractor() {
             startTime={startTime}
             endTime={endTime}
             emails={parsedEmails}
-            getAuthHeaders={getAuthHeaders}
-            modalBaseUrl={MODAL_BASE_URL}
           />
 
           <TableExporter
@@ -235,8 +222,6 @@ function DataExtractor() {
             startTime={startTime}
             endTime={endTime}
             emails={parsedEmails}
-            getAuthHeaders={getAuthHeaders}
-            modalBaseUrl={MODAL_BASE_URL}
           />
 
           <TableExporter
@@ -245,8 +230,6 @@ function DataExtractor() {
             startTime={startTime}
             endTime={endTime}
             emails={parsedEmails}
-            getAuthHeaders={getAuthHeaders}
-            modalBaseUrl={MODAL_BASE_URL}
           />
 
           <TableExporter
@@ -255,8 +238,6 @@ function DataExtractor() {
             startTime={startTime}
             endTime={endTime}
             emails={parsedEmails}
-            getAuthHeaders={getAuthHeaders}
-            modalBaseUrl={MODAL_BASE_URL}
           />
 
           <TableExporter
@@ -265,8 +246,6 @@ function DataExtractor() {
             startTime={startTime}
             endTime={endTime}
             emails={parsedEmails}
-            getAuthHeaders={getAuthHeaders}
-            modalBaseUrl={MODAL_BASE_URL}
           />
 
           <TableExporter
@@ -275,8 +254,6 @@ function DataExtractor() {
             startTime={startTime}
             endTime={endTime}
             emails={parsedEmails}
-            getAuthHeaders={getAuthHeaders}
-            modalBaseUrl={MODAL_BASE_URL}
           />
         </div>
         </div>

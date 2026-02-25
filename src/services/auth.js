@@ -7,12 +7,7 @@ import { supabase } from './supabase';
 
 // Configuration
 const ALLOWED_EMAIL_DOMAINS = ['tufts.edu', 'purdue.edu'];
-const EN1_EMAIL_DOMAINS = ['tufts.edu', 'purdue.edu'];
-const WHITELISTED_EMAILS = [
-  'bill@crcs.works',
-  'williamchurch17@gmail.com',
-  'duncanjohnson99@gmail.com',
-];
+const CAMPS_EMAIL_DOMAINS = ['tufts.edu', 'purdue.edu'];
 
 // Check if we're in SHOWCASE deployment mode
 const DEPLOYMENT_MODE = import.meta.env.VITE_DEPLOYMENT_MODE;
@@ -32,11 +27,6 @@ export const isEmailAuthorized = (email) => {
 
   const lowerEmail = email.toLowerCase();
 
-  // Check whitelist
-  if (WHITELISTED_EMAILS.some((e) => e.toLowerCase() === lowerEmail)) {
-    return true;
-  }
-
   // Check allowed domains
   for (const domain of ALLOWED_EMAIL_DOMAINS) {
     if (lowerEmail.endsWith(`@${domain.toLowerCase()}`)) {
@@ -48,36 +38,34 @@ export const isEmailAuthorized = (email) => {
 };
 
 /**
- * Check if user is admin (client-side check using whitelist)
- * Note: This is for UI gating only. The authoritative admin check
- * happens server-side via the Modal function, which queries the
- * 'admins' table in the database. This ensures security even if
- * client-side code is modified.
- * 
- * To add/remove admins, use the Supabase Dashboard to insert/delete
- * rows in the 'admins' table, and update WHITELISTED_EMAILS here
- * to keep the client-side UI in sync.
+ * Check if user is admin for UI gating.
+ * Source of truth is JWT/app metadata role used by RLS policies.
  */
-export const isAdmin = (email) => {
-  if (!email) return false;
-  const lowerEmail = email.toLowerCase();
-  return WHITELISTED_EMAILS.some((e) => e.toLowerCase() === lowerEmail);
+export const isAdmin = (userOrEmail) => {
+  if (!userOrEmail) return false;
+
+  if (typeof userOrEmail === 'object') {
+    const role = userOrEmail.app_metadata?.role;
+    if (role === 'admin') {
+      return true;
+    }
+  }
 };
 
 /**
  * Determine access level based on email domain
  * @param {string} email - User's email address
- * @returns {string} - 'en1' or 'standard'
+ * @returns {string} - 'camps' or 'standard'
  */
 export const getAccessLevelFromEmail = (email) => {
   if (!email) return 'standard';
   
   const lowerEmail = email.toLowerCase();
   
-  // Check if email domain matches EN1 domains
-  for (const domain of EN1_EMAIL_DOMAINS) {
+  // Check if email domain matches CAMPS domains
+  for (const domain of CAMPS_EMAIL_DOMAINS) {
     if (lowerEmail.endsWith(`@${domain.toLowerCase()}`)) {
-      return 'en1';
+      return 'camps';
     }
   }
   

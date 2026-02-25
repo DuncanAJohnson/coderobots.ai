@@ -30,7 +30,7 @@ export const AuthProvider = ({ children }) => {
     // Check active session on mount
     getSession().then(async (session) => {
       if (session?.user) {
-        const email = session.user.email;
+          const email = session.user.email;
         
         // Validate email authorization
         if (isEmailAuthorized(email)) {
@@ -39,7 +39,7 @@ export const AuthProvider = ({ children }) => {
           
           setSession(session);
           setUser(session.user);
-          setIsAdmin(checkIsAdmin(email));
+          setIsAdmin(checkIsAdmin(session.user));
           setAuthError(null);
         } else {
           // Unauthorized email - sign out
@@ -55,7 +55,7 @@ export const AuthProvider = ({ children }) => {
       console.log('Auth state change:', event, session?.user?.email);
 
       if (session?.user) {
-        const email = session.user.email;
+          const email = session.user.email;
         
         // Validate on every auth change
         if (isEmailAuthorized(email)) {
@@ -64,7 +64,7 @@ export const AuthProvider = ({ children }) => {
           
           setSession(session);
           setUser(session.user);
-          setIsAdmin(checkIsAdmin(email));
+          setIsAdmin(checkIsAdmin(session.user));
           setAuthError(null);
         } else {
           setAuthError(`Access denied. Please sign in with a @tufts.edu, @purdue.edu email or whitelisted account.`);

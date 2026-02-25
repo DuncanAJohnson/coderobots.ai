@@ -4,7 +4,6 @@
  */
 
 import './ChatConfiguration.css';
-import { getAvailableModels, getModelConfig, getModelsByProvider, isStreamingModel } from '../config/models';
 
 const ChatConfiguration = ({ 
   codingLevel, 
@@ -13,10 +12,13 @@ const ChatConfiguration = ({
   onModelChange,
   attachDocumentation,
   onAttachDocumentationChange,
-  streamingModels 
+  modelsByProvider,
+  streamableByModel,
+  selectedModelStreaming,
+  dailyUsagePercentage,
+  dailyUsageLoading,
 }) => {
-  const availableModels = getAvailableModels();
-  const modelsByProvider = getModelsByProvider();
+  const usagePercent = Number.isFinite(dailyUsagePercentage) ? Math.max(0, Math.min(100, Math.round(dailyUsagePercentage))) : 0;
   
   return (
     <div className="chat-configuration">
@@ -40,25 +42,39 @@ const ChatConfiguration = ({
           value={selectedModel}
           onChange={(e) => onModelChange(e.target.value)}
         >
-          {Object.entries(modelsByProvider).map(([provider, models]) => (
+          {Object.entries(modelsByProvider || {}).map(([provider, models]) => (
             <optgroup key={provider} label={provider.toUpperCase()}>
-              {models.map(model => {
-                const config = getModelConfig(model);
-                const streamingLabel = config?.streaming ? ' (streaming)' : ' (full response)';
+              {models.map((model) => {
                 return (
                   <option key={model} value={model}>
-                    {model}{streamingLabel}
+                    {model}
                   </option>
                 );
               })}
             </optgroup>
           ))}
         </select>
-        {!isStreamingModel(selectedModel) && (
-          <span style={{ marginLeft: '10px', fontSize: '0.85em', color: '#666' }}>
-            ⏱️ This model waits for the full response
-          </span>
-        )}
+        <div className="llm-usage-indicator">
+          <div
+            className="llm-usage-ring"
+            style={{ '--usage-percent': usagePercent }}
+            aria-label={`${usagePercent}% of LLM limit used`}
+            role="img"
+          >
+          </div>
+          <div className="llm-usage-text">
+            {usagePercent}% of LLM limit used today
+            <span className="usage-tooltip">
+              <span className="usage-tooltip-icon">ℹ️</span>
+              <span className="usage-tooltip-text">
+                Using Large Language Models (LLMs) requires power and water. 
+                Different models use power and water at different rates. 
+                To ensure everyone is using these resources respectfully, 
+                there is a daily usage limit for higher-usage models. 
+              </span>
+            </span>
+          </div>
+        </div>
       </div>
 
       <div className="config-right">

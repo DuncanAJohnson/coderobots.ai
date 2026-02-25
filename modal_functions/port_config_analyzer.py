@@ -12,7 +12,7 @@ from typing import AsyncIterator
 # Add /root to Python path so imports work
 sys.path.insert(0, "/root")
 
-from model_config import get_provider_for_model
+from budget_manager import get_model_config
 
 # Create Modal app
 app = modal.App("coderobots-port-config")
@@ -22,11 +22,13 @@ image = (
     modal.Image.debian_slim()
     .pip_install(
         "openai",
+        "supabase",
+        "pytz",
         "fastapi[standard]",
         "aiohttp",
     )
     .add_local_dir("modal_functions/providers", "/root/providers")
-    .add_local_file("modal_functions/model_config.py", "/root/model_config.py")
+    .add_local_file("modal_functions/budget_manager.py", "/root/budget_manager.py")
 )
 
 # TODO: WHY IS THIS IN BOTH THIS FILE AND CHAT WITH BUDGET
@@ -87,6 +89,7 @@ Now analyze the code and return the port configuration as JSON only."""
     secrets=[
         modal.Secret.from_name("openai-api-key"),
         modal.Secret.from_name("skolegpt-credentials"),
+        modal.Secret.from_name("supabase-en1-credentials"),
     ],
     timeout=60,  # 1 minute timeout
 )
@@ -104,11 +107,18 @@ async def analyze_port_configuration(
     Returns:
         JSON string with port configuration
     """
+    from supabase import create_client
+    
     print(f"Analyzing code with model {model}: {code}")
     
     try:
-        # Get provider for this model
-        provider_name = get_provider_for_model(model)
+        # Look up provider from the database
+        supabase_client = create_client(
+            os.environ["SUPABASE_EN1_URL"],
+            os.environ["SUPABASE_EN1_SERVICE_ROLE_KEY"],
+        )
+        model_cfg = await get_model_config(supabase_client, model)
+        provider_name = model_cfg["provider"]
         provider = get_provider(provider_name)
         
         # Analyze using provider

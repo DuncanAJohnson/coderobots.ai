@@ -73,9 +73,7 @@
   color: #333;
 }
 
-.budget-error-suggestion {
-  font-size: 16px;
-  line-height: 1.6;
+.budget-error-suggestion-block {
   padding: 15px;
   background-color: #e7f5ff;
   border-left: 4px solid #1971c2;
@@ -83,8 +81,30 @@
   margin-bottom: 10px;
 }
 
+.budget-error-suggestion {
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0 0 10px 0;
+}
+
 .budget-error-suggestion strong {
   color: #1971c2;
+}
+
+.budget-error-model-list {
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 0 0 0 20px;
+  margin: 0;
+  color: #333;
+}
+
+.budget-error-model-list li {
+  margin-bottom: 4px;
+}
+
+.budget-error-model-list li:last-child {
+  margin-bottom: 0;
 }
 
 .budget-error-reset {
