@@ -3,7 +3,7 @@
  * Displays a horizontal scrollable list of code tabs for code file management
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import './CodeTabs.css';
 
 const CodeTabs = ({
@@ -17,12 +17,11 @@ const CodeTabs = ({
 }) => {
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
-  const [showScrollButtons, setShowScrollButtons] = useState(false);
   const tabsContainerRef = useRef(null);
 
-  const handleStartEdit = (codeRecord) => {
+  const handleStartEdit = (codeRecord, index) => {
     setEditingId(codeRecord.id);
-    setEditingName(codeRecord.name || 'Untitled');
+    setEditingName(codeRecord.name || `Code tab ${index + 1}`);
   };
 
   const handleSaveEdit = async (codeId) => {
@@ -47,43 +46,24 @@ const CodeTabs = ({
     }
   };
 
-  const scrollLeft = () => {
-    if (tabsContainerRef.current) {
-      tabsContainerRef.current.scrollBy({ left: -200, behavior: 'smooth' });
+  const handleWheel = (e) => {
+    if (tabsContainerRef.current && e.deltaY !== 0) {
+      e.preventDefault();
+      tabsContainerRef.current.scrollBy({ left: e.deltaY, behavior: 'auto' });
     }
   };
-
-  const scrollRight = () => {
-    if (tabsContainerRef.current) {
-      tabsContainerRef.current.scrollBy({ left: 200, behavior: 'smooth' });
-    }
-  };
-
-  const checkOverflow = () => {
-    if (tabsContainerRef.current) {
-      const { scrollWidth, clientWidth } = tabsContainerRef.current;
-      setShowScrollButtons(scrollWidth > clientWidth);
-    }
-  };
-
-  useEffect(() => {
-    checkOverflow();
-    window.addEventListener('resize', checkOverflow);
-    return () => window.removeEventListener('resize', checkOverflow);
-  }, [codeRecords]);
 
   return (
     <div className="code-tabs-wrapper">
-      {showScrollButtons && (
-        <button className="code-tabs-scroll-btn left" onClick={scrollLeft} aria-label="Scroll left">
-          ←
-        </button>
-      )}
-      
-      <div className="code-tabs-container" ref={tabsContainerRef}>
-        {codeRecords.map((codeRecord) => {
+      <div
+        className="code-tabs-container"
+        ref={tabsContainerRef}
+        onWheel={handleWheel}
+      >
+        {codeRecords.map((codeRecord, index) => {
           const isActive = codeRecord.id === currentCodeId;
           const isEditing = editingId === codeRecord.id;
+          const displayName = codeRecord.name || `Code tab ${index + 1}`;
 
           return (
             <div
@@ -104,30 +84,34 @@ const CodeTabs = ({
                 />
               ) : (
                 <>
-                  <span className="code-tab-name" onDoubleClick={() => handleStartEdit(codeRecord)}>
-                    {codeRecord.name || 'Code Tab'}
+                  <span className="code-tab-name">
+                    {displayName}
                   </span>
+                  <button
+                    type="button"
+                    className="code-tab-edit"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartEdit(codeRecord, index);
+                    }}
+                    aria-label="Rename tab"
+                  >
+                    &#9998;
+                  </button>
                 </>
               )}
             </div>
           );
         })}
-      </div>
-      
-      {showScrollButtons && (
-        <button className="code-tabs-scroll-btn right" onClick={scrollRight} aria-label="Scroll right">
-          →
+        <button className="code-tab-add" onClick={onCreateCode} aria-label="Add new code">
+          +
         </button>
-      )}
-
-      <button className="code-tab-add" onClick={onCreateCode} aria-label="Add new code">
-        + New Code
-      </button>
+      </div>
 
       {onViewPortConfig && (
-        <button 
+        <button
           className="code-tab-port-config"
-          onClick={onViewPortConfig} 
+          onClick={onViewPortConfig}
           disabled={isPortConfigLoading}
           aria-label="View port configuration"
         >
@@ -146,4 +130,3 @@ const CodeTabs = ({
 };
 
 export default CodeTabs;
-
