@@ -60,9 +60,9 @@ const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, o
     <>
       <div className="topbar">
         <div className="topbar-logo">
-          <span className="logo-text">Tufts CEEO</span>
+          <span className="logo-text">Purdue University</span>
         </div>
-        <div className="topbar-title">EN1 AI Editor</div>
+        <div className="topbar-title">LilyBot AI Editor</div>
         {activeSession && (
           <div className="topbar-session-name">
             {isEditingName ? (

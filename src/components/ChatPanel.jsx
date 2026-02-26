@@ -17,8 +17,7 @@ import {
   intermediatePrompt,
   experiencedPrompt,
 } from '../prompts/codingLevels';
-import { spike3Documentation } from '../prompts/spike_3_documentation';
-import { spike2Documentation } from '../prompts/spike_2_documentation';
+import { lilyBotPriming } from '../prompts/spike_priming';
 import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
 import BudgetErrorModal from './BudgetErrorModal';
@@ -48,7 +47,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     conversationHistory, 
     conversations,
     currentConversationId,
-    firmwareVersion,
     getSystemPriming,
     switchConversation,
     createNewConversation,
@@ -72,7 +70,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const [consoleHasContent, setConsoleHasContent] = useState(false);
   const [budgetErrorVisible, setBudgetErrorVisible] = useState(false);
   const [userAccessLevel, setUserAccessLevel] = useState('standard');
-  const [attachDocumentation, setAttachDocumentation] = useState(true);
 
   const selectedModelStreaming = modelMetadata.streamableByModel[selectedModel] ?? false;
 
@@ -308,21 +305,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       role: 'system',
       content: getSystemPriming(),
     });
-
-    // Add SPIKE documentation if checkbox is checked and firmware version is specified
-    if (attachDocumentation) {
-      if (firmwareVersion === '3') {
-        conversation.push({
-          role: 'system',
-          content: spike3Documentation,
-        });
-      } else if (firmwareVersion === '2') {
-        conversation.push({
-          role: 'system',
-          content: spike2Documentation,
-        });
-      }
-    }
 
     // Add coding level instructions
     const levelInstructions = getLevelPrompt(codingLevel);
@@ -603,8 +585,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         onCodingLevelChange={setCodingLevel}
         selectedModel={selectedModel}
         onModelChange={setSelectedModel}
-        attachDocumentation={attachDocumentation}
-        onAttachDocumentationChange={setAttachDocumentation}
         modelsByProvider={modelMetadata.modelsByProvider}
         streamableByModel={modelMetadata.streamableByModel}
         selectedModelStreaming={selectedModelStreaming}

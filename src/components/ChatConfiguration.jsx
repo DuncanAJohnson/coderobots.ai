@@ -76,23 +76,6 @@ const ChatConfiguration = ({
           </div>
         </div>
       </div>
-
-      <div className="config-right">
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={attachDocumentation}
-            onChange={(e) => onAttachDocumentationChange(e.target.checked)}
-          />
-          <span>Attach SPIKE PRIME documentation as context</span>
-        </label>
-        <div className="info-tooltip">
-          <span className="info-icon">ℹ️</span>
-          <span className="tooltip-text">
-            By attaching the full documentation, the LLM will have more knowledge of how SPIKE PRIMEs are programmed, but the response speed will be slower and the cost of messaging with the LLM will be higher.
-          </span>
-        </div>
-      </div>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import Board from '../utils/microRepl.js';
-import { STOP_CODE_SPIKE_2, STOP_CODE_SPIKE_3 } from '../utils/stopSpike.js';
+import { STOP_CODE_LILYBOT } from '../utils/stopSpike.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import CodeTabs from './CodeTabs.jsx';
@@ -237,13 +237,9 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     // Give a moment for buffer to update
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    // Stop motors based on firmware version
+    // Stop motors
     try {
-      if (firmwareVersion === '2') {
-        await board.eval(STOP_CODE_SPIKE_2, { hidden: true });
-      } else if (firmwareVersion === '3') {
-        await board.eval(STOP_CODE_SPIKE_3, { hidden: true });
-      }
+      await board.eval(STOP_CODE_LILYBOT, { hidden: true });
     } catch (error) {
       console.error('Failed to stop motors:', error);
     }

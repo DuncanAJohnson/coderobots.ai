@@ -1,28 +1,24 @@
-export const STOP_CODE_SPIKE_2 = `
-from spike import Motor
-motor.stop()
+export const STOP_CODE_LILYBOT = `
+from machine import Pin, PWM
 
-motor_a = Motor('A')
-motor_b = Motor('B')
-motor_c = Motor('C')
-motor_d = Motor('D')
-motor_e = Motor('E')
-motor_f = Motor('F')
+# Motor Pins Setup
+PWMA = PWM(Pin(28))
+AIN2 = Pin(27, Pin.OUT)
+AIN1 = Pin(26, Pin.OUT)
+PWMA.freq(60)
 
-motor_a.stop()
-motor_b.stop()
-motor_c.stop()
-motor_d.stop()
-motor_e.stop()
-motor_f.stop()
-`;
+BIN1 = Pin(22, Pin.OUT)
+BIN2 = Pin(21, Pin.OUT)
+PWMB = PWM(Pin(20))
+PWMB.freq(60)
 
-export const STOP_CODE_SPIKE_3 = `
-import motor
-motor.stop()
+def stop():
+    AIN1.value(0)
+    AIN2.value(0)
+    BIN1.value(0)
+    BIN2.value(0)
+    PWMA.duty_u16(0)
+    PWMB.duty_u16(0)
 
-import motor_pair
-motor_pair.unpair(motor_pair.PAIR_1)
-motor_pair.unpair(motor_pair.PAIR_2)
-motor_pair.unpair(motor_pair.PAIR_3)
+stop()
 `;
