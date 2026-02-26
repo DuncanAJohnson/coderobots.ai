@@ -27,7 +27,7 @@
   padding: 40px;
   max-width: 560px;
   width: 90%;
-  animation: modalSlideUp 0.3s ease;
+  animation: modalSlideUp 0.2s ease;
 }
 
 .modal-content-wide {
@@ -36,7 +36,7 @@
 
 @keyframes modalSlideUp {
   from {
-    transform: translateY(20px);
+    transform: translateY(12px);
     opacity: 0;
   }
   to {
@@ -55,7 +55,7 @@
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.1s ease;
 }
 
 .modal-close-button:hover {
