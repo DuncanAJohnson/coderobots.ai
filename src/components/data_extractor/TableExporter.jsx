@@ -5,11 +5,12 @@ import {
   convertRowsToCsv,
   downloadCsvFile,
 } from '../../services/dataExport';
+import './TableExporter.css';
 
 /**
  * TableExporter Component
  * Reusable component for configuring and exporting table data
- * 
+ *
  * @param {string} tableName - Display name of the table being exported
  * @param {Array} columns - Array of column definitions: { key, label, default }
  * @param {string} startTime - Start time filter value (from parent)
@@ -27,7 +28,7 @@ function TableExporter({
   const [selectedColumns, setSelectedColumns] = useState(
     columns.filter(c => c.default).map(c => c.key)
   );
-  
+
   // Export states
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState(null);
@@ -77,86 +78,72 @@ function TableExporter({
   };
 
   return (
-    <div className="mb-10">
-      {/* Table Name Header */}
-      <h2 className="text-xl font-semibold text-slate-200 mb-4">{tableName}</h2>
+    <div className="table-exporter">
+      <h2 className="table-exporter-title">{tableName}</h2>
 
-      {/* Error Banner */}
       {error && (
-        <div className="mb-4 p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-red-300 text-sm">
+        <div className="admin-error-banner table-exporter-banner">
           {error}
         </div>
       )}
 
-      {/* Success Banner */}
       {exportResult?.success && (
-        <div className="mb-4 p-3 bg-emerald-900/30 border border-emerald-700/50 rounded-lg text-emerald-300 text-sm">
+        <div className="admin-success-banner table-exporter-banner">
           Successfully exported {exportResult.rowCount} rows
         </div>
       )}
-      
-      {/* Column Selection */}
-      <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium text-slate-200">Columns</h3>
-          <div className="flex gap-2 text-xs">
+
+      <div className="admin-card">
+        <div className="table-exporter-columns-header">
+          <h3 className="admin-section-title">Columns</h3>
+          <div className="table-exporter-column-actions">
             <button
+              type="button"
               onClick={selectAllColumns}
-              className="text-emerald-400 hover:text-emerald-300 transition-colors"
+              className="admin-text-button"
             >
               All
             </button>
-            <span className="text-slate-600">|</span>
+            <span>|</span>
             <button
+              type="button"
               onClick={selectDefaultColumns}
-              className="text-slate-400 hover:text-slate-200 transition-colors"
+              className="admin-text-button"
             >
               Default
             </button>
           </div>
         </div>
-        
-        <div className="flex flex-wrap gap-2 mb-4">
+
+        <div className="table-exporter-pills">
           {columns.map((col) => (
             <button
               key={col.key}
               type="button"
               onClick={() => toggleColumn(col.key)}
-              className={`
-                px-3 py-1.5 rounded-lg cursor-pointer transition-colors text-sm
-                ${selectedColumns.includes(col.key)
-                  ? 'bg-emerald-900/40 border border-emerald-600/50 text-emerald-300'
-                  : 'bg-slate-700/30 border border-slate-600/50 text-slate-400 hover:bg-slate-700/50'
-                }
-              `}
+              className={`column-pill ${selectedColumns.includes(col.key) ? 'selected' : ''}`}
             >
               {col.label}
             </button>
           ))}
         </div>
-        
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-slate-500">
+
+        <div className="table-exporter-footer">
+          <div className="table-exporter-count">
             {selectedColumns.length} column{selectedColumns.length !== 1 ? 's' : ''} selected
           </div>
-          
-          {/* Export Button */}
+
           <button
+            type="button"
             onClick={handleExport}
             disabled={exporting || selectedColumns.length === 0}
-            className={`
-              px-5 py-2 rounded-lg font-medium text-sm transition-all
-              ${exporting || selectedColumns.length === 0
-                ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                : 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-md shadow-emerald-900/30 hover:shadow-emerald-900/50'
-              }
-            `}
+            className="table-exporter-export-btn"
           >
             {exporting ? (
-              <span className="flex items-center gap-2">
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              <span className="table-exporter-export-content">
+                <svg className="spinner" width="16" height="16" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
+                  <path fill="currentColor" opacity="0.75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
                 Exporting...
               </span>

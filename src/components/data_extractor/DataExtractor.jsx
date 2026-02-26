@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import TableExporter from './TableExporter';
+import './DataExtractor.css';
 
 const MESSAGE_COLUMNS = [
   { key: 'id', label: 'ID', default: true },
@@ -91,8 +92,8 @@ function DataExtractor() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="text-slate-300 text-lg">Loading...</div>
+      <div className="admin-loading">
+        <div className="admin-loading-text">Loading...</div>
       </div>
     );
   }
@@ -107,155 +108,152 @@ function DataExtractor() {
     .filter(email => email.length > 0);
 
   return (
-    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="border-b border-slate-700/50 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+    <div className="admin-page">
+      <header className="admin-header">
+        <div className="admin-header-inner">
+          <div className="admin-header-left">
             <button
+              type="button"
               onClick={() => navigate('/')}
-              className="text-slate-400 hover:text-slate-200 transition-colors"
+              className="admin-back-button"
             >
               ← Back
             </button>
-            <h1 className="text-md text-slate-200 font-semibold tracking-tight">
+            <h1 className="admin-title">
               Data Extractor
             </h1>
           </div>
-          <div className="text-sm text-slate-400">
-            Logged in as <span className="text-emerald-400">{user.email}</span>
+          <div className="admin-user">
+            Logged in as <span className="admin-user-email">{user.email}</span>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col flex-1 min-h-0 w-full">
-        {/* Filters row */}
-        <div className="space-y-4 flex-shrink-0 bg-slate-900/80 backdrop-blur-sm">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Time Range Filter */}
-            <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50">
-              <h2 className="text-lg font-medium mb-4 text-slate-200">Time Range</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm text-slate-400 mb-1">Start Time</label>
-                  <input
-                    type="datetime-local"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
-                  />
+      <main className="admin-main-extractor">
+        <div className="admin-extractor-inner">
+          <div className="admin-filters-row">
+            <div className="admin-filters-grid">
+              <div className="admin-card">
+                <h2 className="admin-section-title">Time Range</h2>
+                <div className="admin-card-spacer">
+                  <div>
+                    <label className="admin-label">Start Time</label>
+                    <input
+                      type="datetime-local"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className="admin-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="admin-label">End Time</label>
+                    <input
+                      type="datetime-local"
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className="admin-input"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setStartTime(''); setEndTime(''); }}
+                    className="admin-text-button"
+                  >
+                    Clear dates
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-sm text-slate-400 mb-1">End Time</label>
-                  <input
-                    type="datetime-local"
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
-                  />
+              </div>
+
+              <div className="admin-card">
+                <div className="admin-card-header">
+                  <h2 className="admin-section-title">User Filter</h2>
+                  <button
+                    type="button"
+                    onClick={() => setEmailsInput('')}
+                    className="admin-text-button admin-text-button-small"
+                  >
+                    Clear
+                  </button>
                 </div>
-                <button
-                  onClick={() => { setStartTime(''); setEndTime(''); }}
-                  className="text-sm text-slate-400 hover:text-slate-200 transition-colors"
-                >
-                  Clear dates
-                </button>
+
+                <div className="admin-card-spacer-small">
+                  <div>
+                    <label className="admin-label">
+                      Emails <span className="admin-label-hint">(comma or newline separated)</span>
+                    </label>
+                    <textarea
+                      value={emailsInput}
+                      onChange={(e) => setEmailsInput(e.target.value)}
+                      placeholder="Leave empty for all users"
+                      rows={4}
+                      className="admin-input admin-input-textarea"
+                    />
+                  </div>
+                  <div className="admin-filter-summary">
+                    {parsedEmails.length === 0
+                      ? 'All users will be included'
+                      : `${parsedEmails.length} email${parsedEmails.length !== 1 ? 's' : ''} specified`}
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* User Filter */}
-            <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-medium text-slate-200">User Filter</h2>
-                <button
-                  onClick={() => setEmailsInput('')}
-                  className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
-                >
-                  Clear
-                </button>
-              </div>
-              
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm text-slate-400 mb-1">
-                    Emails <span className="text-slate-500">(comma or newline separated)</span>
-                  </label>
-                  <textarea
-                    value={emailsInput}
-                    onChange={(e) => setEmailsInput(e.target.value)}
-                    placeholder="Leave empty for all users"
-                    rows={4}
-                    className="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 resize-none font-mono text-sm"
-                  />
-                </div>
-                <div className="text-xs text-slate-500">
-                  {parsedEmails.length === 0 
-                    ? 'All users will be included' 
-                    : `${parsedEmails.length} email${parsedEmails.length !== 1 ? 's' : ''} specified`}
-                </div>
-              </div>
+            <div className="admin-filter-summary">
+              {parsedEmails.length === 0 ? 'All users' : `${parsedEmails.length} user${parsedEmails.length !== 1 ? 's' : ''}`}
+              {' • '}
+              {!startTime && !endTime ? 'All time' : `${startTime || 'Beginning'} to ${endTime || 'Now'}`}
             </div>
           </div>
 
-          {/* Filter Summary */}
-          <div className="text-center text-sm text-slate-500">
-            {parsedEmails.length === 0 ? 'All users' : `${parsedEmails.length} user${parsedEmails.length !== 1 ? 's' : ''}`}
-            {' • '}
-            {!startTime && !endTime ? 'All time' : `${startTime || 'Beginning'} to ${endTime || 'Now'}`}
+          <div className="admin-exporters-scroll">
+            <TableExporter
+              tableName="Messages"
+              columns={MESSAGE_COLUMNS}
+              startTime={startTime}
+              endTime={endTime}
+              emails={parsedEmails}
+            />
+
+            <TableExporter
+              tableName="Sessions"
+              columns={SESSION_COLUMNS}
+              startTime={startTime}
+              endTime={endTime}
+              emails={parsedEmails}
+            />
+
+            <TableExporter
+              tableName="Console"
+              columns={CONSOLE_COLUMNS}
+              startTime={startTime}
+              endTime={endTime}
+              emails={parsedEmails}
+            />
+
+            <TableExporter
+              tableName="Code Snapshots"
+              columns={CODE_SNAPSHOT_COLUMNS}
+              startTime={startTime}
+              endTime={endTime}
+              emails={parsedEmails}
+            />
+
+            <TableExporter
+              tableName="Interactions"
+              columns={INTERACTION_COLUMNS}
+              startTime={startTime}
+              endTime={endTime}
+              emails={parsedEmails}
+            />
+
+            <TableExporter
+              tableName="Conversations"
+              columns={CONVERSATION_COLUMNS}
+              startTime={startTime}
+              endTime={endTime}
+              emails={parsedEmails}
+            />
           </div>
-        </div>
-
-        {/* Table Exporters - scrollable */}
-        <div className="flex flex-col gap-6 overflow-y-auto flex-1 min-h-0 p-2 mt-8">
-          <TableExporter
-            tableName="Messages"
-            columns={MESSAGE_COLUMNS}
-            startTime={startTime}
-            endTime={endTime}
-            emails={parsedEmails}
-          />
-
-          <TableExporter
-            tableName="Sessions"
-            columns={SESSION_COLUMNS}
-            startTime={startTime}
-            endTime={endTime}
-            emails={parsedEmails}
-          />
-
-          <TableExporter
-            tableName="Console"
-            columns={CONSOLE_COLUMNS}
-            startTime={startTime}
-            endTime={endTime}
-            emails={parsedEmails}
-          />
-
-          <TableExporter
-            tableName="Code Snapshots"
-            columns={CODE_SNAPSHOT_COLUMNS}
-            startTime={startTime}
-            endTime={endTime}
-            emails={parsedEmails}
-          />
-
-          <TableExporter
-            tableName="Interactions"
-            columns={INTERACTION_COLUMNS}
-            startTime={startTime}
-            endTime={endTime}
-            emails={parsedEmails}
-          />
-
-          <TableExporter
-            tableName="Conversations"
-            columns={CONVERSATION_COLUMNS}
-            startTime={startTime}
-            endTime={endTime}
-            emails={parsedEmails}
-          />
-        </div>
         </div>
       </main>
     </div>
