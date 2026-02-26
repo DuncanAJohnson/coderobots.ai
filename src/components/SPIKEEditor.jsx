@@ -15,7 +15,6 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const [connected, setConnected] = useState(false);
   const [mode, setMode] = useState('disconnected');
   const [isRunning, setIsRunning] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState(0);
   const [buffer, setBuffer] = useState('');
 
   const { 
@@ -284,103 +283,32 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     setBuffer('');
   };
 
-  const handleEnterREPL = async () => {
-    const board = boardRef.current;
-    if (!board || !connected) return;
-
-    if (sessionId) {
-      await logInteraction('switch_to_repl_mode', sessionId);
-    }
-
-    await board.write('\x03');
-    setMode('repl');
-  };
-
-  const handleEnterProgramSlot = async () => {
-    const board = boardRef.current;
-    if (!board || !connected) return;
-
-    if (sessionId) {
-      await logInteraction('switch_to_program_slot_mode', sessionId);
-    }
-
-    setIsRunning(false);
-    await board.reset();
-    setMode('program-slot');
-    board.terminal?.focus();
-  };
-
-  const handleSaveToSlot = async () => {
+  // TODO: Implement this for raspberry pi pico
+  const handleSaveToMain = async () => {
     const board = boardRef.current;
     if (!board || !connected) {
-      alert('Cannot save to slot. Please connect to a SPIKE hub first.');
+      alert('Cannot save to main.py. Please connect to the Pico W first.');
       return;
     }
 
     const codeToSave = editorRef.current?.getCode() || currentCodeContent;
     
-    // Create snapshot before saving to slot
-    await createSnapshot(`save_to_slot_${selectedSlot}`);
+    // Create snapshot before saving to main.py
+    await createSnapshot('save_to_main_py');
     
-    // Log interaction and code before saving to slot
+    // Log interaction before saving to main.py
     if (sessionId) {
-      await logInteraction(`save_to_slot_${selectedSlot}`, sessionId);
+      await logInteraction('save_to_main_py', sessionId);
     }
-    
-    const slotStr = String(selectedSlot).padStart(2, '0');
-    
-    console.log(`Saving code to SPIKE program slot ${selectedSlot}...`);
-
-    // Escape the code content to be a valid Python string literal
-    const escapedCode = JSON.stringify(codeToSave);
-
-    // Construct the Python script to save to the slot
-    const script = `
-import os
-import sys
-
-slot_dir_name = "${slotStr}"
-code_to_write = ${escapedCode}
-program_dir = "program"
-target_file = "program.py"
-
-# Ensure we are in the root directory
-if (not os.getcwd() == '/flash'):
-    os.chdir('/flash')
-
-# Check for 'program' directory, create if it doesn't exist
-if program_dir not in os.listdir():
-    os.mkdir(program_dir)
-os.chdir(program_dir)
-
-# Check for the specific slot directory, create if it doesn't exist
-if slot_dir_name not in os.listdir():
-    os.mkdir(slot_dir_name)
-os.chdir(slot_dir_name)
-
-# Clean up old program files to ensure our .py file runs
-for filename in ['program.mpy', 'program.py']:
-    try:
-        os.remove(filename)
-    except OSError:
-        pass # File didn't exist, which is fine
-
-# Write the new program file in chunks of chunk_size characters
-with open(target_file, "w") as f:
-    f.write(code_to_write)
-
-# Try to return to the root directory
-os.chdir('/flash')
-`;
 
     try {
-      await board.paste(script, { hidden: false });
+      await board.upload('main.py', codeToSave);
       await board.reset();
-      setMode('program-slot');
+      setMode('repl');
       board.terminal?.focus();
     } catch (error) {
-      console.error('Failed to save to slot:', error);
-      alert(`Failed to save to slot: ${error.message}`);
+      console.error('Failed to save to main.py:', error);
+      alert(`Failed to save to main.py: ${error.message}`);
     }
   };
 
@@ -409,17 +337,12 @@ os.chdir('/flash')
         <div className="child bottom-child">
           <ControlPanel
             connected={connected}
-            mode={mode}
-            selectedSlot={selectedSlot}
-            onSlotChange={setSelectedSlot}
             onConnect={handleConnect}
             onRun={handleRun}
             onCtrlC={handleCtrlC}
             onReset={handleReset}
             onClear={handleClear}
-            onEnterREPL={handleEnterREPL}
-            onEnterProgramSlot={handleEnterProgramSlot}
-            onSaveToSlot={handleSaveToSlot}
+            onSaveToMain={handleSaveToMain}
           />
           <div className="terminal-wrapper" ref={replContainerRef}>
             {/* The micro_repl Board will render the xterm terminal here */}
