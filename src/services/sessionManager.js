@@ -91,6 +91,7 @@ export const createNewSession = async (firmwareVersion = '3') => {
     const convoPayload = {
       user_id: user.id,
       session_id: sessionId,
+      name: 'Chat 1',
     };
 
     const convoValidation = validate(conversationInsertSchema, convoPayload);
@@ -116,6 +117,7 @@ export const createNewSession = async (firmwareVersion = '3') => {
     const codePayload = {
       user_id: user.id,
       session_id: sessionId,
+      name: 'Code tab 1',
       content: '# Start your new project here!',
       save_source: 'init',
     };
@@ -354,7 +356,7 @@ export const getSessionConversations = async (sessionId) => {
 /**
  * Create a new conversation for a session
  */
-export const createConversation = async (sessionId) => {
+export const createConversation = async (sessionId, name = 'Chat 1') => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     
@@ -366,7 +368,7 @@ export const createConversation = async (sessionId) => {
     const payload = {
       user_id: user.id,
       session_id: sessionId,
-      name: 'Unnamed Chat',
+      name,
     };
 
     const validation = validate(conversationInsertSchema, payload);

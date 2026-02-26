@@ -4,6 +4,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
+import './ModalBase.css';
 import './DebugManager.css';
 
 // Global log storage
@@ -97,8 +98,8 @@ const DebugManager = ({ visible, onClose }) => {
   if (!visible) return null;
 
   return (
-    <div className="dbg-modal" onClick={onClose}>
-      <div className="dbg-box" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content modal-content-wide dbg-box" onClick={(e) => e.stopPropagation()}>
         <div className="dbg-header">Console Log</div>
         <div className="dbg-body-terminal" ref={logBodyRef}>
           {logs.map((entry, idx) => (

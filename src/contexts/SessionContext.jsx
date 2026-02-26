@@ -255,7 +255,8 @@ export const SessionProvider = ({ children }) => {
     }
 
     try {
-      const newConversation = await createConversation(activeSession.id);
+      const name = `Chat ${conversations.length + 1}`;
+      const newConversation = await createConversation(activeSession.id, name);
       if (newConversation) {
         // Reload conversations list
         await loadConversations(activeSession.id);
@@ -270,7 +271,7 @@ export const SessionProvider = ({ children }) => {
       console.error('Error creating conversation:', error);
       return null;
     }
-  }, [activeSession, loadConversations, switchConversation]);
+  }, [activeSession, conversations.length, loadConversations, switchConversation]);
 
   /**
    * Rename a conversation
@@ -341,7 +342,8 @@ export const SessionProvider = ({ children }) => {
     }
 
     try {
-      const newCode = await createCode(activeSession.id, 'Code Tab');
+      const name = `Code tab ${codeRecords.length + 1}`;
+      const newCode = await createCode(activeSession.id, name);
       if (newCode) {
         // Switch to the new code record (this will reload code records internally)
         await switchCode(newCode.id);
@@ -353,7 +355,7 @@ export const SessionProvider = ({ children }) => {
       console.error('Error creating code record:', error);
       return null;
     }
-  }, [activeSession, switchCode]);
+  }, [activeSession, codeRecords.length, switchCode]);
 
   /**
    * Rename a code record

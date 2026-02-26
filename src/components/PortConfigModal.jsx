@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import './ModalBase.css';
 import './PortConfigModal.css';
 
 // Import component images
@@ -60,8 +61,8 @@ const PortConfigModal = ({ isOpen, portConfig, onClose }) => {
   };
 
   return (
-    <div className="port-config-modal" ref={modalRef} onClick={handleBackdropClick}>
-      <div className="port-config-box">
+    <div className="modal-overlay" ref={modalRef} onClick={handleBackdropClick}>
+      <div className="modal-content modal-content-wide port-config-box">
         <div className="port-config-header">
           <h2>SPIKE Prime Port Configuration</h2>
           <button className="port-config-close" onClick={onClose}>×</button>

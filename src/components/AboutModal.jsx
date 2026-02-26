@@ -3,14 +3,15 @@
  * Displays application information, version, and contact details
  */
 
+import './ModalBase.css';
 import './AboutModal.css';
 
 const AboutModal = ({ visible, onClose }) => {
   if (!visible) return null;
 
   return (
-    <div className="about-modal-overlay" onClick={onClose}>
-      <div className="about-modal-content" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="about-header">
           <h1 className="about-title">EN1 AI Editor</h1>
           <p className="about-subtitle">
@@ -45,7 +46,7 @@ const AboutModal = ({ visible, onClose }) => {
           </p>
         </div>
 
-        <button className="about-close-button" onClick={onClose}>
+        <button className="modal-close-button" onClick={onClose}>
           Close
         </button>
       </div>

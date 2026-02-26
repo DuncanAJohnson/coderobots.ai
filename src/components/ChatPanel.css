@@ -248,29 +248,62 @@
 }
 
 .chat-context-controls button {
-    padding: 0.5rem 1rem;
-    background: #002E6D;
-    color: #fff;
-    border: none;
+    flex-shrink: 0;
+}
+
+.context-checkbox-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: #e5e5e5;
+    color: #666;
+    border: 1px solid #ccc;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.85rem;
-    flex-shrink: 0; /* Prevents buttons from shrinking */
+    font-size: 0.8rem;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.context-checkbox-btn:hover:not(:disabled) {
+    background: #d8d8d8;
+}
+
+.context-checkbox-btn--active {
+    background: #002E6D;
+    color: #fff;
+    border-color: #002E6D;
+}
+
+.context-checkbox-btn--active:hover:not(:disabled) {
+    background: #003d8f;
+    border-color: #003d8f;
+}
+
+.context-checkbox-btn__box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.context-checkbox-btn--active .context-checkbox-btn__box {
+    border-color: #fff;
+}
+
+.context-checkbox-btn__label {
+    white-space: nowrap;
 }
 
 .chat-context-controls button:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
-}
-
-.context-indicator {
-    flex-grow: 1; /* Pushes the text to the right */
-    text-align: left;
-    font-size: 0.85rem;
-    color: #333;
-    white-space: nowrap; /* Prevents text from wrapping */
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 /* Wrapper for the textarea and send button */

@@ -6,9 +6,10 @@
 
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import './ModalBase.css';
 import './AuthModal.css';
 
-const AuthModal = ({ visible, onClose }) => {
+const AuthModal = ({ visible }) => {
   const { signIn, signInWithPassword, signUpWithPassword, authError, isShowcaseMode } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,8 +36,8 @@ const AuthModal = ({ visible, onClose }) => {
   };
 
   return (
-    <div className={`auth-modal-overlay ${visible ? 'visible' : ''}`}>
-      <div className="auth-modal">
+    <div className="modal-overlay">
+      <div className="modal-content auth-modal">
         <h2>Welcome to the EN1 AI Editor</h2>
         <p>Please sign in to continue.</p>
 

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchAdminUsageAnalytics, formatUsd } from '../../services/adminUsage';
+import './AdminUsageDashboard.css';
 
 function formatDateForInput(date) {
   return date.toISOString().split('T')[0];
@@ -66,8 +67,8 @@ function AdminUsageDashboard() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="text-slate-300 text-lg">Loading...</div>
+      <div className="admin-loading">
+        <div className="admin-loading-text">Loading...</div>
       </div>
     );
   }
@@ -77,69 +78,73 @@ function AdminUsageDashboard() {
   }
 
   return (
-    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden">
-      <header className="border-b border-slate-700/50 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+    <div className="admin-page">
+      <header className="admin-header">
+        <div className="admin-header-inner">
+          <div className="admin-header-left">
             <button
+              type="button"
               onClick={() => navigate('/')}
-              className="text-slate-400 hover:text-slate-200 transition-colors"
+              className="admin-back-button"
             >
               ← Back
             </button>
-            <h1 className="text-md text-slate-200 font-semibold tracking-tight">
+            <h1 className="admin-title">
               Admin Usage Dashboard
             </h1>
           </div>
-          <div className="text-sm text-slate-400">
-            Logged in as <span className="text-emerald-400">{user.email}</span>
+          <div className="admin-user">
+            Logged in as <span className="admin-user-email">{user.email}</span>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
-          <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50">
-            <h2 className="text-lg font-medium mb-4 text-slate-200">Time Range</h2>
-            <div className="flex flex-wrap gap-3 mb-4">
+      <main className="admin-main">
+        <div className="admin-content">
+          <div className="admin-card">
+            <h2 className="admin-section-title">Time Range</h2>
+            <div className="admin-preset-row">
               <button
+                type="button"
                 onClick={() => setPreset('past_week')}
-                className={`px-4 py-2 rounded-lg border text-sm ${preset === 'past_week' ? 'bg-emerald-900/40 border-emerald-600/50 text-emerald-300' : 'bg-slate-700/30 border-slate-600/50 text-slate-300'}`}
+                className={`admin-button ${preset === 'past_week' ? 'active' : ''}`}
               >
                 Past Week
               </button>
               <button
+                type="button"
                 onClick={() => setPreset('past_month')}
-                className={`px-4 py-2 rounded-lg border text-sm ${preset === 'past_month' ? 'bg-emerald-900/40 border-emerald-600/50 text-emerald-300' : 'bg-slate-700/30 border-slate-600/50 text-slate-300'}`}
+                className={`admin-button ${preset === 'past_month' ? 'active' : ''}`}
               >
                 Past Month
               </button>
               <button
+                type="button"
                 onClick={() => setPreset('custom')}
-                className={`px-4 py-2 rounded-lg border text-sm ${preset === 'custom' ? 'bg-emerald-900/40 border-emerald-600/50 text-emerald-300' : 'bg-slate-700/30 border-slate-600/50 text-slate-300'}`}
+                className={`admin-button ${preset === 'custom' ? 'active' : ''}`}
               >
                 Custom
               </button>
             </div>
 
             {preset === 'custom' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="admin-date-grid">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">Start Date</label>
+                  <label className="admin-label">Start Date</label>
                   <input
                     type="date"
                     value={customStartDate}
                     onChange={(e) => setCustomStartDate(e.target.value)}
-                    className="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                    className="admin-input"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">End Date</label>
+                  <label className="admin-label">End Date</label>
                   <input
                     type="date"
                     value={customEndDate}
                     onChange={(e) => setCustomEndDate(e.target.value)}
-                    className="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                    className="admin-input"
                   />
                 </div>
               </div>
@@ -147,28 +152,28 @@ function AdminUsageDashboard() {
           </div>
 
           {error && (
-            <div className="p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-red-300 text-sm">
+            <div className="admin-error-banner">
               {error}
             </div>
           )}
 
-          <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50">
-            <h2 className="text-lg font-medium text-slate-200 mb-2">Total Spend</h2>
-            <div className="text-3xl font-semibold text-emerald-300">
+          <div className="admin-card">
+            <h2 className="admin-section-title">Total Spend</h2>
+            <div className="admin-total-spend-value">
               {loading || !analytics ? '—' : formatUsd(analytics.totalSpendUsd)}
             </div>
             {analytics && (
-              <div className="text-xs text-slate-500 mt-2">
+              <div className="admin-total-spend-meta">
                 {analytics.range.startIso} to {analytics.range.endIso}
               </div>
             )}
           </div>
 
-          <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50">
-            <h2 className="text-lg font-medium text-slate-200 mb-4">Daily Spend (USD)</h2>
-            <div className="h-72">
+          <div className="admin-card">
+            <h2 className="admin-section-title">Daily Spend (USD)</h2>
+            <div className="admin-chart-container">
               {loading ? (
-                <div className="h-full flex items-center justify-center text-slate-400">Loading chart...</div>
+                <div className="admin-chart-loading">Loading chart...</div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData}>
@@ -187,33 +192,33 @@ function AdminUsageDashboard() {
             </div>
           </div>
 
-          <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50">
-            <h2 className="text-lg font-medium text-slate-200 mb-4">Usage by User</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+          <div className="admin-card">
+            <h2 className="admin-section-title">Usage by User</h2>
+            <div className="admin-table-wrap">
+              <table className="admin-table">
                 <thead>
-                  <tr className="border-b border-slate-700/70">
-                    <th className="text-left py-2 text-slate-300">User</th>
-                    <th className="text-right py-2 text-slate-300">LLM Calls</th>
-                    <th className="text-right py-2 text-slate-300">Spend (USD)</th>
+                  <tr>
+                    <th>User</th>
+                    <th>LLM Calls</th>
+                    <th>Spend (USD)</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={3} className="py-4 text-center text-slate-400">Loading users...</td>
+                      <td colSpan={3} className="empty">Loading users...</td>
                     </tr>
                   ) : analytics && analytics.users.length > 0 ? (
                     analytics.users.map((item) => (
-                      <tr key={item.userId} className="border-b border-slate-800">
-                        <td className="py-2 text-slate-300">{item.email || item.userId}</td>
-                        <td className="py-2 text-right text-slate-300">{item.llmCalls.toLocaleString()}</td>
-                        <td className="py-2 text-right text-slate-300">{formatUsd(item.costUsd)}</td>
+                      <tr key={item.userId}>
+                        <td>{item.email || item.userId}</td>
+                        <td>{item.llmCalls.toLocaleString()}</td>
+                        <td>{formatUsd(item.costUsd)}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={3} className="py-4 text-center text-slate-400">No usage in selected range.</td>
+                      <td colSpan={3} className="empty">No usage in selected range.</td>
                     </tr>
                   )}
                 </tbody>

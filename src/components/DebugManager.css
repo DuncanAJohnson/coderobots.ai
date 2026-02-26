@@ -1,34 +1,22 @@
-.dbg-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: fadeIn 0.2s ease;
-}
+/* DebugManager - overlay and content from ModalBase.css */
 
 .dbg-box {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-  width: 90%;
+  padding: 0;
   max-width: 900px;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: slideUp 0.3s ease;
 }
 
 .dbg-header {
-  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-  color: white;
-  padding: 12px 20px;
-  font-size: 16px;
-  font-weight: 600;
-  border-bottom: 2px solid #1e40af;
+  padding: 16px 24px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 16px 16px 0 0;
 }
 
 .dbg-body,
@@ -73,7 +61,7 @@
 }
 
 .dbg-controls {
-  padding: 20px;
+  padding: 20px 24px;
   background: #f9fafb;
   display: flex;
   gap: 12px;
@@ -87,16 +75,16 @@
   color: #16a34a;
   font-weight: 600;
   font-size: 14px;
-  animation: fadeIn 0.2s ease;
+  animation: modalFadeIn 0.2s ease;
 }
 
 .dbg-button {
-  padding: 10px 20px;
+  padding: 12px 24px;
   background-color: #3b82f6;
   color: white;
   border: none;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 8px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.2s ease;
@@ -111,10 +99,11 @@
 }
 
 .dbg-footer {
-  padding: 16px 20px;
+  padding: 16px 24px;
   background: #f9fafb;
   text-align: center;
   border-top: 1px solid #e5e7eb;
+  border-radius: 0 0 16px 16px;
 }
 
 .dbg-footer a {
@@ -149,4 +138,3 @@
 .dbg-body-terminal::-webkit-scrollbar-thumb:hover {
   background: #777;
 }
-

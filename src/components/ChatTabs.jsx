@@ -3,7 +3,7 @@
  * Displays a horizontal scrollable list of chat tabs for conversation management
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import './ChatTabs.css';
 
 const ChatTabs = ({
@@ -15,12 +15,11 @@ const ChatTabs = ({
 }) => {
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
-  const [showScrollButtons, setShowScrollButtons] = useState(false);
   const tabsContainerRef = useRef(null);
 
-  const handleStartEdit = (conversation) => {
+  const handleStartEdit = (conversation, index) => {
     setEditingId(conversation.id);
-    setEditingName(conversation.name || 'Unnamed Chat');
+    setEditingName(conversation.name || `Chat ${index + 1}`);
   };
 
   const handleSaveEdit = async (conversationId) => {
@@ -45,43 +44,24 @@ const ChatTabs = ({
     }
   };
 
-  const scrollLeft = () => {
-    if (tabsContainerRef.current) {
-      tabsContainerRef.current.scrollBy({ left: -200, behavior: 'smooth' });
+  const handleWheel = (e) => {
+    if (tabsContainerRef.current && e.deltaY !== 0) {
+      e.preventDefault();
+      tabsContainerRef.current.scrollBy({ left: e.deltaY, behavior: 'auto' });
     }
   };
-
-  const scrollRight = () => {
-    if (tabsContainerRef.current) {
-      tabsContainerRef.current.scrollBy({ left: 200, behavior: 'smooth' });
-    }
-  };
-
-  const checkOverflow = () => {
-    if (tabsContainerRef.current) {
-      const { scrollWidth, clientWidth } = tabsContainerRef.current;
-      setShowScrollButtons(scrollWidth > clientWidth);
-    }
-  };
-
-  useEffect(() => {
-    checkOverflow();
-    window.addEventListener('resize', checkOverflow);
-    return () => window.removeEventListener('resize', checkOverflow);
-  }, [conversations]);
 
   return (
     <div className="chat-tabs-wrapper">
-      {showScrollButtons && (
-        <button className="chat-tabs-scroll-btn left" onClick={scrollLeft} aria-label="Scroll left">
-          ←
-        </button>
-      )}
-      
-      <div className="chat-tabs-container" ref={tabsContainerRef}>
-        {conversations.map((conversation) => {
+      <div
+        className="chat-tabs-container"
+        ref={tabsContainerRef}
+        onWheel={handleWheel}
+      >
+        {conversations.map((conversation, index) => {
           const isActive = conversation.id === currentConversationId;
           const isEditing = editingId === conversation.id;
+          const displayName = conversation.name || `Chat ${index + 1}`;
 
           return (
             <div
@@ -102,30 +82,31 @@ const ChatTabs = ({
                 />
               ) : (
                 <>
-                  <span className="chat-tab-name" onDoubleClick={() => handleStartEdit(conversation)}>
-                    {conversation.name || 'Unnamed Chat'}
+                  <span className="chat-tab-name">
+                    {displayName}
                   </span>
+                  <button
+                    type="button"
+                    className="chat-tab-edit"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartEdit(conversation, index);
+                    }}
+                    aria-label="Rename tab"
+                  >
+                    &#9998;
+                  </button>
                 </>
               )}
             </div>
           );
         })}
-        
-        
-      </div>
-      
-      {showScrollButtons && (
-        <button className="chat-tabs-scroll-btn right" onClick={scrollRight} aria-label="Scroll right">
-          →
+        <button className="chat-tab-add" onClick={onCreateConversation} aria-label="Add new chat">
+          +
         </button>
-      )}
-
-      <button className="chat-tab-add" onClick={onCreateConversation} aria-label="Add new chat">
-        + New Chat
-      </button>
+      </div>
     </div>
   );
 };
 
 export default ChatTabs;
-
