@@ -519,9 +519,14 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   };
 
   const handleKeyDown = (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault();
-      handleSendMessage();
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // Shift+Enter: allow default (newline)
+      } else {
+        // Enter: send message
+        e.preventDefault();
+        handleSendMessage();
+      }
     }
   };
 
