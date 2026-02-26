@@ -337,35 +337,3 @@ export const updateSessionOnLoad = async (sessionId) => {
     console.error('Error in updateSessionOnLoad:', error);
   }
 };
-
-/**
- * Update message with port configurations
- */
-export const updateMessagePortConfigurations = async (messageId, portConfigurations) => {
-  try {
-    const updatePayload = { port_configurations: portConfigurations };
-
-    // Validate update payload
-    const validation = validate(messageUpdateSchema, updatePayload);
-    if (!validation.success) {
-      console.error('Message update validation failed:', validation.error.issues);
-      return false;
-    }
-
-    const { error } = await supabase
-      .from(TABLES.MESSAGES)
-      .update(validation.data)
-      .eq('id', messageId);
-
-    if (error) {
-      console.error('Error updating message port configurations:', error);
-      return false;
-    }
-
-    console.log(`✅ Updated port configurations for message ${messageId}`);
-    return true;
-  } catch (error) {
-    console.error('Error in updateMessagePortConfigurations:', error);
-    return false;
-  }
-};

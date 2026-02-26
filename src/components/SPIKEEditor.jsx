@@ -4,10 +4,8 @@ import { STOP_CODE_SPIKE_2, STOP_CODE_SPIKE_3 } from '../utils/stopSpike.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import CodeTabs from './CodeTabs.jsx';
-import PortConfigModal from './PortConfigModal.jsx';
 import { useSession } from '../contexts/SessionContext';
 import { logConsole, logInteraction } from '../services/dataLogger';
-import { analyzePortConfiguration } from '../utils/portConfigStream';
 import './SPIKEEditor.css';
 
 const FIFO_SIZE = 10000;
@@ -19,9 +17,6 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const [isRunning, setIsRunning] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(0);
   const [buffer, setBuffer] = useState('');
-  const [portConfigModalOpen, setPortConfigModalOpen] = useState(false);
-  const [currentPortConfig, setCurrentPortConfig] = useState(null);
-  const [isPortConfigLoading, setIsPortConfigLoading] = useState(false);
 
   const { 
     codeRecords, 
@@ -315,32 +310,6 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     board.terminal?.focus();
   };
 
-  const handleViewPortConfig = async () => {
-    const codeToAnalyze = editorRef.current?.getCode() || currentCodeContent;
-    
-    if (!codeToAnalyze.trim()) {
-      alert('No code to analyze. Please write some code first.');
-      return;
-    }
-
-    setIsPortConfigLoading(true);
-
-    try {
-      const config = await analyzePortConfiguration(codeToAnalyze);
-      setCurrentPortConfig(config);
-      setPortConfigModalOpen(true);
-    } catch (error) {
-      console.error('Error analyzing port configuration:', error);
-      alert('Failed to analyze port configuration. Please try again.');
-    } finally {
-      setIsPortConfigLoading(false);
-    }
-  };
-
-  const closePortConfigModal = () => {
-    setPortConfigModalOpen(false);
-  };
-
   const handleSaveToSlot = async () => {
     const board = boardRef.current;
     if (!board || !connected) {
@@ -423,8 +392,6 @@ os.chdir('/flash')
         onSwitchCode={switchCode}
         onCreateCode={createNewCode}
         onRenameCode={updateCodeName}
-        onViewPortConfig={handleViewPortConfig}
-        isPortConfigLoading={isPortConfigLoading}
       />
       <div className="parent" ref={containerRef}>
         <div className="child top-child">
@@ -459,13 +426,6 @@ os.chdir('/flash')
           </div>
         </div>
       </div>
-
-      {/* Port Configuration Modal */}
-      <PortConfigModal
-        isOpen={portConfigModalOpen}
-        portConfig={currentPortConfig}
-        onClose={closePortConfigModal}
-      />
     </div>
   );
 });

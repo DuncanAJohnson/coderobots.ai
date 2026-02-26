@@ -22,7 +22,6 @@ const MESSAGE_COLUMNS = [
   { key: 'code_context_id', label: 'Code Context ID', default: false },
   { key: 'console_context_id', label: 'Console Context ID', default: false },
   { key: 'timestamp', label: 'Timestamp', default: true },
-  { key: 'port_configurations', label: 'Port Configurations', default: false },
 ];
 
 const SESSION_COLUMNS = [
