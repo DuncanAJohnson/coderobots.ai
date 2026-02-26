@@ -3,34 +3,22 @@
  * Displays budget exceeded messages
  */
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
+import './ModalBase.css';
 import './BudgetErrorModal.css';
 
 const BudgetErrorModal = ({ visible, onClose, accessLevel, premiumModels = [], nonPremiumModels = [] }) => {
-
   useEffect(() => {
     if (!visible) return;
-
   }, [visible]);
 
   if (!visible) return null;
 
   const isCamps = accessLevel === 'en1';
 
-  const handleOverlayClick = (e) => {
-    // Only close if clicking the overlay itself (not the modal content)
-    if (e.target === e.currentTarget) {
-      onClose?.();
-    }
-  };
-
   return (
-    <div
-      className="budget-error-modal-overlay"
-      style={{ display: visible ? 'flex' : 'none' }}
-      onClick={handleOverlayClick}
-    >
-      <div className="budget-error-modal-box">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="budget-error-modal-header">
           <h2>Daily LLM Usage Limit Reached</h2>
         </div>
@@ -66,7 +54,7 @@ const BudgetErrorModal = ({ visible, onClose, accessLevel, premiumModels = [], n
           )}
         </div>
         <div className="budget-error-modal-footer">
-          <button className="modal-btn primary" onClick={onClose}>
+          <button className="modal-close-button" onClick={onClose}>
             OK
           </button>
         </div>

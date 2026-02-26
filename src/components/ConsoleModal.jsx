@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from '@codemirror/view';
+import './ModalBase.css';
 import './ConsoleModal.css';
 
 const ConsoleModal = ({ isOpen, consoleContent, onClose, onCopy }) => {
@@ -31,8 +32,8 @@ const ConsoleModal = ({ isOpen, consoleContent, onClose, onCopy }) => {
   };
 
   return (
-    <div className="console-modal" ref={modalRef} onClick={handleBackdropClick}>
-      <div className="console-box">
+    <div className="modal-overlay" ref={modalRef} onClick={handleBackdropClick}>
+      <div className="modal-content modal-content-wide console-box">
         <div className="console-header">CONSOLE OUTPUT</div>
         <div className="console-editor-container">
           <CodeMirror

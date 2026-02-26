@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
 import { EditorView } from '@codemirror/view';
+import './ModalBase.css';
 import './CodeModal.css';
 
 const CodeModal = ({ isOpen, code, lang, onClose, onCopy, onReplace }) => {
@@ -32,8 +33,8 @@ const CodeModal = ({ isOpen, code, lang, onClose, onCopy, onReplace }) => {
   };
 
   return (
-    <div className="code-modal" ref={modalRef} onClick={handleBackdropClick}>
-      <div className="code-box">
+    <div className="modal-overlay" ref={modalRef} onClick={handleBackdropClick}>
+      <div className="modal-content modal-content-wide code-box">
         {lang && (
           <div className="code-lang">{lang.toUpperCase()}</div>
         )}
