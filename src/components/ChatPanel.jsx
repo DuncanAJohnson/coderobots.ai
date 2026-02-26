@@ -718,27 +718,22 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       <div className="chat-input-area">
         <div className="chat-context-controls">
           <button
-            className="context-btn"
-            onClick={() => setAttachedContext(prev => ({ ...prev, includeCode: true }))}
+            type="button"
+            className={`context-checkbox-btn ${attachedContext.includeCode ? 'context-checkbox-btn--active' : ''}`}
+            onClick={() => setAttachedContext(prev => ({ ...prev, includeCode: !prev.includeCode }))}
           >
-            Add Code to Chat
+            <span className="context-checkbox-btn__box">{attachedContext.includeCode ? '✓' : ''}</span>
+            <span className="context-checkbox-btn__label">Add Code to Chat</span>
           </button>
           <button
-            className="context-btn"
-            onClick={() => setAttachedContext(prev => ({ ...prev, includeConsole: true }))}
+            type="button"
+            className={`context-checkbox-btn ${attachedContext.includeConsole ? 'context-checkbox-btn--active' : ''}`}
+            onClick={() => setAttachedContext(prev => ({ ...prev, includeConsole: !prev.includeConsole }))}
             disabled={!consoleHasContent}
           >
-            Add Console to Chat
+            <span className="context-checkbox-btn__box">{attachedContext.includeConsole ? '✓' : ''}</span>
+            <span className="context-checkbox-btn__label">Add Console to Chat</span>
           </button>
-          {(attachedContext.includeCode || attachedContext.includeConsole) && (
-            <div className="context-indicator">
-              ✅ {attachedContext.includeCode && attachedContext.includeConsole
-                ? 'Code & Console context will be sent.'
-                : attachedContext.includeCode
-                ? 'Code context will be sent.'
-                : 'Console context will be sent.'}
-            </div>
-          )}
         </div>
 
         <div className="chat-input-row">
