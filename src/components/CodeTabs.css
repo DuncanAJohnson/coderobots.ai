@@ -152,43 +152,6 @@
   background: #c9c9c9;
 }
 
-/* View Port Configuration button */
-.code-tab-port-config {
-  flex-shrink: 0;
-  padding: 6px 10px;
-  background: #7B1FA2;
-  color: white;
-  border: none;
-  border-radius: 2px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  white-space: nowrap;
-  transition: background-color 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-left: 4px;
-}
-
-.code-tab-port-config:hover:not(:disabled) {
-  background: #9C27B0;
-}
-
-.code-tab-port-config:active:not(:disabled) {
-  background: #6A1B9A;
-}
-
-.code-tab-port-config:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.code-tab-port-config-loading {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
 .spinner-small {
   display: inline-block;
   width: 10px;

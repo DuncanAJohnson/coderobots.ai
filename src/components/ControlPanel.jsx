@@ -1,67 +1,68 @@
 const ControlPanel = ({
   connected,
-  mode,
-  selectedSlot,
-  onSlotChange,
-  onConnect,
+  connectedBoard = null,
+  isConnecting = false,
+  onConnectMicrobit,
+  onConnectPico,
+  onDisconnect,
   onRun,
   onCtrlC,
   onReset,
   onClear,
-  onEnterREPL,
-  onEnterProgramSlot,
-  onSaveToSlot
+  onSaveToMain
 }) => {
   return (
-    <div className={`control-panel right-panel ${mode}-mode`}>
-      <div className="mode-status">
-        Status: <span className="mode-indicator">
-          {mode === 'disconnected' && 'Disconnected'}
-          {mode === 'repl' && 'REPL Mode'}
-          {mode === 'program-slot' && 'Program Slot Mode'}
-        </span>
-      </div>
-
+    <div className="control-panel right-panel">
       <div className="button-group">
-        <button onClick={onConnect} className="button">
-          {connected ? 'Disconnect' : 'Connect'}
-        </button>
-        <button onClick={onEnterREPL} className="button program-slot-only">
-          Enter REPL Mode
-        </button>
-        <button onClick={onEnterProgramSlot} className="button repl-only">
-          Enter Program Slot Mode
-        </button>
-        <button onClick={onClear} className="button">
+        {connected ? (
+          <button
+            onClick={onDisconnect}
+            className="button disconnect-button"
+            disabled={isConnecting}
+          >
+            {isConnecting ? 'Disconnecting...' : 'Disconnect'}
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={onConnectMicrobit}
+              className="button connect-button"
+              disabled={isConnecting}
+            >
+              {isConnecting ? 'Connecting...' : 'Connect micro:bit'}
+            </button>
+            <button
+              onClick={onConnectPico}
+              className="button connect-button"
+              disabled={isConnecting}
+            >
+              {isConnecting ? 'Connecting...' : 'Connect Pico'}
+            </button>
+          </>
+        )}
+        <button onClick={onClear} className="button clear-console-button" disabled={isConnecting}>
           Clear Console
         </button>
       </div>
 
-      <div className="button-group repl-only">
-        <button onClick={onRun} className="button">
-          ▶ Run Program
-        </button>
-        <button onClick={onCtrlC} className="button">
-          Stop Program
-        </button>
-        <button onClick={onReset} className="button">
-          Reset Device
-        </button>
-        <div className="vertical-line"></div>
-        <select 
-          value={selectedSlot} 
-          onChange={(e) => onSlotChange(e.target.value)}
-          className="button slot-selector"
-          title="Select program slot to save to"
-        >
-          {[...Array(20)].map((_, i) => (
-            <option key={i} value={i}>Slot {i}</option>
-          ))}
-        </select>
-        <button onClick={onSaveToSlot} className="button">
-          Save to Slot
-        </button>
-      </div>
+      {connected && (
+        <div className="button-group">
+          <button onClick={onRun} className="button run-button">
+            ▶ Run Program
+          </button>
+          {connectedBoard === 'pico' && (
+            <button onClick={onSaveToMain} className="button run-button">
+              Save to main.py
+            </button>
+          )}
+          <button onClick={onCtrlC} className="button stop-button">
+            Stop Program
+          </button>
+          <button onClick={onReset} className="button stop-button">
+            Reset Device
+          </button>
+        </div>
+      )}
     </div>
   );
 };

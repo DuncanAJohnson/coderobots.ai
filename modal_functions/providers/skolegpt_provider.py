@@ -136,48 +136,4 @@ class SkoleGPTProvider(BaseProvider):
                         logger.warning(f"SkoleGPT non-streaming: Unexpected data structure (no choices): {data}")
         
         # SkoleGPT doesn't provide usage data, so we don't yield usage
-    
-    async def analyze_port_config(
-        self,
-        code: str,
-        model: str,
-        system_prompt: str,
-    ) -> str:
-        """Analyze port configuration using SkoleGPT."""
-        # Prepare messages
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Analyze this SPIKE PRIME code and return the port configuration as JSON:\n\n```python\n{code}\n```"}
-        ]
-        
-        payload = {
-            "messages": messages,
-            "stream": False,
-            "model": model,
-            "temperature": 0.7,
-            "presence_penalty": 0,
-            "frequency_penalty": 0,
-            "top_p": 0.95
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-            "Accept": "application/json"
-        }
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.post(self.api_url, json=payload, headers=headers) as response:
-                if not response.ok:
-                    raise ValueError(f"SkoleGPT API error: {response.status} - {await response.text()}")
-                
-                data = await response.json()
-                
-                # Extract content from SkoleGPT response format
-                # Adjust this based on actual SkoleGPT response structure
-                if 'choices' in data and len(data['choices']) > 0:
-                    content = data['choices'][0].get('message', {}).get('content', '')
-                    return content
-                else:
-                    raise ValueError("Invalid response format from SkoleGPT")
 

@@ -82,6 +82,38 @@
   flex-shrink: 0;
 }
 
+.status-and-control-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.status-banner {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.45rem 0.65rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  line-height: 1.25;
+  border: 1px solid #c9d2dc;
+  background: #f3f6fa;
+  color: #1f2933;
+}
+
+.status-banner.success {
+  border-color: #86c998;
+  background: #edf8f0;
+  color: #225c2f;
+}
+
+.status-banner.error {
+  border-color: #d88f8f;
+  background: #fceeee;
+  color: #7c2222;
+}
+
 .button-group {
   display: flex;
   flex-wrap: wrap;
@@ -90,8 +122,7 @@
 }
 
 /* Button Styling */
-.spike-editor .button,
-.spike-editor .slot-selector {
+.spike-editor .button {
   background-color: #007bff;
   color: white;
   border: none;
@@ -112,88 +143,41 @@
   cursor: not-allowed;
 }
 
-/* Left Panel - Blue buttons */
-.left-panel .button {
-  background-color: #007bff;
-}
-
-.left-panel .button:hover:not(:disabled) {
-  background-color: #0056b3;
-}
-
-/* Right Panel - Green buttons */
-.right-panel .button {
+/* Button color roles */
+.right-panel .connect-button {
   background-color: #26823b;
 }
 
-.right-panel .button:hover:not(:disabled) {
-  background-color: #2d5c37;
+.right-panel .connect-button:hover:not(:disabled) {
+  background-color: #1f6c31;
 }
 
-/* REPL-only buttons - Cyan */
-.right-panel .repl-only .button {
-  background-color: #17a2b8;
+
+.right-panel .disconnect-button,
+.right-panel .stop-button {
+  background-color: #a33a3a;
 }
 
-.right-panel .repl-only .button:hover:not(:disabled) {
-  background-color: #138496;
+.right-panel .disconnect-button:hover:not(:disabled),
+.right-panel .stop-button:hover:not(:disabled) {
+  background-color: #8f2e2e;
 }
 
-/* Vertical separator */
-.vertical-line {
-  border-left: 2px solid #ccc;
-  height: 1.5rem;
-  align-self: center;
+.right-panel .clear-console-button {
+  background-color: #d0d3d8;
+  color: #1f2933;
 }
 
-/* Mode Status Indicator */
-.mode-status {
-  width: 100%;
-  padding: 0.5rem;
-  background-color: #e9ecef;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  text-align: center;
-  font-weight: bold;
-  color: #495057;
-  font-size: 0.9rem;
+.right-panel .clear-console-button:hover:not(:disabled) {
+  background-color: #bcc1c8;
 }
 
-.mode-indicator {
-  font-weight: bold;
-  color: #212529;
+.right-panel .run-button {
+  background-color: #2d7a3c;
 }
 
-/* Mode-based visibility */
-.control-panel .repl-only,
-.control-panel .program-slot-only {
-  display: none;
-}
-
-.control-panel.repl-mode .repl-only {
-  display: flex;
-}
-
-.control-panel.program-slot-mode .program-slot-only {
-  display: flex;
-}
-
-/* Disable certain buttons in program-slot mode */
-.control-panel.program-slot-mode .repl-only .button,
-.control-panel.program-slot-mode .slot-selector {
-  opacity: 0.5;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-/* Slot Selector */
-.slot-selector {
-  min-width: 80px;
-  background-color: #17a2b8;
-}
-
-.slot-selector:hover:not(:disabled) {
-  background-color: #138496;
+.right-panel .run-button:hover:not(:disabled) {
+  background-color: #266734;
 }
 
 /* Responsive adjustments */

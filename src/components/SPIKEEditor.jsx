@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import Board from '../utils/microRepl.js';
-import { STOP_CODE_SPIKE_2, STOP_CODE_SPIKE_3 } from '../utils/stopSpike.js';
+import { STOP_CODE_LILYBOT } from '../utils/stopSpike.js';
+import {
+  openMicrobitInstallerSession,
+  shouldInstallMicrobitFirmware,
+} from '../utils/microbitInstall.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import CodeTabs from './CodeTabs.jsx';
-import PortConfigModal from './PortConfigModal.jsx';
 import { useSession } from '../contexts/SessionContext';
 import { logConsole, logInteraction } from '../services/dataLogger';
-import { analyzePortConfiguration } from '../utils/portConfigStream';
 import './SPIKEEditor.css';
 
 const FIFO_SIZE = 10000;
@@ -15,13 +17,16 @@ const FIFO_SIZE = 10000;
 
 const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const [connected, setConnected] = useState(false);
+  const [connectedBoard, setConnectedBoard] = useState(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [statusBanner, setStatusBanner] = useState({
+    type: 'info',
+    message: 'Not connected.'
+  });
   const [mode, setMode] = useState('disconnected');
   const [isRunning, setIsRunning] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState(0);
   const [buffer, setBuffer] = useState('');
-  const [portConfigModalOpen, setPortConfigModalOpen] = useState(false);
-  const [currentPortConfig, setCurrentPortConfig] = useState(null);
-  const [isPortConfigLoading, setIsPortConfigLoading] = useState(false);
+  const [microbitInstallArmed, setMicrobitInstallArmed] = useState(false);
 
   const { 
     codeRecords, 
@@ -36,12 +41,58 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   } = useSession();
 
   const editorRef = useRef(null);
-  const terminalRef = useRef(null);
   const boardRef = useRef(null);
   const replContainerRef = useRef(null);
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
   const isLocalChangeRef = useRef(false);
+
+  const logInteractionSafe = async (action) => {
+    if (!sessionId) return;
+    try {
+      await logInteraction(action, sessionId);
+    } catch (error) {
+      console.warn(`Failed to log interaction (${action}):`, error);
+    }
+  };
+
+  const logConsoleSafe = async (content, action) => {
+    if (!sessionId || !content) return;
+    try {
+      await logConsole(content, sessionId, action);
+    } catch (error) {
+      console.warn(`Failed to log console (${action}):`, error);
+    }
+  };
+
+  const getConnectionErrorMessage = (error) => {
+    const message = error?.message || 'Unknown serial error';
+    if (/WebUSB is not available/i.test(message)) {
+      return 'Connection failed: WebUSB is required to install micro:bit MicroPython. Use a Chromium-based browser.';
+    }
+    if (/No device selected|no-device-selected/i.test(message)) {
+      return 'Connection failed: no micro:bit selected in the browser device picker.';
+    }
+    if (/Bad response for 8 -> 17|reconnect-microbit/i.test(message) || /reconnect-microbit/i.test(error?.code || '')) {
+      return 'Connection failed: unstable WebUSB link to micro:bit. Unplug/replug the board, then click Connect micro:bit again.';
+    }
+    if (/WebUSB still unstable|WebUSB flashing link stayed unstable/i.test(message)) {
+      return message;
+    }
+    if (/MicroPython install requires WebUSB access/i.test(message)) {
+      return message;
+    }
+    if (/did not respond like a MicroPython REPL/i.test(message)) {
+      return 'Connection failed: selected device is not a compatible MicroPython REPL.';
+    }
+    if (/Failed to open serial port|NetworkError|busy|resource/i.test(message)) {
+      return 'Connection failed: serial port is busy. Close any other serial connections to the device and try again.';
+    }
+    if (/No port selected by the user/i.test(message)) {
+      return 'Connection failed: no device selected by the user.';
+    }
+    return `Connection failed: ${message}`;
+  };
 
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
@@ -71,20 +122,45 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
         dataType: 'string',
         onconnect: () => {
           console.log('Device connected');
+          setIsConnecting(false);
           setConnected(true);
           setMode('repl');
+          setStatusBanner({
+            type: 'success',
+            message: 'Device Status: Connected. REPL is ready.'
+          });
         },
         ondisconnect: () => {
           console.log('Device disconnected');
+          setIsConnecting(false);
           setConnected(false);
+          setConnectedBoard(null);
+          setMicrobitInstallArmed(false);
           setMode('disconnected');
           setBuffer('');
           setIsRunning(false);
+          setStatusBanner({
+            type: 'info',
+            message: 'Device Status: Disconnected.'
+          });
+        },
+        onportselected: () => {
+          setStatusBanner({
+            type: 'info',
+            message: 'Attempting to connect...'
+          });
         },
         onerror: (error) => {
           console.error('Board error:', error);
-          if (terminalRef.current) {
-            terminalRef.current.write(`\r\nError: ${error.message}\r\n`);
+          setIsConnecting(false);
+          const message = getConnectionErrorMessage(error);
+          setStatusBanner({
+            type: 'error',
+            message
+          });
+          const terminal = boardRef.current?.terminal;
+          if (terminal) {
+            terminal.write(`\r\n${message}\r\n`);
           }
         },
         ondata: (chunk) => {
@@ -172,30 +248,126 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     };
   }, []);
 
-  const handleConnect = async () => {
+  const handleDisconnect = async () => {
     const board = boardRef.current;
-    if (!board) return;
+    if (!board || isConnecting) return;
 
-    if (connected) {
-      // Disconnect
-      if (sessionId) {
-        await logInteraction('disconnect', sessionId);
-      }
-      await board.reset();
+    setIsConnecting(true);
+    try {
+      if (!connected) return;
+      setStatusBanner({
+        type: 'info',
+        message: 'Disconnecting...'
+      });
+      await logInteractionSafe('disconnect');
       await board.disconnect();
-    } else {
-      // Connect
-      if (sessionId) {
-        await logInteraction('connect', sessionId);
+    }
+    finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleConnect = async (targetBoard) => {
+    const board = boardRef.current;
+    if (!board || isConnecting || connected) return;
+
+    setIsConnecting(true);
+    let installerSession = null;
+    try {
+      if (targetBoard === 'microbit' && microbitInstallArmed) {
+        try {
+          installerSession = await openMicrobitInstallerSession({
+            allowDevicePrompt: true,
+            onStatus: (message) => {
+              setStatusBanner({
+                type: 'info',
+                message
+              });
+            }
+          });
+          setStatusBanner({
+            type: 'info',
+            message: 'Installing MicroPython on micro:bit...'
+          });
+        } catch (installerPrepError) {
+          throw installerPrepError;
+        }
+      } else {
+        setStatusBanner({
+          type: 'info',
+          message: `Waiting for ${targetBoard === 'microbit' ? 'micro:bit' : 'Pico'} serial device selection...`
+        });
       }
+      // Keep requestPort in the direct click gesture path.
+      void logInteractionSafe(`connect_${targetBoard}`);
       try {
-        await board.connect(replContainerRef.current, true);
+        if (targetBoard === 'microbit' && installerSession) {
+          await installerSession.flashBundledFirmware({
+            onStatus: (message) => {
+              setStatusBanner({
+                type: 'info',
+                message
+              });
+            },
+            onProgress: (progressPercent) => {
+              if (typeof progressPercent !== 'number') return;
+              setStatusBanner({
+                type: 'info',
+                message: `Installing MicroPython on micro:bit... ${progressPercent}%`
+              });
+            },
+          });
+
+          // Allow USB stack to settle after flashing and board reset.
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          setMicrobitInstallArmed(false);
+          setStatusBanner({
+            type: 'info',
+            message: 'MicroPython install complete. Select micro:bit serial port...'
+          });
+        }
+        await board.connect(replContainerRef.current, true, { boardType: targetBoard });
+
+        // Ensure user code is interrupted before any post-connect setup.
+        await board.interrupt(150);
+        if (targetBoard === 'pico') {
+          // Stop LilyBot motors/tasks on Pico only.
+          await board.eval(STOP_CODE_LILYBOT, { hidden: true });
+        }
+        setConnectedBoard(targetBoard);
       } catch (error) {
+        if (targetBoard === 'microbit' && shouldInstallMicrobitFirmware(error) && !microbitInstallArmed) {
+          setMicrobitInstallArmed(true);
+          const installMessage = 'MicroPython is missing on this micro:bit. Click Connect micro:bit again to install it.';
+          setStatusBanner({
+            type: 'info',
+            message: installMessage
+          });
+          const terminal = board.terminal;
+          if (terminal) terminal.write(`\r\n${installMessage}\r\n`);
+          return;
+        }
         console.error('Connection failed:', error);
-        if (terminalRef.current) {
-          terminalRef.current.write(`\r\nConnection failed: ${error.message}\r\n`);
+        setConnected(false);
+        setConnectedBoard(null);
+        setMode('disconnected');
+        setIsRunning(false);
+        const message = getConnectionErrorMessage(error);
+        setStatusBanner({
+          type: 'error',
+          message
+        });
+        const terminal = board.terminal;
+        if (terminal) terminal.write(`\r\n${message}\r\n`);
+      }
+      finally {
+        if (installerSession) {
+          await installerSession.close();
         }
       }
+    }
+    finally {
+      setIsConnecting(false);
     }
   };
 
@@ -209,9 +381,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     await createSnapshot('run_device');
     
     // Log interaction and code before running
-    if (sessionId) {
-      await logInteraction('run_device', sessionId);
-    }
+    await logInteractionSafe('run_device');
     
     // Stop any running code first
     if (isRunning) {
@@ -233,25 +403,21 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     const board = boardRef.current;
     if (!board || !connected) return;
 
-    if (sessionId) {
-      await logInteraction('send_ctrl_c', sessionId);
-    }
+    await logInteractionSafe('send_ctrl_c');
 
     setIsRunning(false);
-    await board.write('\x03');
+    await board.interrupt();
     
     // Give a moment for buffer to update
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    // Stop motors based on firmware version
-    try {
-      if (firmwareVersion === '2') {
-        await board.eval(STOP_CODE_SPIKE_2, { hidden: true });
-      } else if (firmwareVersion === '3') {
-        await board.eval(STOP_CODE_SPIKE_3, { hidden: true });
+    // Stop motors for Pico only.
+    if (connectedBoard === 'pico') {
+      try {
+        await board.eval(STOP_CODE_LILYBOT, { hidden: true });
+      } catch (error) {
+        console.error('Failed to stop motors:', error);
       }
-    } catch (error) {
-      console.error('Failed to stop motors:', error);
     }
   };
 
@@ -259,159 +425,50 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     const board = boardRef.current;
     if (!board || !connected) return;
 
-    if (sessionId) {
-      await logInteraction('reset_device', sessionId);
-    }
+    await logInteractionSafe('reset_device');
 
     setIsRunning(false);
     await board.reset();
     await new Promise(resolve => setTimeout(resolve, 1000));
-    await board.write('\x03');
+    await board.interrupt();
     setMode('repl');
     board.terminal?.focus();
   };
 
   const handleClear = async () => {
     // Log interaction and console before clearing
-    if (sessionId) {
-      await logInteraction('clear_console', sessionId);
-      if (buffer) {
-        await logConsole(buffer, sessionId, 'clear_console');
-      }
-    }
-    
-    if (terminalRef.current) {
-      terminalRef.current.clear();
-    }
+    await logInteractionSafe('clear_console');
+    await logConsoleSafe(buffer, 'clear_console');
+
     if (boardRef.current?.terminal) {
       boardRef.current.terminal.clear();
     }
     setBuffer('');
   };
 
-  const handleEnterREPL = async () => {
-    const board = boardRef.current;
-    if (!board || !connected) return;
-
-    if (sessionId) {
-      await logInteraction('switch_to_repl_mode', sessionId);
-    }
-
-    await board.write('\x03');
-    setMode('repl');
-  };
-
-  const handleEnterProgramSlot = async () => {
-    const board = boardRef.current;
-    if (!board || !connected) return;
-
-    if (sessionId) {
-      await logInteraction('switch_to_program_slot_mode', sessionId);
-    }
-
-    setIsRunning(false);
-    await board.reset();
-    setMode('program-slot');
-    board.terminal?.focus();
-  };
-
-  const handleViewPortConfig = async () => {
-    const codeToAnalyze = editorRef.current?.getCode() || currentCodeContent;
-    
-    if (!codeToAnalyze.trim()) {
-      alert('No code to analyze. Please write some code first.');
-      return;
-    }
-
-    setIsPortConfigLoading(true);
-
-    try {
-      const config = await analyzePortConfiguration(codeToAnalyze);
-      setCurrentPortConfig(config);
-      setPortConfigModalOpen(true);
-    } catch (error) {
-      console.error('Error analyzing port configuration:', error);
-      alert('Failed to analyze port configuration. Please try again.');
-    } finally {
-      setIsPortConfigLoading(false);
-    }
-  };
-
-  const closePortConfigModal = () => {
-    setPortConfigModalOpen(false);
-  };
-
-  const handleSaveToSlot = async () => {
+  const handleSaveToMain = async () => {
     const board = boardRef.current;
     if (!board || !connected) {
-      alert('Cannot save to slot. Please connect to a SPIKE hub first.');
+      alert('Cannot save to main.py. Please connect to the Pico W first.');
       return;
     }
 
     const codeToSave = editorRef.current?.getCode() || currentCodeContent;
     
-    // Create snapshot before saving to slot
-    await createSnapshot(`save_to_slot_${selectedSlot}`);
+    // Create snapshot before saving to main.py
+    await createSnapshot('save_to_main_py');
     
-    // Log interaction and code before saving to slot
-    if (sessionId) {
-      await logInteraction(`save_to_slot_${selectedSlot}`, sessionId);
-    }
-    
-    const slotStr = String(selectedSlot).padStart(2, '0');
-    
-    console.log(`Saving code to SPIKE program slot ${selectedSlot}...`);
-
-    // Escape the code content to be a valid Python string literal
-    const escapedCode = JSON.stringify(codeToSave);
-
-    // Construct the Python script to save to the slot
-    const script = `
-import os
-import sys
-
-slot_dir_name = "${slotStr}"
-code_to_write = ${escapedCode}
-program_dir = "program"
-target_file = "program.py"
-
-# Ensure we are in the root directory
-if (not os.getcwd() == '/flash'):
-    os.chdir('/flash')
-
-# Check for 'program' directory, create if it doesn't exist
-if program_dir not in os.listdir():
-    os.mkdir(program_dir)
-os.chdir(program_dir)
-
-# Check for the specific slot directory, create if it doesn't exist
-if slot_dir_name not in os.listdir():
-    os.mkdir(slot_dir_name)
-os.chdir(slot_dir_name)
-
-# Clean up old program files to ensure our .py file runs
-for filename in ['program.mpy', 'program.py']:
-    try:
-        os.remove(filename)
-    except OSError:
-        pass # File didn't exist, which is fine
-
-# Write the new program file in chunks of chunk_size characters
-with open(target_file, "w") as f:
-    f.write(code_to_write)
-
-# Try to return to the root directory
-os.chdir('/flash')
-`;
+    // Log interaction before saving to main.py
+    await logInteractionSafe('save_to_main_py');
 
     try {
-      await board.paste(script, { hidden: false });
+      await board.upload('main.py', codeToSave);
       await board.reset();
-      setMode('program-slot');
+      setMode('repl');
       board.terminal?.focus();
     } catch (error) {
-      console.error('Failed to save to slot:', error);
-      alert(`Failed to save to slot: ${error.message}`);
+      console.error('Failed to save to main.py:', error);
+      alert(`Failed to save to main.py: ${error.message}`);
     }
   };
 
@@ -423,8 +480,6 @@ os.chdir('/flash')
         onSwitchCode={switchCode}
         onCreateCode={createNewCode}
         onRenameCode={updateCodeName}
-        onViewPortConfig={handleViewPortConfig}
-        isPortConfigLoading={isPortConfigLoading}
       />
       <div className="parent" ref={containerRef}>
         <div className="child top-child">
@@ -440,32 +495,31 @@ os.chdir('/flash')
         <div className="resizer" ref={resizerRef}></div>
 
         <div className="child bottom-child">
-          <ControlPanel
-            connected={connected}
-            mode={mode}
-            selectedSlot={selectedSlot}
-            onSlotChange={setSelectedSlot}
-            onConnect={handleConnect}
-            onRun={handleRun}
-            onCtrlC={handleCtrlC}
-            onReset={handleReset}
-            onClear={handleClear}
-            onEnterREPL={handleEnterREPL}
-            onEnterProgramSlot={handleEnterProgramSlot}
-            onSaveToSlot={handleSaveToSlot}
-          />
+          <div className="status-and-control-row">
+            <ControlPanel
+              connected={connected}
+              connectedBoard={connectedBoard}
+              isConnecting={isConnecting}
+              onConnectMicrobit={() => handleConnect('microbit')}
+              onConnectPico={() => handleConnect('pico')}
+              onDisconnect={handleDisconnect}
+              onRun={handleRun}
+              onCtrlC={handleCtrlC}
+              onReset={handleReset}
+              onClear={handleClear}
+              onSaveToMain={handleSaveToMain}
+            />
+            {!connected && (
+              <div className={`status-banner ${statusBanner.type}`}>
+                {statusBanner.message}
+              </div>
+            )}
+          </div>
           <div className="terminal-wrapper" ref={replContainerRef}>
             {/* The micro_repl Board will render the xterm terminal here */}
           </div>
         </div>
       </div>
-
-      {/* Port Configuration Modal */}
-      <PortConfigModal
-        isOpen={portConfigModalOpen}
-        portConfig={currentPortConfig}
-        onClose={closePortConfigModal}
-      />
     </div>
   );
 });

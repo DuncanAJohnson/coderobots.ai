@@ -24,7 +24,7 @@ import {
   getLatestCode,
   updateSessionOnLoad,
 } from '../services/dataLogger';
-import { spikePriming } from '../prompts/spike_priming';
+import { lilyBotPriming } from '../prompts/spike_priming';
 
 const SessionContext = createContext();
 
@@ -184,7 +184,7 @@ export const SessionProvider = ({ children }) => {
    * Get the initial system priming message for building conversation
    */
   const getSystemPriming = useCallback(() => {
-    return spikePriming;
+    return lilyBotPriming;
   }, []);
 
   /**

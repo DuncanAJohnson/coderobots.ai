@@ -28,6 +28,8 @@ const { assign } = Object;
 const { parse } = JSON;
 const { serial } = navigator;
 const defaultOptions = { hidden: true, raw: false };
+const HANDSHAKE_TIMEOUT_MS = 1000;
+const PROMPT_TIMEOUT_MS = 12000;
 
 const decoder = new TextDecoder;
 const encoder = new TextEncoder;
@@ -78,6 +80,49 @@ const reason = (action, evaluating) => new Error(
 );
 
 const sleep = async delay => new Promise(res => setTimeout(res, delay));
+const withTimeout = async (promise, timeoutMs, message) => {
+  let timeoutId;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+      })
+    ]);
+  }
+  finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
+const machineNameFromOutput = output => {
+  const noise = new Set([
+    '>>>',
+    '...',
+    SOFT_REBOOT,
+    CONTROL_C_REPL,
+    '=== ',
+    '=== paste mode; Ctrl-C to cancel, Ctrl-D to finish ===',
+    'from sys import implementation as _',
+    'print(hasattr(_, "_machine") and _._machine or _.name)',
+    '_=None',
+    'del _',
+  ]);
+
+  const lines = output
+    .split(LINE_SEPARATOR)
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (noise.has(line)) continue;
+    if (line.startsWith('===')) continue;
+    if (/^(Traceback|KeyboardInterrupt)/.test(line)) continue;
+    return line;
+  }
+  return '';
+};
 
 /**
  * Return a specific value or infer it from the live element.
@@ -98,6 +143,7 @@ const style = (target, value, property) => (
  * @prop {string} [dataType='buffer']
  * @prop {() => void} [onconnect]
  * @prop {() => void} [ondisconnect]
+ * @prop {() => void} [onportselected]
  * @prop {(error:Error) => void} [onerror=console.error]
  * @prop {(buffer:Uint8Array) => void} [ondata]
  * @prop {{ background:string, foreground:string }} [theme]
@@ -109,6 +155,7 @@ const options = {
   dataType: 'buffer',
   onconnect: noop,
   ondisconnect: noop,
+  onportselected: noop,
   onerror: console.error,
   ondata: noop,
   theme: {
@@ -139,6 +186,7 @@ export default function Board({
   dataType = options.dataType,
   onconnect = options.onconnect,
   ondisconnect = options.ondisconnect,
+  onportselected = options.onportselected,
   onerror = options.onerror,
   ondata = options.ondata,
   onresult = parse,
@@ -154,14 +202,48 @@ export default function Board({
   let accumulator = '';
   let aborter, dedent, readerClosed, writer, writerClosed;
 
+  const promptReady = value => /(?:\r\n|\r|\n)>>> $/.test(value) || value.endsWith('>>> ');
+
   // last meaningful line
   const lml = () => accumulator.split(ENTER).at(-2);
 
-  const forIt = async () => {
-    while (!accumulator.endsWith(END)) await sleep(5);
+  const forIt = async (timeoutMs = 15000, action = 'response') => {
+    const started = Date.now();
+    while (!promptReady(accumulator)) {
+      if (Date.now() - started > timeoutMs) {
+        accumulator = '';
+        throw new Error(`Timed out while waiting for ${action}`);
+      }
+      await sleep(5);
+    }
     const result = lml();
     accumulator = '';
     return result;
+  };
+
+  const cleanupPartialConnection = async () => {
+    const sp = port;
+    const t = terminal;
+    port = null;
+    terminal = null;
+    fitAddon = null;
+    accumulator = '';
+    evaluating = 0;
+    showEval = false;
+    resetting = false;
+
+    try { if (aborter) aborter.abort('connect-failure'); } catch {}
+    try { if (writer) await writer.close(); } catch {}
+    try { if (writerClosed) await writerClosed; } catch {}
+    try { if (readerClosed) await readerClosed; } catch {}
+    try { if (sp) await sp.close(); } catch {}
+    try { if (t) t.dispose(); } catch {}
+
+    aborter = undefined;
+    dedent = undefined;
+    readerClosed = undefined;
+    writer = undefined;
+    writerClosed = undefined;
   };
 
   const board = {
@@ -187,7 +269,7 @@ export default function Board({
      * @param {string | Element} target where the REPL shows its output or accepts its input.
      * @returns
      */
-    connect: async (target, named = true) => {
+    connect: async (target, named = true, { boardType = 'generic' } = {}) => {
       if (port) return board;
       if (typeof target === 'string') {
         target = (
@@ -195,12 +277,12 @@ export default function Board({
           document.querySelector(target)
         );
       }
+      if (!target) throw new Error('Unable to find terminal container for REPL');
       try {
         const libs = dependencies(target);
 
-        port = await serial.getPorts()
-          .then(ports => ports.map(port => port.getInfo()))
-          .then(filters => serial.requestPort({ filters }));
+        port = await serial.requestPort({});
+        onportselected();
 
         const [
           { default: codedent },
@@ -231,7 +313,7 @@ export default function Board({
         writerClosed = tes.readable.pipeTo(port.writable);
         writer = tes.writable.getWriter();
 
-        const machine = Promise.withResolvers();
+        let machine = Promise.withResolvers();
         let waitForMachine = false;
 
         const reveal = chunk => {
@@ -252,8 +334,9 @@ export default function Board({
             }
             else if (waitForMachine) {
               accumulator += decoder.decode(chunk);
-              if (accumulator.endsWith(END) && accumulator.includes(MACHINE)) {
-                machine.resolve(lml());
+              if (promptReady(accumulator)) {
+                const detected = machineNameFromOutput(accumulator);
+                if (detected) machine.resolve(detected);
                 accumulator = '';
               }
             }
@@ -315,7 +398,7 @@ export default function Board({
         });
 
         terminal.onData(chunk => {
-          if (!evaluating) writer.write(chunk);
+          if (!evaluating && writer) writer.write(chunk);
         });
 
         fitAddon = new FitAddon;
@@ -326,37 +409,68 @@ export default function Board({
         terminal.focus();
 
         if (named) {
-          // bootstrap with board name details
-          await writer.write(CONTROL_C);
+          // Bootstrap with board name details. Some tools (e.g. Thonny)
+          // can leave the REPL in a non-friendly state, so normalize first.
+          const probeMachine = async () => {
+            machine = Promise.withResolvers();
+            await writer.write(CONTROL_B);
+            await sleep(30);
+            await writer.write(CONTROL_C);
+            await sleep(30);
+            accumulator = '';
+            waitForMachine = true;
+            await writer.write(CONTROL_E);
+            await writer.write(MACHINE);
+            await writer.write(CONTROL_D);
+          };
+
           terminal.clear();
-          await sleep(options.baudRate * 50 / baudRate);
-          waitForMachine = true;
+          await probeMachine();
 
-          // enter paste mode - no history attached
-          await writer.write(CONTROL_E);
-          await writer.write(MACHINE);
-          await writer.write(CONTROL_D);
-
-          name = await machine.promise;
-          waitForMachine = false;
-
-          // clean up latest row and start fresh
-          terminal.clear();
-          terminal.write('\x1b[M');
-          terminal.write(`${name}${END}`);
+          try {
+            try {
+              name = await withTimeout(
+                machine.promise,
+                HANDSHAKE_TIMEOUT_MS,
+                'Selected serial device did not respond like a MicroPython REPL'
+              );
+            }
+            catch (firstAttemptError) {
+              await probeMachine();
+              name = await withTimeout(
+                machine.promise,
+                HANDSHAKE_TIMEOUT_MS,
+                firstAttemptError.message
+              );
+            }
+          }
+          finally {
+            accumulator = '';
+            waitForMachine = false;
+            if (name) {
+              terminal.clear();
+              terminal.write('\x1b[M');
+              terminal.write(`${name}${ENTER}`);
+            }
+          }
         }
         else {
           machine.resolve(name);
           terminal.write(`${CONTROL_C_REPL}${ENTER}`);
         }
 
+        // Ensure a stable prompt before returning. This avoids transient
+        // post-connect states where hidden evals can appear stuck.
+        await board.waitForPrompt(PROMPT_TIMEOUT_MS);
+
         onconnect();
 
         return board;
       }
       catch (error) {
-        port = null;
+        await cleanupPartialConnection();
         onerror(error);
+        throw error;
       }
     },
 
@@ -364,21 +478,29 @@ export default function Board({
      * Destroy the terminal after disconnecting the board.
      */
     disconnect: async () => {
-      if (port) {
+      if (port || terminal) {
         const sp = port;
         const t = terminal;
         port = null;
         terminal = null;
         fitAddon = null;
+        accumulator = '';
+        evaluating = 0;
+        showEval = false;
         try {
-          aborter.abort('disconnect');
-          writer.close();
-          await writerClosed;
-          await readerClosed;
-          await sp.close();
-          t.dispose();
+          if (aborter) aborter.abort('disconnect');
+          if (writer) await writer.close().catch(() => {});
+          if (writerClosed) await writerClosed.catch(() => {});
+          if (readerClosed) await readerClosed.catch(() => {});
+          if (sp) await sp.close().catch(() => {});
+          if (t) t.dispose();
         }
         finally {
+          aborter = undefined;
+          dedent = undefined;
+          readerClosed = undefined;
+          writer = undefined;
+          writerClosed = undefined;
           ondisconnect();
         }
       }
@@ -394,42 +516,41 @@ export default function Board({
       if (port && !evaluating) {
         evaluating = 1;
         showEval = !hidden;
-        let outcome = null;
-        const lines = dedent(code).split(LINE_SEPARATOR);
-        while (lines.length && !lines.at(-1).trim()) lines.pop();
-        let asRef = false, asPatch = false, result = '';
-        if (lines.length) {
-          result = lines.at(-1);
-          asRef = /^[a-zA-Z0-9._]+$/.test(result);
-          if (!asRef && /^\S+/.test(result) && !/[;=]/.test(result)) {
-            asRef = asPatch = true;
-            lines.pop();
-            lines.push(`${EXPRESSION}=${result}`, EXPRESSION);
-            result = EXPRESSION;
+        try {
+          let outcome = null;
+          const lines = dedent(code).split(LINE_SEPARATOR);
+          while (lines.length && !lines.at(-1).trim()) lines.pop();
+          let asRef = false, asPatch = false, result = '';
+          if (lines.length) {
+            result = lines.at(-1);
+            asRef = /^[a-zA-Z0-9._]+$/.test(result);
+            if (!asRef && /^\S+/.test(result) && !/[;=]/.test(result)) {
+              asRef = asPatch = true;
+              lines.pop();
+              lines.push(`${EXPRESSION}=${result}`, EXPRESSION);
+              result = EXPRESSION;
+            }
+            await exec(lines.join(ENTER), writer);
           }
-          await exec(lines.join(ENTER), writer);
-        }
-        if (asRef) {
-          await writer.write(
-            `import json;print(json.dumps(${result}))${ENTER}`
-          );
-          evaluating = 2;
-          try {
-            outcome = onresult(await forIt());
+          if (asRef) {
+            await writer.write(
+              `import json;print(json.dumps(${result}))${ENTER}`
+            );
+            evaluating = 2;
+            outcome = onresult(await forIt(15000, 'evaluation result'));
           }
-          finally {
+          // free ram on patched code evaluation
+          if (asPatch) {
             evaluating = 0;
             showEval = false;
+            await board.paste(`${EXPRESSION}=None`, defaultOptions);
           }
+          return outcome;
         }
-        else {
+        finally {
           evaluating = 0;
           showEval = false;
         }
-        // free ram on patched code evaluation
-        if (asPatch)
-          await board.paste(`${EXPRESSION}=None`, defaultOptions);
-        return outcome;
       }
       else onerror(reason('eval', evaluating));
     },
@@ -444,13 +565,17 @@ export default function Board({
       if (port && !evaluating) {
         showEval = !hidden;
         evaluating = hidden ? 2 : 1;
-        await writer.write(raw ? CONTROL_A : CONTROL_E);
-        await exec(dedent(code), writer, raw);
-        await writer.write(raw ? CONTROL_B : CONTROL_D);
-        if (hidden) await forIt();
-        // terminal.write('\x1b[M\x1b[A');
-        evaluating = 0;
-        showEval = false;
+        try {
+          await writer.write(raw ? CONTROL_A : CONTROL_E);
+          await exec(dedent(code), writer, raw);
+          await writer.write(raw ? CONTROL_B : CONTROL_D);
+          if (hidden) await forIt(15000, 'paste mode completion');
+          // terminal.write('\x1b[M\x1b[A');
+        }
+        finally {
+          evaluating = 0;
+          showEval = false;
+        }
       }
       else onerror(reason('paste', evaluating));
     },
@@ -494,36 +619,83 @@ export default function Board({
         let i = 0, { length } = code;
 
         evaluating = 2;
-        // enter raw mode
-        await writer.write(CONTROL_A);
-        // notify beginning
-        update(i, length);
-        // write the whole code
-        while (i < length) {
-          await writer.write(code[i++]);
+        try {
+          // enter raw mode
+          await writer.write(CONTROL_A);
+          // notify beginning
           update(i, length);
-          // pause every 256 chars to allow UI
-          // to show changes (too greedy otherwise)
-          if (!(i % 256)) await sleep(0);
+          // write the whole code
+          while (i < length) {
+            await writer.write(code[i++]);
+            update(i, length);
+            // pause every 256 chars to allow UI
+            // to show changes (too greedy otherwise)
+            if (!(i % 256)) await sleep(0);
+          }
+          // commit raw code
+          await writer.write(CONTROL_D);
+          // exit raw mode
+          await writer.write(CONTROL_B);
+          terminal.write(`\x1b[M... decoding ${path} `);
+          await forIt(30000, 'upload completion');
+          terminal.write(`\x1b[M... verifying ${path} `);
+          const result = view.length === await board.eval(`
+            import os
+            os.stat(${stringify(path)})[6]
+          `);
+          const message = result ? 'uploaded' : '\x1b[1mfailed\x1b[22m to upload';
+          terminal.write(`\x1b[M... ${message} ${path} ${ENTER}>>> `);
+          terminal.focus();
+          return result;
         }
-        // commit raw code
-        await writer.write(CONTROL_D);
-        // exit raw mode
-        await writer.write(CONTROL_B);
-        terminal.write(`\x1b[M... decoding ${path} `);
-        await forIt();
-        evaluating = 0;
-        terminal.write(`\x1b[M... verifying ${path} `);
-        const result = view.length === await board.eval(`
-          import os
-          os.stat(${stringify(path)})[6]
-        `);
-        const message = result ? 'uploaded' : '\x1b[1mfailed\x1b[22m to upload';
-        terminal.write(`\x1b[M... ${message} ${path} ${ENTER}>>> `);
-        terminal.focus();
-        return result
+        finally {
+          evaluating = 0;
+        }
       }
       else onerror(reason('upload', evaluating));
+    },
+
+    /**
+     * Send a Ctrl+C interrupt even while evaluating.
+     * @param {number} delay how long to wait after interrupt
+     */
+    interrupt: async (delay = 100) => {
+      if (port && writer) {
+        await writer.write(CONTROL_C);
+        await sleep(delay);
+        evaluating = 0;
+        showEval = false;
+        accumulator = '';
+        terminal?.focus();
+      }
+      else onerror(reason('interrupt', evaluating));
+    },
+
+    /**
+     * Wait until the REPL prompt is visible and stable.
+     * @param {number} timeoutMs
+     */
+    waitForPrompt: async (timeoutMs = PROMPT_TIMEOUT_MS) => {
+      if (port && writer) {
+        const prevEvaluating = evaluating;
+        const prevShowEval = showEval;
+        evaluating = 2;
+        showEval = false;
+        try {
+          accumulator = '';
+          await writer.write(CONTROL_C);
+          await sleep(30);
+          await writer.write(ENTER);
+          await forIt(timeoutMs, 'REPL prompt');
+        }
+        finally {
+          evaluating = prevEvaluating;
+          showEval = prevShowEval;
+          accumulator = '';
+        }
+      } else {
+        onerror(reason('wait for prompt', evaluating));
+      }
     },
 
     /**
@@ -534,10 +706,7 @@ export default function Board({
       if (port) {
         if (evaluating) {
           // interrupt current program
-          await writer.write(CONTROL_C);
-          await sleep(delay);
-          evaluating = 0;
-          accumulator = '';
+          await board.interrupt(delay);
         }
         // reset the board
         resetting = true;

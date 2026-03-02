@@ -12,8 +12,6 @@ const CodeTabs = ({
   onSwitchCode,
   onCreateCode,
   onRenameCode,
-  onViewPortConfig,
-  isPortConfigLoading,
 }) => {
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
@@ -107,24 +105,6 @@ const CodeTabs = ({
           +
         </button>
       </div>
-
-      {onViewPortConfig && (
-        <button
-          className="code-tab-port-config"
-          onClick={onViewPortConfig}
-          disabled={isPortConfigLoading}
-          aria-label="View port configuration"
-        >
-          {isPortConfigLoading ? (
-            <div className="code-tab-port-config-loading">
-              <span className="spinner-small"></span>
-              <span>Analyzing...</span>
-            </div>
-          ) : (
-            'View Port Configuration'
-          )}
-        </button>
-      )}
     </div>
   );
 };

@@ -7,7 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { useSession } from '../contexts/SessionContext';
-import { logMessage, logConsole, updateMessagePortConfigurations } from '../services/dataLogger';
+import { logMessage, logConsole } from '../services/dataLogger';
 import { streamChatCompletionWithBudget } from '../utils/chatStream';
 import { getUserAccessLevel, getDailyBudgetUsage } from '../services/aiUsage';
 import { fetchModelMetadata } from '../services/aiModels';
@@ -17,13 +17,10 @@ import {
   intermediatePrompt,
   experiencedPrompt,
 } from '../prompts/codingLevels';
-import { spike3Documentation } from '../prompts/spike_3_documentation';
-import { spike2Documentation } from '../prompts/spike_2_documentation';
-import { analyzePortConfiguration } from '../utils/portConfigStream';
+import { lilyBotPriming } from '../prompts/spike_priming';
 import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
 import BudgetErrorModal from './BudgetErrorModal';
-import PortConfigModal from './PortConfigModal';
 import ChatConfiguration from './ChatConfiguration';
 import ChatTabs from './ChatTabs';
 import './ChatPanel.css';
@@ -50,7 +47,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     conversationHistory, 
     conversations,
     currentConversationId,
-    firmwareVersion,
     getSystemPriming,
     switchConversation,
     createNewConversation,
@@ -74,10 +70,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const [consoleHasContent, setConsoleHasContent] = useState(false);
   const [budgetErrorVisible, setBudgetErrorVisible] = useState(false);
   const [userAccessLevel, setUserAccessLevel] = useState('standard');
-  const [attachDocumentation, setAttachDocumentation] = useState(true);
-  const [portConfigs, setPortConfigs] = useState(new Map());
-  const [portConfigModalOpen, setPortConfigModalOpen] = useState(false);
-  const [currentPortConfig, setCurrentPortConfig] = useState(null);
 
   const selectedModelStreaming = modelMetadata.streamableByModel[selectedModel] ?? false;
 
@@ -93,24 +85,12 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         .map(msg => ({
           role: msg.role === 'user' ? 'user' : 'bot',
           content: msg.content,
-          messageId: msg.id, // Store message ID for port config lookup
+          messageId: msg.id,
         }));
       setMessages(displayMessages);
       
-      // Load port configurations from database
-      const newPortConfigs = new Map();
-      conversationHistory.forEach((msg) => {
-        if (msg.port_configurations && typeof msg.port_configurations === 'object') {
-          // Restore port configurations from database
-          Object.entries(msg.port_configurations).forEach(([key, config]) => {
-            newPortConfigs.set(key, config);
-          });
-        }
-      });
-      setPortConfigs(newPortConfigs);
     } else {
       setMessages([]);
-      setPortConfigs(new Map());
     }
   }, [conversationHistory]);
 
@@ -326,21 +306,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       content: getSystemPriming(),
     });
 
-    // Add SPIKE documentation if checkbox is checked and firmware version is specified
-    if (attachDocumentation) {
-      if (firmwareVersion === '3') {
-        conversation.push({
-          role: 'system',
-          content: spike3Documentation,
-        });
-      } else if (firmwareVersion === '2') {
-        conversation.push({
-          role: 'system',
-          content: spike2Documentation,
-        });
-      }
-    }
-
     // Add coding level instructions
     const levelInstructions = getLevelPrompt(codingLevel);
     if (levelInstructions) {
@@ -441,46 +406,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         completion_tokens: usageData?.output_tokens || 0,
       });
 
-      // Extract Python code snippets and analyze port configurations
-      if (loggedMessage && loggedMessage.id) {
-        const pythonSnippets = extractPythonSnippets(fullResponse, loggedMessage.id);
-        const portConfigurationsForDb = {};
-
-        if (pythonSnippets.length > 0) {
-          // Analyze all Python snippets
-          for (const snippet of pythonSnippets) {
-            try {
-              const config = await analyzePortConfiguration(snippet.code);
-              portConfigurationsForDb[snippet.key] = config;
-              
-              // Update local state immediately
-              setPortConfigs(prev => {
-                const newMap = new Map(prev);
-                newMap.set(snippet.key, config);
-                return newMap;
-              });
-            } catch (error) {
-              console.error(`Error analyzing port configuration for ${snippet.key}:`, error);
-            }
-          }
-
-          // Update the message with port configurations
-          if (Object.keys(portConfigurationsForDb).length > 0) {
-            await updateMessagePortConfigurations(loggedMessage.id, portConfigurationsForDb);
-          }
-        }
-
-        // Update the message in state with the ID
-        setMessages(prev => {
-          const newMessages = [...prev];
-          newMessages[newMessages.length - 1] = {
-            ...newMessages[newMessages.length - 1],
-            messageId: loggedMessage.id,
-          };
-          return newMessages;
-        });
-      }
-
       // Check budget status and show modal if budget exceeded
       if (budgetStatus && !budgetStatus.has_budget) {
         setBudgetErrorVisible(true);
@@ -567,19 +492,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     closeConsoleModal();
   };
 
-  const handleViewPortConfig = (codeKey) => {
-    const config = portConfigs.get(codeKey);
-    if (config) {
-      setCurrentPortConfig(config);
-      setPortConfigModalOpen(true);
-    }
-  };
-
-  const closePortConfigModal = () => {
-    setPortConfigModalOpen(false);
-    setCurrentPortConfig(null);
-  };
-
   const renderMessage = (message, index) => {
     const isUser = message.role === 'user';
     const label = isUser ? 'User' : message.role === 'system' ? 'System' : 'AI Bot';
@@ -646,9 +558,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
                   const isPython = lang === 'python' || lang === 'py';
                   const isBot = !isUser && message.role !== 'system';
                   
-                  // Port configs are loaded from database on mount
-                  const hasConfig = portConfigs.has(codeKey);
-
                   return (
                     <div key={`${consoleIdx}-${codeIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                       <button
@@ -657,14 +566,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
                       >
                         VIEW CODE SNIPPET
                       </button>
-                      {isPython && isBot && hasConfig && (
-                        <button
-                          className="port-config-btn"
-                          onClick={() => handleViewPortConfig(codeKey)}
-                        >
-                          VIEW PORT CONFIGURATION
-                        </button>
-                      )}
                     </div>
                   );
                 }
@@ -684,8 +585,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         onCodingLevelChange={setCodingLevel}
         selectedModel={selectedModel}
         onModelChange={setSelectedModel}
-        attachDocumentation={attachDocumentation}
-        onAttachDocumentationChange={setAttachDocumentation}
         modelsByProvider={modelMetadata.modelsByProvider}
         streamableByModel={modelMetadata.streamableByModel}
         selectedModelStreaming={selectedModelStreaming}
@@ -784,12 +683,6 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         nonPremiumModels={modelMetadata.nonPremiumModels}
       />
 
-      {/* Port Configuration Modal */}
-      <PortConfigModal
-        isOpen={portConfigModalOpen}
-        portConfig={currentPortConfig}
-        onClose={closePortConfigModal}
-      />
     </div>
   );
 };

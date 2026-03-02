@@ -32,24 +32,4 @@ class BaseProvider(ABC):
             - {'type': 'usage', 'usage': {...}} for usage data (optional)
         """
         pass
-    
-    @abstractmethod
-    async def analyze_port_config(
-        self,
-        code: str,
-        model: str,
-        system_prompt: str,
-    ) -> str:
-        """
-        Analyze port configuration from code.
-        
-        Args:
-            code: Python code to analyze
-            model: Model name to use
-            system_prompt: System prompt for analysis
-        
-        Returns:
-            JSON string with port configuration
-        """
-        pass
 
