@@ -175,7 +175,6 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
       if (sessionId) {
         await logInteraction('disconnect', sessionId);
       }
-      await board.reset();
       await board.disconnect();
     } else {
       // Connect
@@ -279,7 +278,6 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     setBuffer('');
   };
 
-  // TODO: Implement this for raspberry pi pico
   const handleSaveToMain = async () => {
     const board = boardRef.current;
     if (!board || !connected) {
