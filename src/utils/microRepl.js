@@ -29,6 +29,7 @@ const { parse } = JSON;
 const { serial } = navigator;
 const defaultOptions = { hidden: true, raw: false };
 const HANDSHAKE_TIMEOUT_MS = 1000;
+const PROMPT_TIMEOUT_MS = 12000;
 
 const decoder = new TextDecoder;
 const encoder = new TextEncoder;
@@ -201,12 +202,14 @@ export default function Board({
   let accumulator = '';
   let aborter, dedent, readerClosed, writer, writerClosed;
 
+  const promptReady = value => /(?:\r\n|\r|\n)>>> $/.test(value) || value.endsWith('>>> ');
+
   // last meaningful line
   const lml = () => accumulator.split(ENTER).at(-2);
 
   const forIt = async (timeoutMs = 15000, action = 'response') => {
     const started = Date.now();
-    while (!accumulator.endsWith(END)) {
+    while (!promptReady(accumulator)) {
       if (Date.now() - started > timeoutMs) {
         accumulator = '';
         throw new Error(`Timed out while waiting for ${action}`);
@@ -266,7 +269,7 @@ export default function Board({
      * @param {string | Element} target where the REPL shows its output or accepts its input.
      * @returns
      */
-    connect: async (target, named = true) => {
+    connect: async (target, named = true, { boardType = 'generic' } = {}) => {
       if (port) return board;
       if (typeof target === 'string') {
         target = (
@@ -310,7 +313,7 @@ export default function Board({
         writerClosed = tes.readable.pipeTo(port.writable);
         writer = tes.writable.getWriter();
 
-        const machine = Promise.withResolvers();
+        let machine = Promise.withResolvers();
         let waitForMachine = false;
 
         const reveal = chunk => {
@@ -331,7 +334,7 @@ export default function Board({
             }
             else if (waitForMachine) {
               accumulator += decoder.decode(chunk);
-              if (accumulator.endsWith(END)) {
+              if (promptReady(accumulator)) {
                 const detected = machineNameFromOutput(accumulator);
                 if (detected) machine.resolve(detected);
                 accumulator = '';
@@ -409,6 +412,7 @@ export default function Board({
           // Bootstrap with board name details. Some tools (e.g. Thonny)
           // can leave the REPL in a non-friendly state, so normalize first.
           const probeMachine = async () => {
+            machine = Promise.withResolvers();
             await writer.write(CONTROL_B);
             await sleep(30);
             await writer.write(CONTROL_C);
@@ -454,6 +458,10 @@ export default function Board({
           machine.resolve(name);
           terminal.write(`${CONTROL_C_REPL}${ENTER}`);
         }
+
+        // Ensure a stable prompt before returning. This avoids transient
+        // post-connect states where hidden evals can appear stuck.
+        await board.waitForPrompt(PROMPT_TIMEOUT_MS);
 
         onconnect();
 
@@ -661,6 +669,33 @@ export default function Board({
         terminal?.focus();
       }
       else onerror(reason('interrupt', evaluating));
+    },
+
+    /**
+     * Wait until the REPL prompt is visible and stable.
+     * @param {number} timeoutMs
+     */
+    waitForPrompt: async (timeoutMs = PROMPT_TIMEOUT_MS) => {
+      if (port && writer) {
+        const prevEvaluating = evaluating;
+        const prevShowEval = showEval;
+        evaluating = 2;
+        showEval = false;
+        try {
+          accumulator = '';
+          await writer.write(CONTROL_C);
+          await sleep(30);
+          await writer.write(ENTER);
+          await forIt(timeoutMs, 'REPL prompt');
+        }
+        finally {
+          evaluating = prevEvaluating;
+          showEval = prevShowEval;
+          accumulator = '';
+        }
+      } else {
+        onerror(reason('wait for prompt', evaluating));
+      }
     },
 
     /**

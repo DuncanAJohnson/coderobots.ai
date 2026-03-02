@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import Board from '../utils/microRepl.js';
 import { STOP_CODE_LILYBOT } from '../utils/stopSpike.js';
+import {
+  openMicrobitInstallerSession,
+  shouldInstallMicrobitFirmware,
+} from '../utils/microbitInstall.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import CodeTabs from './CodeTabs.jsx';
@@ -13,6 +17,7 @@ const FIFO_SIZE = 10000;
 
 const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const [connected, setConnected] = useState(false);
+  const [connectedBoard, setConnectedBoard] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [statusBanner, setStatusBanner] = useState({
     type: 'info',
@@ -21,6 +26,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const [mode, setMode] = useState('disconnected');
   const [isRunning, setIsRunning] = useState(false);
   const [buffer, setBuffer] = useState('');
+  const [microbitInstallArmed, setMicrobitInstallArmed] = useState(false);
 
   const { 
     codeRecords, 
@@ -61,6 +67,21 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
 
   const getConnectionErrorMessage = (error) => {
     const message = error?.message || 'Unknown serial error';
+    if (/WebUSB is not available/i.test(message)) {
+      return 'Connection failed: WebUSB is required to install micro:bit MicroPython. Use a Chromium-based browser.';
+    }
+    if (/No device selected|no-device-selected/i.test(message)) {
+      return 'Connection failed: no micro:bit selected in the browser device picker.';
+    }
+    if (/Bad response for 8 -> 17|reconnect-microbit/i.test(message) || /reconnect-microbit/i.test(error?.code || '')) {
+      return 'Connection failed: unstable WebUSB link to micro:bit. Unplug/replug the board, then click Connect micro:bit again.';
+    }
+    if (/WebUSB still unstable|WebUSB flashing link stayed unstable/i.test(message)) {
+      return message;
+    }
+    if (/MicroPython install requires WebUSB access/i.test(message)) {
+      return message;
+    }
     if (/did not respond like a MicroPython REPL/i.test(message)) {
       return 'Connection failed: selected device is not a compatible MicroPython REPL.';
     }
@@ -113,6 +134,8 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
           console.log('Device disconnected');
           setIsConnecting(false);
           setConnected(false);
+          setConnectedBoard(null);
+          setMicrobitInstallArmed(false);
           setMode('disconnected');
           setBuffer('');
           setIsRunning(false);
@@ -225,46 +248,121 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     };
   }, []);
 
-  const handleConnect = async () => {
+  const handleDisconnect = async () => {
     const board = boardRef.current;
     if (!board || isConnecting) return;
 
     setIsConnecting(true);
     try {
-      if (connected) {
-        // Disconnect
-        setStatusBanner({
-          type: 'info',
-          message: 'Disconnecting...'
-        });
-        await logInteractionSafe('disconnect');
-        await board.disconnect();
-      } else {
-        // Connect
-        setStatusBanner({
-          type: 'info',
-          message: 'Waiting for serial device selection...'
-        });
-        // Keep requestPort in the direct click gesture path.
-        void logInteractionSafe('connect');
+      if (!connected) return;
+      setStatusBanner({
+        type: 'info',
+        message: 'Disconnecting...'
+      });
+      await logInteractionSafe('disconnect');
+      await board.disconnect();
+    }
+    finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleConnect = async (targetBoard) => {
+    const board = boardRef.current;
+    if (!board || isConnecting || connected) return;
+
+    setIsConnecting(true);
+    let installerSession = null;
+    try {
+      if (targetBoard === 'microbit' && microbitInstallArmed) {
         try {
-          await board.connect(replContainerRef.current, true);
-          // Ensure user code is interrupted before sending a stop command.
-          await board.interrupt(150);
-          // run stop code to stop the code in main.py from running
-          await board.eval(STOP_CODE_LILYBOT, { hidden: true });
-        } catch (error) {
-          console.error('Connection failed:', error);
-          setConnected(false);
-          setMode('disconnected');
-          setIsRunning(false);
-          const message = getConnectionErrorMessage(error);
+          installerSession = await openMicrobitInstallerSession({
+            allowDevicePrompt: true,
+            onStatus: (message) => {
+              setStatusBanner({
+                type: 'info',
+                message
+              });
+            }
+          });
           setStatusBanner({
-            type: 'error',
-            message
+            type: 'info',
+            message: 'Installing MicroPython on micro:bit...'
+          });
+        } catch (installerPrepError) {
+          throw installerPrepError;
+        }
+      } else {
+        setStatusBanner({
+          type: 'info',
+          message: `Waiting for ${targetBoard === 'microbit' ? 'micro:bit' : 'Pico'} serial device selection...`
+        });
+      }
+      // Keep requestPort in the direct click gesture path.
+      void logInteractionSafe(`connect_${targetBoard}`);
+      try {
+        if (targetBoard === 'microbit' && installerSession) {
+          await installerSession.flashBundledFirmware({
+            onStatus: (message) => {
+              setStatusBanner({
+                type: 'info',
+                message
+              });
+            },
+            onProgress: (progressPercent) => {
+              if (typeof progressPercent !== 'number') return;
+              setStatusBanner({
+                type: 'info',
+                message: `Installing MicroPython on micro:bit... ${progressPercent}%`
+              });
+            },
+          });
+
+          // Allow USB stack to settle after flashing and board reset.
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          setMicrobitInstallArmed(false);
+          setStatusBanner({
+            type: 'info',
+            message: 'MicroPython install complete. Select micro:bit serial port...'
+          });
+        }
+        await board.connect(replContainerRef.current, true, { boardType: targetBoard });
+
+        // Ensure user code is interrupted before any post-connect setup.
+        await board.interrupt(150);
+        if (targetBoard === 'pico') {
+          // Stop LilyBot motors/tasks on Pico only.
+          await board.eval(STOP_CODE_LILYBOT, { hidden: true });
+        }
+        setConnectedBoard(targetBoard);
+      } catch (error) {
+        if (targetBoard === 'microbit' && shouldInstallMicrobitFirmware(error) && !microbitInstallArmed) {
+          setMicrobitInstallArmed(true);
+          const installMessage = 'MicroPython is missing on this micro:bit. Click Connect micro:bit again to install it.';
+          setStatusBanner({
+            type: 'info',
+            message: installMessage
           });
           const terminal = board.terminal;
-          if (terminal) terminal.write(`\r\n${message}\r\n`);
+          if (terminal) terminal.write(`\r\n${installMessage}\r\n`);
+          return;
+        }
+        console.error('Connection failed:', error);
+        setConnected(false);
+        setConnectedBoard(null);
+        setMode('disconnected');
+        setIsRunning(false);
+        const message = getConnectionErrorMessage(error);
+        setStatusBanner({
+          type: 'error',
+          message
+        });
+        const terminal = board.terminal;
+        if (terminal) terminal.write(`\r\n${message}\r\n`);
+      }
+      finally {
+        if (installerSession) {
+          await installerSession.close();
         }
       }
     }
@@ -313,11 +411,13 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     // Give a moment for buffer to update
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    // Stop motors
-    try {
-      await board.eval(STOP_CODE_LILYBOT, { hidden: true });
-    } catch (error) {
-      console.error('Failed to stop motors:', error);
+    // Stop motors for Pico only.
+    if (connectedBoard === 'pico') {
+      try {
+        await board.eval(STOP_CODE_LILYBOT, { hidden: true });
+      } catch (error) {
+        console.error('Failed to stop motors:', error);
+      }
     }
   };
 
@@ -398,8 +498,11 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
           <div className="status-and-control-row">
             <ControlPanel
               connected={connected}
+              connectedBoard={connectedBoard}
               isConnecting={isConnecting}
-              onConnect={handleConnect}
+              onConnectMicrobit={() => handleConnect('microbit')}
+              onConnectPico={() => handleConnect('pico')}
+              onDisconnect={handleDisconnect}
               onRun={handleRun}
               onCtrlC={handleCtrlC}
               onReset={handleReset}

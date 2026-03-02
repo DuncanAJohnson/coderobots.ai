@@ -1,7 +1,10 @@
 const ControlPanel = ({
   connected,
+  connectedBoard = null,
   isConnecting = false,
-  onConnect,
+  onConnectMicrobit,
+  onConnectPico,
+  onDisconnect,
   onRun,
   onCtrlC,
   onReset,
@@ -11,13 +14,32 @@ const ControlPanel = ({
   return (
     <div className="control-panel right-panel">
       <div className="button-group">
-        <button
-          onClick={onConnect}
-          className={`button ${connected ? 'disconnect-button' : 'connect-button'}`}
-          disabled={isConnecting}
-        >
-          {isConnecting ? 'Connecting...' : (connected ? 'Disconnect' : 'Connect')}
-        </button>
+        {connected ? (
+          <button
+            onClick={onDisconnect}
+            className="button disconnect-button"
+            disabled={isConnecting}
+          >
+            {isConnecting ? 'Disconnecting...' : 'Disconnect'}
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={onConnectMicrobit}
+              className="button connect-button"
+              disabled={isConnecting}
+            >
+              {isConnecting ? 'Connecting...' : 'Connect micro:bit'}
+            </button>
+            <button
+              onClick={onConnectPico}
+              className="button connect-button"
+              disabled={isConnecting}
+            >
+              {isConnecting ? 'Connecting...' : 'Connect Pico'}
+            </button>
+          </>
+        )}
         <button onClick={onClear} className="button clear-console-button" disabled={isConnecting}>
           Clear Console
         </button>
@@ -28,9 +50,11 @@ const ControlPanel = ({
           <button onClick={onRun} className="button run-button">
             ▶ Run Program
           </button>
-          <button onClick={onSaveToMain} className="button run-button">
-            Save to main.py
-          </button>
+          {connectedBoard === 'pico' && (
+            <button onClick={onSaveToMain} className="button run-button">
+              Save to main.py
+            </button>
+          )}
           <button onClick={onCtrlC} className="button stop-button">
             Stop Program
           </button>
