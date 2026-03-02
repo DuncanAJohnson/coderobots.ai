@@ -1,5 +1,6 @@
 const ControlPanel = ({
   connected,
+  isConnecting = false,
   onConnect,
   onRun,
   onCtrlC,
@@ -13,10 +14,11 @@ const ControlPanel = ({
         <button
           onClick={onConnect}
           className={`button ${connected ? 'disconnect-button' : 'connect-button'}`}
+          disabled={isConnecting}
         >
-          {connected ? 'Disconnect' : 'Connect'}
+          {isConnecting ? 'Connecting...' : (connected ? 'Disconnect' : 'Connect')}
         </button>
-        <button onClick={onClear} className="button clear-console-button">
+        <button onClick={onClear} className="button clear-console-button" disabled={isConnecting}>
           Clear Console
         </button>
       </div>

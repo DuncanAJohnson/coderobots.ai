@@ -82,6 +82,38 @@
   flex-shrink: 0;
 }
 
+.status-and-control-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.status-banner {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.45rem 0.65rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  line-height: 1.25;
+  border: 1px solid #c9d2dc;
+  background: #f3f6fa;
+  color: #1f2933;
+}
+
+.status-banner.success {
+  border-color: #86c998;
+  background: #edf8f0;
+  color: #225c2f;
+}
+
+.status-banner.error {
+  border-color: #d88f8f;
+  background: #fceeee;
+  color: #7c2222;
+}
+
 .button-group {
   display: flex;
   flex-wrap: wrap;

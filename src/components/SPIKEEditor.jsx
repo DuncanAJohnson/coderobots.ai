@@ -13,6 +13,11 @@ const FIFO_SIZE = 10000;
 
 const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const [connected, setConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [statusBanner, setStatusBanner] = useState({
+    type: 'info',
+    message: 'Not connected.'
+  });
   const [mode, setMode] = useState('disconnected');
   const [isRunning, setIsRunning] = useState(false);
   const [buffer, setBuffer] = useState('');
@@ -30,12 +35,43 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   } = useSession();
 
   const editorRef = useRef(null);
-  const terminalRef = useRef(null);
   const boardRef = useRef(null);
   const replContainerRef = useRef(null);
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
   const isLocalChangeRef = useRef(false);
+
+  const logInteractionSafe = async (action) => {
+    if (!sessionId) return;
+    try {
+      await logInteraction(action, sessionId);
+    } catch (error) {
+      console.warn(`Failed to log interaction (${action}):`, error);
+    }
+  };
+
+  const logConsoleSafe = async (content, action) => {
+    if (!sessionId || !content) return;
+    try {
+      await logConsole(content, sessionId, action);
+    } catch (error) {
+      console.warn(`Failed to log console (${action}):`, error);
+    }
+  };
+
+  const getConnectionErrorMessage = (error) => {
+    const message = error?.message || 'Unknown serial error';
+    if (/did not respond like a MicroPython REPL/i.test(message)) {
+      return 'Connection failed: selected device is not a compatible MicroPython REPL.';
+    }
+    if (/Failed to open serial port|NetworkError|busy|resource/i.test(message)) {
+      return 'Connection failed: serial port is busy. Close any other serial connections to the device and try again.';
+    }
+    if (/No port selected by the user/i.test(message)) {
+      return 'Connection failed: no device selected by the user.';
+    }
+    return `Connection failed: ${message}`;
+  };
 
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
@@ -65,20 +101,43 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
         dataType: 'string',
         onconnect: () => {
           console.log('Device connected');
+          setIsConnecting(false);
           setConnected(true);
           setMode('repl');
+          setStatusBanner({
+            type: 'success',
+            message: 'Device Status: Connected. REPL is ready.'
+          });
         },
         ondisconnect: () => {
           console.log('Device disconnected');
+          setIsConnecting(false);
           setConnected(false);
           setMode('disconnected');
           setBuffer('');
           setIsRunning(false);
+          setStatusBanner({
+            type: 'info',
+            message: 'Device Status: Disconnected.'
+          });
+        },
+        onportselected: () => {
+          setStatusBanner({
+            type: 'info',
+            message: 'Attempting to connect...'
+          });
         },
         onerror: (error) => {
           console.error('Board error:', error);
-          if (terminalRef.current) {
-            terminalRef.current.write(`\r\nError: ${error.message}\r\n`);
+          setIsConnecting(false);
+          const message = getConnectionErrorMessage(error);
+          setStatusBanner({
+            type: 'error',
+            message
+          });
+          const terminal = boardRef.current?.terminal;
+          if (terminal) {
+            terminal.write(`\r\n${message}\r\n`);
           }
         },
         ondata: (chunk) => {
@@ -168,27 +227,49 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
 
   const handleConnect = async () => {
     const board = boardRef.current;
-    if (!board) return;
+    if (!board || isConnecting) return;
 
-    if (connected) {
-      // Disconnect
-      if (sessionId) {
-        await logInteraction('disconnect', sessionId);
-      }
-      await board.disconnect();
-    } else {
-      // Connect
-      if (sessionId) {
-        await logInteraction('connect', sessionId);
-      }
-      try {
-        await board.connect(replContainerRef.current, true);
-      } catch (error) {
-        console.error('Connection failed:', error);
-        if (terminalRef.current) {
-          terminalRef.current.write(`\r\nConnection failed: ${error.message}\r\n`);
+    setIsConnecting(true);
+    try {
+      if (connected) {
+        // Disconnect
+        setStatusBanner({
+          type: 'info',
+          message: 'Disconnecting...'
+        });
+        await logInteractionSafe('disconnect');
+        await board.disconnect();
+      } else {
+        // Connect
+        setStatusBanner({
+          type: 'info',
+          message: 'Waiting for serial device selection...'
+        });
+        // Keep requestPort in the direct click gesture path.
+        void logInteractionSafe('connect');
+        try {
+          await board.connect(replContainerRef.current, true);
+          // Ensure user code is interrupted before sending a stop command.
+          await board.interrupt(150);
+          // run stop code to stop the code in main.py from running
+          await board.eval(STOP_CODE_LILYBOT, { hidden: true });
+        } catch (error) {
+          console.error('Connection failed:', error);
+          setConnected(false);
+          setMode('disconnected');
+          setIsRunning(false);
+          const message = getConnectionErrorMessage(error);
+          setStatusBanner({
+            type: 'error',
+            message
+          });
+          const terminal = board.terminal;
+          if (terminal) terminal.write(`\r\n${message}\r\n`);
         }
       }
+    }
+    finally {
+      setIsConnecting(false);
     }
   };
 
@@ -202,9 +283,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     await createSnapshot('run_device');
     
     // Log interaction and code before running
-    if (sessionId) {
-      await logInteraction('run_device', sessionId);
-    }
+    await logInteractionSafe('run_device');
     
     // Stop any running code first
     if (isRunning) {
@@ -226,12 +305,10 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     const board = boardRef.current;
     if (!board || !connected) return;
 
-    if (sessionId) {
-      await logInteraction('send_ctrl_c', sessionId);
-    }
+    await logInteractionSafe('send_ctrl_c');
 
     setIsRunning(false);
-    await board.write('\x03');
+    await board.interrupt();
     
     // Give a moment for buffer to update
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -248,30 +325,21 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     const board = boardRef.current;
     if (!board || !connected) return;
 
-    if (sessionId) {
-      await logInteraction('reset_device', sessionId);
-    }
+    await logInteractionSafe('reset_device');
 
     setIsRunning(false);
     await board.reset();
     await new Promise(resolve => setTimeout(resolve, 1000));
-    await board.write('\x03');
+    await board.interrupt();
     setMode('repl');
     board.terminal?.focus();
   };
 
   const handleClear = async () => {
     // Log interaction and console before clearing
-    if (sessionId) {
-      await logInteraction('clear_console', sessionId);
-      if (buffer) {
-        await logConsole(buffer, sessionId, 'clear_console');
-      }
-    }
-    
-    if (terminalRef.current) {
-      terminalRef.current.clear();
-    }
+    await logInteractionSafe('clear_console');
+    await logConsoleSafe(buffer, 'clear_console');
+
     if (boardRef.current?.terminal) {
       boardRef.current.terminal.clear();
     }
@@ -291,9 +359,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     await createSnapshot('save_to_main_py');
     
     // Log interaction before saving to main.py
-    if (sessionId) {
-      await logInteraction('save_to_main_py', sessionId);
-    }
+    await logInteractionSafe('save_to_main_py');
 
     try {
       await board.upload('main.py', codeToSave);
@@ -329,15 +395,23 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
         <div className="resizer" ref={resizerRef}></div>
 
         <div className="child bottom-child">
-          <ControlPanel
-            connected={connected}
-            onConnect={handleConnect}
-            onRun={handleRun}
-            onCtrlC={handleCtrlC}
-            onReset={handleReset}
-            onClear={handleClear}
-            onSaveToMain={handleSaveToMain}
-          />
+          <div className="status-and-control-row">
+            <ControlPanel
+              connected={connected}
+              isConnecting={isConnecting}
+              onConnect={handleConnect}
+              onRun={handleRun}
+              onCtrlC={handleCtrlC}
+              onReset={handleReset}
+              onClear={handleClear}
+              onSaveToMain={handleSaveToMain}
+            />
+            {!connected && (
+              <div className={`status-banner ${statusBanner.type}`}>
+                {statusBanner.message}
+              </div>
+            )}
+          </div>
           <div className="terminal-wrapper" ref={replContainerRef}>
             {/* The micro_repl Board will render the xterm terminal here */}
           </div>
