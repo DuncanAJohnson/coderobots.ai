@@ -10,7 +10,7 @@ import { useSession } from '../contexts/SessionContext';
 import { logMessage, logConsole } from '../services/dataLogger';
 import { streamChatCompletionWithBudget } from '../utils/chatStream';
 import { getUserAccessLevel, getDailyBudgetUsage } from '../services/aiUsage';
-import { fetchModelMetadata } from '../services/aiModels';
+import { fetchModelMetadata, pickInitialModel } from '../services/aiModels';
 import { 
   LEVEL_INSTRUCTION_PREFIX,
   beginnerPrompt,
@@ -37,6 +37,7 @@ const EMPTY_MODEL_METADATA = {
   modelsByProvider: {},
   streamableByModel: {},
   unlimitedByModel: {},
+  defaultModels: [],
   premiumModels: [],
   nonPremiumModels: [],
 };
@@ -141,11 +142,11 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   useEffect(() => {
     const allModels = modelMetadata.allModels || [];
     if (!selectedModel && allModels.length > 0) {
-      setSelectedModel(allModels[0]);
+      setSelectedModel(pickInitialModel(modelMetadata));
       return;
     }
     if (selectedModel && !allModels.includes(selectedModel)) {
-      setSelectedModel(allModels[0] || '');
+      setSelectedModel(pickInitialModel(modelMetadata));
     }
   }, [modelMetadata, selectedModel]);
 

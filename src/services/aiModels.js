@@ -8,6 +8,7 @@ function normalizeRows(rows = []) {
       provider: row.provider,
       streamable: Boolean(row.streamable),
       unlimited: Boolean(row.unlimited),
+      default: Boolean(row.default),
     }));
 }
 
@@ -16,6 +17,7 @@ function buildModelMetadata(rows) {
   const modelsByProvider = {};
   const streamableByModel = {};
   const unlimitedByModel = {};
+  const defaultModels = [];
 
   for (const row of normalized) {
     if (!modelsByProvider[row.provider]) {
@@ -24,6 +26,9 @@ function buildModelMetadata(rows) {
     modelsByProvider[row.provider].push(row.model_name);
     streamableByModel[row.model_name] = row.streamable;
     unlimitedByModel[row.model_name] = row.unlimited;
+    if (row.default) {
+      defaultModels.push(row.model_name);
+    }
   }
 
   Object.keys(modelsByProvider).forEach((provider) => {
@@ -40,16 +45,28 @@ function buildModelMetadata(rows) {
     modelsByProvider,
     streamableByModel,
     unlimitedByModel,
+    defaultModels: [...new Set(defaultModels)],
     premiumModels: [...new Set(premiumModels)],
     nonPremiumModels: [...new Set(nonPremiumModels)],
   };
+}
+
+export function pickInitialModel(modelMetadata) {
+  const defaultModels = modelMetadata?.defaultModels || [];
+  if (defaultModels.length > 0) {
+    const randomIndex = Math.floor(Math.random() * defaultModels.length);
+    return defaultModels[randomIndex];
+  }
+
+  const allModels = modelMetadata?.allModels || [];
+  return allModels[0] || '';
 }
 
 export async function fetchModelMetadata() {
   try {
     const { data, error } = await supabase
       .from('ai_models')
-      .select('model_name, provider, streamable, unlimited')
+      .select('model_name, provider, streamable, unlimited, "default"')
       .order('provider', { ascending: true })
       .order('model_name', { ascending: true });
 
