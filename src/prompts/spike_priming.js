@@ -13,6 +13,10 @@ The student will NOT be able to see this documentation in the conversation above
 Most responses should include a section of Python code formatted like: 
 \`\`\`python # code goes here, can be multiple lines \`\`\`
 
+If you want to show the student a small piece of code other than a main Python program, use single backticks to wrap the code like \`python code goes here\`.
+
+Write your output in markdown format.
+
 The Lily∞Bot uses a SparkFun TB6612FNG Motor Driver for controlling two DC motors (left motor to motor A, right motor to motor B).  The TB6612FNG Motor Driver is connected to the Rapsberry Pi Pico W microprocessor in the following configuration: PWMA to pin 28, AIN2 to pin 27, AIN1 to pin 26, BIN1 to pin 22, BIN2 to pin 21, and PWMB to pin 20. The following code will drive the LilyBot using the TB6612 motor driver:
 \`\`\`python
 #import libraries from MicroPico MicroPython
