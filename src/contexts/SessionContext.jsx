@@ -156,13 +156,18 @@ export const SessionProvider = ({ children }) => {
       
       // Load all code records for this session
       const sessionCodeRecords = await loadCodeRecords(session.id);
-      
+
       // Set current code if available
       if (session.current_code_id) {
-        setCurrentCodeId(session.current_code_id);
-        const currentCode = sessionCodeRecords.find(code => code.id === session.current_code_id);
-        if (currentCode) {
-          setCurrentCodeContent(currentCode.content || '# Start your project here!\n');
+        // Use getLatestCode to load the previously selected code content directly
+        const latestCode = await getLatestCode(session.id);
+        if (latestCode !== null) {
+          setCurrentCodeId(session.current_code_id);
+          setCurrentCodeContent(latestCode);
+        } else if (sessionCodeRecords.length > 0) {
+          // current_code_id is stale or deleted — fall back to first record
+          setCurrentCodeId(sessionCodeRecords[0].id);
+          setCurrentCodeContent(sessionCodeRecords[0].content || '# Start your project here!\n');
         }
       } else if (sessionCodeRecords.length > 0) {
         // Fall back to first code record if no current_code_id
@@ -436,6 +441,14 @@ export const SessionProvider = ({ children }) => {
       return false;
     }
   }, [activeSession, currentCodeId, currentCodeContent]);
+
+  // Auto-select the first code tab if records are loaded but none is selected
+  useEffect(() => {
+    if (codeRecords.length > 0 && !currentCodeId) {
+      setCurrentCodeId(codeRecords[0].id);
+      setCurrentCodeContent(codeRecords[0].content || '# Start your project here!\n');
+    }
+  }, [codeRecords, currentCodeId]);
 
   // Cleanup debounce timer on unmount
   useEffect(() => {
