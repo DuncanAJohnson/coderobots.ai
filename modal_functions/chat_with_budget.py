@@ -29,6 +29,8 @@ image = (
     .pip_install(
         "pydantic>=2.0.0",
         "openai",
+        "anthropic",
+        "google-genai",
         "supabase",
         "pytz",
         "fastapi[standard]",
@@ -44,13 +46,19 @@ def get_provider(provider_name: str):
     if provider_name == "openai":
         print("Using OpenAI provider")
         from providers.openai_provider import OpenAIProvider
-        print("OpenAIProvider initialized")
         return OpenAIProvider()
     elif provider_name == "skolegpt":
         print("Using SkoleGPT provider")
         from providers.skolegpt_provider import SkoleGPTProvider
-        print("SkoleGPTProvider initialized")
         return SkoleGPTProvider()
+    elif provider_name == "anthropic":
+        print("Using Anthropic provider")
+        from providers.anthropic_provider import AnthropicProvider
+        return AnthropicProvider()
+    elif provider_name == "google":
+        print("Using Google provider")
+        from providers.google_provider import GoogleProvider
+        return GoogleProvider()
     else:
         raise ValueError(f"Unknown provider: {provider_name}")
 
@@ -59,6 +67,8 @@ def get_provider(provider_name: str):
     image=image,
     secrets=[
         modal.Secret.from_name("openai-api-key"),
+        modal.Secret.from_name("anthropic-secret"),
+        modal.Secret.from_name("gemini-secret"),
         modal.Secret.from_name("supabase-en1-credentials"),
         modal.Secret.from_name("supabase-showcase-credentials"),
     ],
@@ -70,7 +80,7 @@ async def stream_chat_completion_with_budget(
     auth_token: str,
     environment: str = "EN1",
     model: str = "gpt-5-nano",
-    max_tokens: int = 100000,
+    max_tokens: int = 64000,
 ) -> AsyncIterator[str]:
     """
     Stream AI responses with budget tracking and enforcement.
@@ -142,8 +152,8 @@ async def stream_chat_completion_with_budget(
                 # Capture usage data (only OpenAI provides this)
                 usage_data = event["usage"]
         
-        # Log usage and calculate cost (only for OpenAI models)
-        if usage_data and provider_name == "openai":
+        # Log usage and calculate cost for all providers that return usage data
+        if usage_data:
             try:
                 cost = await calculate_cost(
                     supabase_client,
@@ -195,6 +205,8 @@ async def stream_chat_completion_with_budget(
     image=image,
     secrets=[
         modal.Secret.from_name("openai-api-key"),
+        modal.Secret.from_name("anthropic-secret"),
+        modal.Secret.from_name("gemini-secret"),
         modal.Secret.from_name("supabase-en1-credentials"),
         modal.Secret.from_name("supabase-showcase-credentials"),
         modal.Secret.from_name("skolegpt-credentials"),
@@ -212,7 +224,7 @@ async def chat_endpoint_with_budget(request: dict):
         "auth_token": "jwt_token",
         "environment": "EN1",
         "model": "gpt-5-nano",
-        "max_tokens": 10000
+        "max_tokens": 64000
     }
     """
     from fastapi.responses import StreamingResponse
@@ -223,7 +235,7 @@ async def chat_endpoint_with_budget(request: dict):
     auth_token = request.get("auth_token")
     environment = request.get("environment", "EN1")
     model = request.get("model", "gpt-5-nano")
-    max_tokens = request.get("max_tokens", 100000)
+    max_tokens = request.get("max_tokens", 64000)
     
     if not messages:
         return {"error": "No messages provided"}, 400

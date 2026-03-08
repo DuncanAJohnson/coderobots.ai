@@ -15,7 +15,7 @@ const MODAL_BUDGET_ENDPOINT_URL = import.meta.env.VITE_MODAL_BUDGET_ENDPOINT_URL
  * @param {Number} maxTokens - Maximum tokens to generate
  * @returns {AsyncGenerator} - Yields chunks of content as they arrive
  */
-export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxTokens = 100000) {
+export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxTokens = 64000) {
   if (!MODAL_ENDPOINT_URL) {
     throw new Error('VITE_MODAL_ENDPOINT_URL is not configured in .env.local');
   }
@@ -91,7 +91,7 @@ export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxT
  * @param {String} environment - Supabase environment to use ('EN1' or 'SHOWCASE')
  * @returns {AsyncGenerator} - Yields chunks of content and budget status
  */
-export async function* streamChatCompletionWithBudget(messages, model = 'gpt-5-nano', maxTokens = 100000, environment = null) {
+export async function* streamChatCompletionWithBudget(messages, model = 'gpt-5-nano', maxTokens = 64000, environment = null) {
   if (!MODAL_BUDGET_ENDPOINT_URL) {
     throw new Error('VITE_MODAL_BUDGET_ENDPOINT_URL is not configured in .env.local');
   }
