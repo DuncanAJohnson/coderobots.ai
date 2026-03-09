@@ -9,6 +9,9 @@ const CodeEditor = forwardRef(({ initialCode = '# Start your project here!\n', o
 
   useImperativeHandle(ref, () => ({
     getCode: () => {
+      if (editorViewRef.current) {
+        return editorViewRef.current.state.doc.toString();
+      }
       return codeRef.current;
     },
     setCode: (code) => {
