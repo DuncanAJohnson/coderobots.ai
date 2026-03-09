@@ -85,3 +85,32 @@
   box-shadow: none;
 }
 
+.topbar-lang-toggle {
+  display: flex;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.topbar-lang-btn {
+  padding: 8px 12px;
+  background-color: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+}
+
+.topbar-lang-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+.topbar-lang-btn--active {
+  background-color: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+

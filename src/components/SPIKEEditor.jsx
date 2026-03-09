@@ -3,15 +3,17 @@ import Board from '../utils/microRepl.js';
 import { STOP_CODE } from '../utils/stopSpike.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
+import { useLanguage } from '../contexts/LanguageContext';
 import './SPIKEEditor.css';
 
 const FIFO_SIZE = 10000;
 const CODE_STORAGE_KEY = 'coderobots_editor_code';
 
 const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
+  const { t } = useLanguage();
   const [connected, setConnected] = useState(false);
   const [mode, setMode] = useState('disconnected');
-  const [code, setCode] = useState('# Start your project here!\n');
+  const [code, setCode] = useState(t('initialCode'));
   const [isRunning, setIsRunning] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(0);
   const [buffer, setBuffer] = useState('');
@@ -287,7 +289,7 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
   const handleSaveToSlot = async () => {
     const board = boardRef.current;
     if (!board || !connected) {
-      alert('Cannot save to slot. Please connect to a SPIKE hub first.');
+      alert(t('cannotSaveToSlot'));
       return;
     }
 
@@ -346,7 +348,7 @@ os.chdir('/flash')
       board.terminal?.focus();
     } catch (error) {
       console.error('Failed to save to slot:', error);
-      alert(`Failed to save to slot: ${error.message}`);
+      alert(`${t('failedToSaveToSlot')}${error.message}`);
     }
   };
 

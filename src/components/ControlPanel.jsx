@@ -1,3 +1,5 @@
+import { useLanguage } from '../contexts/LanguageContext';
+
 const ControlPanel = ({
   connected,
   mode,
@@ -12,54 +14,56 @@ const ControlPanel = ({
   onEnterProgramSlot,
   onSaveToSlot
 }) => {
+  const { t } = useLanguage();
+
   return (
     <div className={`control-panel right-panel ${mode}-mode`}>
       <div className="mode-status">
-        Status: <span className="mode-indicator">
-          {mode === 'disconnected' && 'Disconnected'}
-          {mode === 'repl' && 'REPL Mode'}
-          {mode === 'program-slot' && 'Program Slot Mode'}
+        {t('statusLabel')}<span className="mode-indicator">
+          {mode === 'disconnected' && t('disconnected')}
+          {mode === 'repl' && t('replMode')}
+          {mode === 'program-slot' && t('programSlotMode')}
         </span>
       </div>
 
       <div className="button-group">
         <button onClick={onConnect} className="button">
-          {connected ? 'Disconnect' : 'Connect'}
+          {connected ? t('disconnect') : t('connect')}
         </button>
         <button onClick={onEnterREPL} className="button program-slot-only">
-          Enter REPL Mode
+          {t('enterRepl')}
         </button>
         <button onClick={onEnterProgramSlot} className="button repl-only">
-          Enter Program Slot Mode
+          {t('enterProgramSlot')}
         </button>
         <button onClick={onClear} className="button">
-          Clear Console
+          {t('clearConsole')}
         </button>
       </div>
 
       <div className="button-group repl-only">
         <button onClick={onRun} className="button">
-          ▶ Run Program
+          {t('runProgram')}
         </button>
         <button onClick={onCtrlC} className="button">
-          Stop Program
+          {t('stopProgram')}
         </button>
         <button onClick={onReset} className="button">
-          Reset Device
+          {t('resetDevice')}
         </button>
         <div className="vertical-line"></div>
-        <select 
-          value={selectedSlot} 
+        <select
+          value={selectedSlot}
           onChange={(e) => onSlotChange(e.target.value)}
           className="button slot-selector"
-          title="Select program slot to save to"
+          title={t('slotSelectorTitle')}
         >
           {[...Array(20)].map((_, i) => (
-            <option key={i} value={i}>Slot {i}</option>
+            <option key={i} value={i}>{t('slot')} {i}</option>
           ))}
         </select>
         <button onClick={onSaveToSlot} className="button">
-          Save to Slot
+          {t('saveToSlot')}
         </button>
       </div>
     </div>
@@ -67,4 +71,3 @@ const ControlPanel = ({
 };
 
 export default ControlPanel;
-

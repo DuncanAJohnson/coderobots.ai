@@ -17,6 +17,7 @@ import {
 import { spikePriming } from '../prompts/spike_priming';
 import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
+import { useLanguage } from '../contexts/LanguageContext';
 import './ChatPanel.css';
 
 const STORAGE_KEY = 'coderobots_chat_history';
@@ -34,6 +35,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent, isRobotCo
   const [consoleModalOpen, setConsoleModalOpen] = useState(false);
   const [currentConsoleContent, setCurrentConsoleContent] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
+  const { t } = useLanguage();
 
   const chatBodyRef = useRef(null);
   const streamingMessageRef = useRef(null);
@@ -110,7 +112,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent, isRobotCo
   };
 
   const handleClearHistory = () => {
-    if (confirm('Are you sure you want to clear the conversation history?')) {
+    if (confirm(t('clearConfirm'))) {
       setMessages([]);
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -257,7 +259,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent, isRobotCo
   };
 
   const handleKeyDown = (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
@@ -302,7 +304,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent, isRobotCo
 
   const renderMessage = (message, index) => {
     const isUser = message.role === 'user';
-    const label = isUser ? 'User' : message.role === 'system' ? 'System' : 'AI Bot';
+    const label = isUser ? t('userLabel') : message.role === 'system' ? 'System' : t('botLabel');
     const color = isUser ? '#fbe2d7' : message.role === 'system' ? '#d7e4fb' : '#d8f6d8';
     const align = isUser ? 'align-right' : 'align-left';
 
@@ -323,7 +325,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent, isRobotCo
                   className="console-btn"
                   onClick={() => openConsoleModal(consoleText)}
                 >
-                  VIEW ATTACHED CONSOLE LOG
+                  {t('viewConsoleLog')}
                 </button>
               );
             } else {
@@ -356,7 +358,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent, isRobotCo
                       className="code-btn"
                       onClick={() => openCodeModal(codeText, lang)}
                     >
-                      VIEW CODE SNIPPET
+                      {t('viewCodeSnippet')}
                     </button>
                   );
                 }
@@ -372,29 +374,29 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent, isRobotCo
   return (
     <div className="chat-panel">
       <div className="control-group">
-        <label htmlFor="coding-level-selector">Coding Level:</label>
+        <label htmlFor="coding-level-selector">{t('codingLevel')}</label>
         <select
           id="coding-level-selector"
           className="chat-level-selector"
           value={codingLevel}
           onChange={(e) => setCodingLevel(e.target.value)}
         >
-          <option value="beginner">Beginner</option>
-          <option value="intermediate">Intermediate</option>
-          <option value="experienced">Experienced</option>
+          <option value="beginner">{t('beginner')}</option>
+          <option value="intermediate">{t('intermediate')}</option>
+          <option value="experienced">{t('experienced')}</option>
         </select>
-        <button 
+        <button
           className="clear-history-btn"
           onClick={handleClearHistory}
-          title="Clear conversation history"
+          title={t('clearChatTitle')}
         >
-          Clear Chat
+          {t('clearChat')}
         </button>
       </div>
 
       <div className="chat-body" ref={chatBodyRef}>
         <div className="chat-disclaimer">
-          Conversation is stored locally in your browser.
+          {t('chatDisclaimer')}
         </div>
         {messages.map((msg, idx) => renderMessage(msg, idx))}
         {isStreaming && (
@@ -410,22 +412,22 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent, isRobotCo
             className="context-btn"
             onClick={() => setAttachedContext(prev => ({ ...prev, includeCode: true }))}
           >
-            Add Code to Chat
+            {t('addCodeToChat')}
           </button>
           <button
             className="context-btn"
             onClick={() => setAttachedContext(prev => ({ ...prev, includeConsole: true }))}
             disabled={!isRobotConnected}
           >
-            Add Console to Chat
+            {t('addConsoleToChat')}
           </button>
           {(attachedContext.includeCode || attachedContext.includeConsole) && (
             <div className="context-indicator">
               ✅ {attachedContext.includeCode && attachedContext.includeConsole
-                ? 'Code & Console context will be sent.'
+                ? t('contextBoth')
                 : attachedContext.includeCode
-                ? 'Code context will be sent.'
-                : 'Console context will be sent.'}
+                ? t('contextCode')
+                : t('contextConsole')}
             </div>
           )}
         </div>
@@ -434,14 +436,14 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent, isRobotCo
           <textarea
             id="chat-input"
             rows="2"
-            placeholder="Type your message…"
+            placeholder={t('messagePlaceholder')}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isStreaming}
           />
           <button id="chat-send" onClick={handleSendMessage} disabled={isStreaming}>
-            SEND
+            {t('send')}
           </button>
         </div>
       </div>

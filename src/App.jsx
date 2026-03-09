@@ -4,12 +4,19 @@ import SPIKEEditor from './components/SPIKEEditor';
 import ChatPanel from './components/ChatPanel';
 import TitleBar from './components/TitleBar';
 import DebugManager, { debugLog } from './components/DebugManager';
+import { LanguageProvider } from './contexts/LanguageContext';
+import en from './locales/en.json';
+import da from './locales/da.json';
 
 const CODE_STORAGE_KEY = 'coderobots_editor_code';
+const locales = { en, da };
 
 function App() {
   const [showDebugModal, setShowDebugModal] = useState(false);
-  const [editorCode, setEditorCode] = useState('# Start your project here!\n');
+  const [editorCode, setEditorCode] = useState(() => {
+    const lang = localStorage.getItem('coderobots_language') || 'da';
+    return locales[lang]?.initialCode ?? en.initialCode;
+  });
   const [isRobotConnected, setIsRobotConnected] = useState(false);
 
   const resizerRef = useRef(null);
@@ -97,6 +104,7 @@ function App() {
   };
 
   return (
+    <LanguageProvider>
     <>
       <div className="app-container">
         <TitleBar 
@@ -122,11 +130,12 @@ function App() {
         </div>
       </div>
 
-      <DebugManager 
-        visible={showDebugModal} 
-        onClose={() => setShowDebugModal(false)} 
+      <DebugManager
+        visible={showDebugModal}
+        onClose={() => setShowDebugModal(false)}
       />
     </>
+    </LanguageProvider>
   );
 }
 

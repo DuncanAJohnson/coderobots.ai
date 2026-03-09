@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from '@codemirror/view';
+import { useLanguage } from '../contexts/LanguageContext';
 import './ConsoleModal.css';
 
 const ConsoleModal = ({ isOpen, consoleContent, onClose, onCopy }) => {
   const modalRef = useRef(null);
+  const { t } = useLanguage();
 
   useEffect(() => {
     const handleEscape = (e) => {
@@ -33,7 +35,7 @@ const ConsoleModal = ({ isOpen, consoleContent, onClose, onCopy }) => {
   return (
     <div className="console-modal" ref={modalRef} onClick={handleBackdropClick}>
       <div className="console-box">
-        <div className="console-header">CONSOLE OUTPUT</div>
+        <div className="console-header">{t('consoleOutput')}</div>
         <div className="console-editor-container">
           <CodeMirror
             value={consoleContent}
@@ -91,8 +93,8 @@ const ConsoleModal = ({ isOpen, consoleContent, onClose, onCopy }) => {
           />
         </div>
         <div className="console-actions">
-          <button data-act="cancel" onClick={onClose}>Cancel</button>
-          <button data-act="copy" onClick={onCopy}>Copy</button>
+          <button data-act="cancel" onClick={onClose}>{t('cancel')}</button>
+          <button data-act="copy" onClick={onCopy}>{t('copy')}</button>
         </div>
       </div>
     </div>

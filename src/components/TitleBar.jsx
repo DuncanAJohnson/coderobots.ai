@@ -5,32 +5,48 @@
 
 import { useState } from 'react';
 import AboutModal from './AboutModal';
+import { useLanguage } from '../contexts/LanguageContext';
 import './TitleBar.css';
 
 const TitleBar = ({ onShowDebug }) => {
   const [showAbout, setShowAbout] = useState(false);
+  const { lang, switchLang, t } = useLanguage();
 
   return (
     <>
       <div className="topbar">
-        <div className="topbar-title">Code Robots with SkoleGPT</div>
+        <div className="topbar-title">{t('appTitle')}</div>
         <div className="topbar-actions">
-          <button 
-            className="topbar-button" 
+          <button
+            className="topbar-button"
             onClick={() => setShowAbout(true)}
-            title="About this application"
+            title={t('aboutTitle')}
           >
-            ABOUT
+            {t('about')}
           </button>
           {onShowDebug && (
-            <button 
-              className="topbar-button" 
+            <button
+              className="topbar-button"
               onClick={onShowDebug}
-              title="Open debug console"
+              title={t('debugTitle')}
             >
-              DEBUG
+              {t('debug')}
             </button>
           )}
+          <div className="topbar-lang-toggle">
+            <button
+              className={`topbar-lang-btn${lang === 'da' ? ' topbar-lang-btn--active' : ''}`}
+              onClick={() => switchLang('da')}
+            >
+              DA
+            </button>
+            <button
+              className={`topbar-lang-btn${lang === 'en' ? ' topbar-lang-btn--active' : ''}`}
+              onClick={() => switchLang('en')}
+            >
+              EN
+            </button>
+          </div>
         </div>
       </div>
 
@@ -40,4 +56,3 @@ const TitleBar = ({ onShowDebug }) => {
 };
 
 export default TitleBar;
-
