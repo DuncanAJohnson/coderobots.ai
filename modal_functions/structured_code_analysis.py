@@ -50,7 +50,6 @@ async def analyze_code_structured(
     Returns:
         dict with keys:
             "result": the parsed structured output (dict), or None if refused
-            "refusal": refusal message string, or None
             "usage": token usage info dict
     """
     from openai import AsyncOpenAI
@@ -112,7 +111,6 @@ async def structured_code_analysis_endpoint(request: dict):
     Returns:
     {
         "result": { ... },   // parsed structured output, or null if refused
-        "refusal": null,     // refusal message string, or null
         "usage": { "input_tokens": 0, "output_tokens": 0, "total_tokens": 0 }
     }
     """
