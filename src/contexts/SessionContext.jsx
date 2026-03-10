@@ -122,6 +122,7 @@ export const SessionProvider = ({ children }) => {
 
         // Clear conversation history for new session
         setConversationHistory([]);
+        setCurrentConversationId(session.current_conversation_id);
         
         // Reload sessions list to include new one
         await loadSessions();
@@ -433,9 +434,9 @@ export const SessionProvider = ({ children }) => {
       
       if (snapshot) {
         console.log(`📸 Created code snapshot (${saveSource})`);
-        return true;
+        return snapshot.id;
       }
-      return false;
+      return null;
     } catch (error) {
       console.error('Error creating code snapshot:', error);
       return false;

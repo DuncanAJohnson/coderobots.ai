@@ -279,7 +279,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
     // Log context to database
     const sessionId = activeSession.id;
-    const conversationId = activeSession.current_conversation_id;
+    const conversationId = currentConversationId;
     let consoleContextId = null;
 
     if (finalContext.console && finalContext.console.trim()) {
