@@ -17,7 +17,6 @@ import {
   intermediatePrompt,
   experiencedPrompt,
 } from '../prompts/codingLevels';
-import { lilyBotPriming } from '../prompts/spike_priming';
 import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
 import BudgetErrorModal from './BudgetErrorModal';

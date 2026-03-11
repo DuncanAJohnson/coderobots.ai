@@ -24,7 +24,8 @@ import {
   getLatestCode,
   updateSessionOnLoad,
 } from '../services/dataLogger';
-import { lilyBotPriming } from '../prompts/spike_priming';
+import { buildLilyBotPriming } from '../prompts/spike_priming';
+import { getCurrentUserHardwareConfig, getHardwareCatalog, toPromptHardwareConfig } from '../services/hardwareConfig';
 
 const SessionContext = createContext();
 
@@ -39,6 +40,20 @@ export const SessionProvider = ({ children }) => {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [firmwareVersion, setFirmwareVersion] = useState('3');
+  const [hardwarePromptConfig, setHardwarePromptConfig] = useState(null);
+  const loadHardwarePromptConfig = useCallback(async () => {
+    try {
+      const [catalog, config] = await Promise.all([
+        getHardwareCatalog(),
+        getCurrentUserHardwareConfig(),
+      ]);
+      setHardwarePromptConfig(toPromptHardwareConfig(config, catalog));
+    } catch (error) {
+      console.error('Error loading hardware prompt configuration:', error);
+      setHardwarePromptConfig(null);
+    }
+  }, []);
+
   
   // Debounce timer for live code saving
   const saveDebounceTimer = useRef(null);
@@ -190,8 +205,8 @@ export const SessionProvider = ({ children }) => {
    * Get the initial system priming message for building conversation
    */
   const getSystemPriming = useCallback(() => {
-    return lilyBotPriming;
-  }, []);
+    return buildLilyBotPriming(hardwarePromptConfig);
+  }, [hardwarePromptConfig]);
 
   /**
    * Clear conversation history (for UI)
@@ -459,6 +474,20 @@ export const SessionProvider = ({ children }) => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    loadHardwarePromptConfig();
+  }, [loadHardwarePromptConfig]);
+
+  useEffect(() => {
+    const handler = () => {
+      loadHardwarePromptConfig();
+    };
+    window.addEventListener('hardware-config-updated', handler);
+    return () => {
+      window.removeEventListener('hardware-config-updated', handler);
+    };
+  }, [loadHardwarePromptConfig]);
 
   
   const value = {
