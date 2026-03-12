@@ -7,119 +7,13 @@ import { supabase } from './supabase';
 import { parseFritzingModule, makeConnectorLabel } from '../utils/fritzing';
 import picoWFzpRaw from '../assets/fritzing/PicoW/PicoW.fzp?raw';
 import picoWSvgRaw from '../assets/fritzing/PicoW/PicoW.svg?raw';
+import adafruitTB6612FzpRaw from '../assets/fritzing/AdafruitTB6612MotorDriver/AdafruitTB6612.fzp?raw';
+import adafruitTB6612SvgRaw from '../assets/fritzing/AdafruitTB6612MotorDriver/AdafruitTB6612.svg?raw';
 
 const APP_CONFIG_MPU_KEY = 'LILYBOT_MPUS';
 const APP_CONFIG_COMPONENTS_KEY = 'LILYBOT_COMPONENTS';
 const APP_CONFIG_TEMPLATES_KEY = 'LILYBOT_HARDWARE_TEMPLATES';
 const USER_CONFIG_KEY = 'lilybot_hardware_config';
-
-const FALLBACK_MPUS = [
-  {
-    id: 'rpi-pico',
-    name: 'Raspberry Pi Pico',
-    kind: 'mpu',
-    fzp_url: '',
-    svg_url: '',
-    pins: [
-      { id: 'gp16', name: 'GP16' },
-      { id: 'gp17', name: 'GP17' },
-      { id: 'gp20', name: 'GP20' },
-      { id: 'gp21', name: 'GP21' },
-      { id: 'gp22', name: 'GP22' },
-      { id: 'gp26', name: 'GP26' },
-      { id: 'gp27', name: 'GP27' },
-      { id: 'gp28', name: 'GP28' },
-    ],
-  },
-  {
-    id: 'arduino-uno',
-    name: 'Arduino Uno',
-    kind: 'mpu',
-    fzp_url: '',
-    svg_url: '',
-    pins: [
-      { id: 'd2', name: 'D2' },
-      { id: 'd3', name: 'D3' },
-      { id: 'd4', name: 'D4' },
-      { id: 'd5', name: 'D5' },
-      { id: 'd6', name: 'D6' },
-      { id: 'd7', name: 'D7' },
-      { id: 'd8', name: 'D8' },
-      { id: 'd9', name: 'D9' },
-      { id: 'd10', name: 'D10' },
-      { id: 'd11', name: 'D11' },
-      { id: 'd12', name: 'D12' },
-      { id: 'd13', name: 'D13' },
-      { id: 'a0', name: 'A0' },
-      { id: 'a1', name: 'A1' },
-      { id: 'a2', name: 'A2' },
-    ],
-  },
-];
-
-const FALLBACK_COMPONENTS = [
-  {
-    id: 'tb6612fng',
-    name: 'Motor Driver TB6612FNG',
-    kind: 'component',
-    fzp_url: '',
-    svg_url: '',
-    pins: [
-      { id: 'pwma', name: 'PWMA' },
-      { id: 'ain1', name: 'AIN1' },
-      { id: 'ain2', name: 'AIN2' },
-      { id: 'bin1', name: 'BIN1' },
-      { id: 'bin2', name: 'BIN2' },
-      { id: 'pwmb', name: 'PWMB' },
-    ],
-  },
-  {
-    id: 'led-5mm',
-    name: 'LED 5mm',
-    kind: 'component',
-    fzp_url: '',
-    svg_url: '',
-    pins: [
-      { id: 'anode', name: 'anode' },
-      { id: 'cathode', name: 'cathode' },
-    ],
-  },
-  {
-    id: 'hc-sr04',
-    name: 'HC-SR04 Ultrasonic Sensor',
-    kind: 'component',
-    fzp_url: 'https://raw.githubusercontent.com/fritzing/fritzing-parts/12761296fc8bcc53ed481b78e3a99c907d85b18d/core/hc-sr04_bf8299a_002.fzp',
-    svg_url: 'https://raw.githubusercontent.com/fritzing/fritzing-parts/12761296fc8bcc53ed481b78e3a99c907d85b18d/svg/core/icon/hc-sr04_bf8299a_002.svg',
-    pins: [
-      { id: 'vcc', name: 'VCC' },
-      { id: 'trig', name: 'TRIG' },
-      { id: 'echo', name: 'ECHO' },
-      { id: 'gnd', name: 'GND' },
-    ],
-  },
-];
-
-const FALLBACK_TEMPLATES = [
-  {
-    id: 'default-pico-lilybot',
-    name: 'Default LilyBot (Pico + TB6612 + HC-SR04)',
-    selectedMpuId: 'rpi-pico',
-    components: [
-      { instanceId: 'tb6612-1', componentId: 'tb6612fng', nickname: 'Motor Driver' },
-      { instanceId: 'hcsr04-1', componentId: 'hc-sr04', nickname: 'Ultrasonic' },
-    ],
-    mappings: {
-      gp28: { instanceId: 'tb6612-1', componentPinId: 'pwma', label: 'Motor Driver PWMA' },
-      gp27: { instanceId: 'tb6612-1', componentPinId: 'ain2', label: 'Motor Driver AIN2' },
-      gp26: { instanceId: 'tb6612-1', componentPinId: 'ain1', label: 'Motor Driver AIN1' },
-      gp22: { instanceId: 'tb6612-1', componentPinId: 'bin1', label: 'Motor Driver BIN1' },
-      gp21: { instanceId: 'tb6612-1', componentPinId: 'bin2', label: 'Motor Driver BIN2' },
-      gp20: { instanceId: 'tb6612-1', componentPinId: 'pwmb', label: 'Motor Driver PWMB' },
-      gp17: { instanceId: 'hcsr04-1', componentPinId: 'trig', label: 'Ultrasonic TRIG' },
-      gp16: { instanceId: 'hcsr04-1', componentPinId: 'echo', label: 'Ultrasonic ECHO' },
-    },
-  },
-];
 
 let cachedCatalogPromise = null;
 
@@ -131,18 +25,37 @@ function isPicoWPart(part) {
   return LOCAL_PICO_W_IDS.has(normalizedId) || normalizedName.includes('pico w');
 }
 
+const LOCAL_ADAFRUIT_TB6612_IDS = new Set(['adafruit-tb6612', 'adafruit-tb6612fng', 'adafruit-tb6612-motor-driver']);
+
+function isAdafruitTB6612Part(part) {
+  const normalizedId = String(part?.id || '').toLowerCase();
+  const normalizedName = String(part?.name || '').toLowerCase();
+  return LOCAL_ADAFRUIT_TB6612_IDS.has(normalizedId) || (normalizedName.includes('adafruit') && normalizedName.includes('tb6612'));
+}
+
 function applyLocalPartOverrides(parts, key) {
-  if (!Array.isArray(parts) || key !== APP_CONFIG_MPU_KEY) return parts;
+  if (!Array.isArray(parts)) return parts;
 
   return parts.map((part) => {
-    if (!isPicoWPart(part)) return part;
-    return {
-      ...part,
-      fzp_url: '',
-      fzp_raw: picoWFzpRaw,
-      svg_url: '',
-      svg_raw: picoWSvgRaw,
-    };
+    if (key === APP_CONFIG_MPU_KEY && isPicoWPart(part)) {
+      return {
+        ...part,
+        fzp_url: '',
+        fzp_raw: picoWFzpRaw,
+        svg_url: '',
+        svg_raw: picoWSvgRaw,
+      };
+    }
+    if (key === APP_CONFIG_COMPONENTS_KEY && isAdafruitTB6612Part(part)) {
+      return {
+        ...part,
+        fzp_url: '',
+        fzp_raw: adafruitTB6612FzpRaw,
+        svg_url: '',
+        svg_raw: adafruitTB6612SvgRaw,
+      };
+    }
+    return part;
   });
 }
 
@@ -164,19 +77,20 @@ function normalizePartRow(part) {
   };
 }
 
-async function fetchPartsFromConfig(key, fallbackValue) {
+async function fetchPartsFromConfig(key) {
   const { data, error } = await supabase
     .from('app_config')
     .select('value')
     .eq('key', key)
     .maybeSingle();
 
-  if (error || !data?.value) return applyLocalPartOverrides(fallbackValue, key);
+  if (error) throw new Error(`Failed to fetch ${key} from app_config: ${error.message}`);
+  if (!data?.value) throw new Error(`No data found for ${key} in app_config`);
 
   const rows = Array.isArray(data.value) ? data.value : [];
   const normalized = rows.map(normalizePartRow).filter(Boolean);
-  const resolved = normalized.length > 0 ? normalized : fallbackValue;
-  return applyLocalPartOverrides(resolved, key);
+  if (normalized.length === 0) throw new Error(`${key} in app_config is empty or invalid`);
+  return applyLocalPartOverrides(normalized, key);
 }
 
 async function fetchTemplatesFromConfig() {
@@ -186,9 +100,13 @@ async function fetchTemplatesFromConfig() {
     .eq('key', APP_CONFIG_TEMPLATES_KEY)
     .maybeSingle();
 
-  if (error || !data?.value) return FALLBACK_TEMPLATES;
-  if (!Array.isArray(data.value)) return FALLBACK_TEMPLATES;
-  return data.value;
+  if (error) throw new Error(`Failed to fetch templates from app_config: ${error.message}`);
+  if (!data?.value) throw new Error(`No data found for ${APP_CONFIG_TEMPLATES_KEY} in app_config`);
+
+  // Support both a single template object and an array of templates
+  const raw = Array.isArray(data.value) ? data.value : [data.value];
+  if (raw.length === 0) throw new Error(`${APP_CONFIG_TEMPLATES_KEY} in app_config is empty`);
+  return raw;
 }
 
 async function resolvePartPins(part) {
@@ -237,8 +155,8 @@ export async function getHardwareCatalog(forceRefresh = false) {
 
   cachedCatalogPromise = (async () => {
   const [mpus, components, templates] = await Promise.all([
-    fetchPartsFromConfig(APP_CONFIG_MPU_KEY, FALLBACK_MPUS),
-    fetchPartsFromConfig(APP_CONFIG_COMPONENTS_KEY, FALLBACK_COMPONENTS),
+    fetchPartsFromConfig(APP_CONFIG_MPU_KEY),
+    fetchPartsFromConfig(APP_CONFIG_COMPONENTS_KEY),
     fetchTemplatesFromConfig(),
   ]);
 
@@ -285,9 +203,9 @@ export async function saveCurrentUserHardwareConfig(config) {
 }
 
 export function getDefaultHardwareConfig(catalog) {
-  const firstMpu = catalog?.mpus?.[0] || FALLBACK_MPUS[0];
+  const firstMpu = catalog?.mpus?.[0];
   return {
-    selectedMpuId: firstMpu.id,
+    selectedMpuId: firstMpu?.id || '',
     components: [],
     mappings: {},
   };

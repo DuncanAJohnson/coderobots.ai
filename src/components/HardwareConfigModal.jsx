@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import DOMPurify from 'dompurify';
 import './ModalBase.css';
 import './HardwareConfigModal.css';
+import MpuPinDiagram from './MpuPinDiagram';
+import ComponentPinDiagram from './ComponentPinDiagram';
 import {
   getCurrentUserHardwareConfig,
   saveCurrentUserHardwareConfig,
@@ -184,10 +186,34 @@ const HardwareConfigModal = ({ visible, onClose }) => {
     const template = catalog.templates.find((item) => item.id === selectedTemplateId);
     if (!template) return;
 
+    const mpuExists = catalog.mpus.some((mpu) => mpu.id === template.selectedMpuId);
+    const resolvedMpuId = mpuExists
+      ? template.selectedMpuId
+      : (config?.selectedMpuId || catalog.mpus[0]?.id);
+
+    if (!mpuExists) {
+      console.warn(
+        `Template MPU "${template.selectedMpuId}" not found in catalog — keeping current MPU "${resolvedMpuId}".`,
+      );
+    }
+
+    // Only include components whose componentId exists in the catalog
+    const validComponents = (template.components || []).filter((c) => {
+      const exists = catalog.components.some((cc) => cc.id === c.componentId);
+      if (!exists) console.warn(`Template component "${c.componentId}" not found in catalog — skipping.`);
+      return exists;
+    });
+    const validInstanceIds = new Set(validComponents.map((c) => c.instanceId));
+
+    // Drop mappings that reference removed component instances
+    const validMappings = Object.fromEntries(
+      Object.entries(template.mappings || {}).filter(([, m]) => validInstanceIds.has(m.instanceId)),
+    );
+
     setConfig({
-      selectedMpuId: template.selectedMpuId,
-      components: template.components || [],
-      mappings: template.mappings || {},
+      selectedMpuId: resolvedMpuId,
+      components: validComponents,
+      mappings: validMappings,
     });
     setActiveMpuPinId(null);
   };
@@ -253,33 +279,55 @@ const HardwareConfigModal = ({ visible, onClose }) => {
             <div className="hardware-config-body">
               <section className="hardware-panel hardware-panel-left">
                 <h3>{selectedMpu?.name || 'MPU'}</h3>
-                <p className="hardware-helper-text">Click an input row, then click a component pin on the right.</p>
-                {renderPartPreview(selectedMpu, 'part-preview')}
+                <p className="hardware-helper-text">
+                  {activeMpuPinId
+                    ? 'Now click a component pin on the right to connect it.'
+                    : 'Click a pin label to select it for mapping.'}
+                </p>
 
-                <div className="mpu-pin-list">
-                  {(selectedMpu?.pins || []).map((pin) => {
-                    const mapping = config.mappings?.[pin.id];
-                    return (
-                      <div className="mpu-pin-row" key={pin.id}>
-                        <span className="mpu-pin-name">{pin.name}</span>
-                        <button
-                          className={`mpu-pin-input ${activeMpuPinId === pin.id ? 'active' : ''}`}
-                          onClick={() => setActiveMpuPinId(pin.id)}
-                          onMouseEnter={() => setHoveredMpuPinId(pin.id)}
-                          onMouseLeave={() => setHoveredMpuPinId(null)}
-                          title={mapping?.label || 'No mapping yet'}
-                        >
-                          {mapping?.label || 'Click to map...'}
-                        </button>
-                        {mapping && (
-                          <button className="mpu-clear-button" onClick={() => clearMapping(pin.id)}>
-                            Clear
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                {(selectedMpu?.svg_raw || selectedMpu?.svg_url) ? (
+                  <MpuPinDiagram
+                    svgRaw={selectedMpu.svg_raw}
+                    svgUrl={selectedMpu.svg_url}
+                    pins={selectedMpu.pins || []}
+                    mappings={config.mappings}
+                    activePinId={activeMpuPinId}
+                    hoveredPinId={hoveredMpuPinId}
+                    onPinClick={(pinId) =>
+                      setActiveMpuPinId((prev) => (prev === pinId ? null : pinId))
+                    }
+                    onPinHover={setHoveredMpuPinId}
+                    onClearMapping={clearMapping}
+                  />
+                ) : (
+                  <>
+                    {renderPartPreview(selectedMpu, 'part-preview')}
+                    <div className="mpu-pin-list">
+                      {(selectedMpu?.pins || []).map((pin) => {
+                        const mapping = config.mappings?.[pin.id];
+                        return (
+                          <div className="mpu-pin-row" key={pin.id}>
+                            <span className="mpu-pin-name">{pin.name}</span>
+                            <button
+                              className={`mpu-pin-input ${activeMpuPinId === pin.id ? 'active' : ''}`}
+                              onClick={() => setActiveMpuPinId(pin.id)}
+                              onMouseEnter={() => setHoveredMpuPinId(pin.id)}
+                              onMouseLeave={() => setHoveredMpuPinId(null)}
+                              title={mapping?.label || 'No mapping yet'}
+                            >
+                              {mapping?.label || 'Click to map...'}
+                            </button>
+                            {mapping && (
+                              <button className="mpu-clear-button" onClick={() => clearMapping(pin.id)}>
+                                Clear
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </section>
 
               <section className="hardware-panel hardware-panel-right">
@@ -299,40 +347,63 @@ const HardwareConfigModal = ({ visible, onClose }) => {
                 </div>
 
                 <div className="component-list">
-                  {instantiatedComponents.map((component) => (
-                    <article key={component.instanceId} className="component-card">
-                      <div className="component-card-header">
-                        <strong>{component.nickname}</strong>
-                        <button className="component-remove" onClick={() => removeComponent(component.instanceId)}>
-                          Remove
-                        </button>
-                      </div>
+                  {instantiatedComponents.map((component) => {
+                    const hasVisualDiagram =
+                      (component.svg_raw || component.svg_url) &&
+                      component.pins.some((p) => p.svgId);
 
-                      {renderPartPreview(component, 'part-preview')}
+                    return (
+                      <article key={component.instanceId} className="component-card">
+                        <div className="component-card-header">
+                          <strong>{component.nickname}</strong>
+                          <button className="component-remove" onClick={() => removeComponent(component.instanceId)}>
+                            Remove
+                          </button>
+                        </div>
 
-                      <div className="component-pin-list">
-                        {component.pins.map((pin) => {
-                          const shouldBlink = Object.entries(config.mappings || {}).some(
-                            ([mpuPinId, mapping]) =>
-                              mpuPinId === hoveredMpuPinId &&
-                              mapping?.instanceId === component.instanceId &&
-                              mapping?.componentPinId === pin.id,
-                          );
-
-                          return (
-                            <button
-                              key={pin.id}
-                              className={`component-pin-button ${shouldBlink ? 'blink' : ''}`}
-                              onClick={() => handlePinConnect(component, pin)}
-                              title={pin.description || pin.name}
-                            >
-                              {pin.name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </article>
-                  ))}
+                        {hasVisualDiagram ? (
+                          <ComponentPinDiagram
+                            svgRaw={component.svg_raw}
+                            svgUrl={component.svg_url}
+                            pins={component.pins}
+                            instanceId={component.instanceId}
+                            mappings={config.mappings}
+                            activeMpuPinId={activeMpuPinId}
+                            hoveredMpuPinId={hoveredMpuPinId}
+                            mpuPins={selectedMpu?.pins || []}
+                            onPinClick={(pinId) => {
+                              const pin = component.pins.find((p) => p.id === pinId);
+                              if (pin) handlePinConnect(component, pin);
+                            }}
+                          />
+                        ) : (
+                          <>
+                            {renderPartPreview(component, 'part-preview')}
+                            <div className="component-pin-list">
+                              {component.pins.map((pin) => {
+                                const shouldBlink = Object.entries(config.mappings || {}).some(
+                                  ([mpuPinId, mapping]) =>
+                                    mpuPinId === hoveredMpuPinId &&
+                                    mapping?.instanceId === component.instanceId &&
+                                    mapping?.componentPinId === pin.id,
+                                );
+                                return (
+                                  <button
+                                    key={pin.id}
+                                    className={`component-pin-button ${shouldBlink ? 'blink' : ''}`}
+                                    onClick={() => handlePinConnect(component, pin)}
+                                    title={pin.description || pin.name}
+                                  >
+                                    {pin.name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </article>
+                    );
+                  })}
                 </div>
               </section>
             </div>

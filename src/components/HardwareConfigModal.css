@@ -73,8 +73,9 @@
 .hardware-config-body {
   margin-top: 18px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1.35fr 1fr;
   gap: 16px;
+  align-items: start;
 }
 
 .hardware-panel {
@@ -83,6 +84,12 @@
   padding: 14px;
   min-height: 500px;
   background: #fafafa;
+}
+
+/* The left panel with the visual diagram needs less min-height
+   since the SVG scales to its natural height */
+.hardware-panel-left {
+  min-height: 0;
 }
 
 .hardware-panel h3 {
