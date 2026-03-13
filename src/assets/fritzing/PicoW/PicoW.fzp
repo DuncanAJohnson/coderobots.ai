@@ -427,7 +427,7 @@ p, li { white-space: pre-wrap; }
    </views>
   </connector>
   <connector id="connector25" name="pin 26" type="male">
-   <description>CP20/I2C SDA</description>
+   <description>GP20/I2C SDA</description>
    <views>
     <breadboardView>
      <p svgId="connector25pin" layer="breadboard"/>

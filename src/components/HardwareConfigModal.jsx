@@ -239,8 +239,13 @@ const HardwareConfigModal = ({ visible, onClose }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content modal-content-wide hardware-config-modal" onClick={(e) => e.stopPropagation()}>
         <div className="hardware-config-header">
-          <h2>Hardware Configuration</h2>
-          <p>Select an MPU and map its pins to external components.</p>
+          <div className="hardware-config-header-text">
+            <h2>Hardware Configuration</h2>
+            <p>Select an MPU and map its pins to external components.</p>
+          </div>
+          <button className="hardware-config-save-button" onClick={handleSave} disabled={isSaving || loading || !config}>
+            {isSaving ? 'Saving...' : 'Save Configuration'}
+          </button>
         </div>
 
         {loading && <div className="hardware-config-loading">Loading hardware catalog...</div>}
@@ -409,15 +414,6 @@ const HardwareConfigModal = ({ visible, onClose }) => {
             </div>
           </>
         )}
-
-        <div className="hardware-config-actions">
-          <button className="topbar-button" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="topbar-button save" onClick={handleSave} disabled={isSaving || loading || !config}>
-            {isSaving ? 'Saving...' : 'Save Configuration'}
-          </button>
-        </div>
       </div>
     </div>
   );

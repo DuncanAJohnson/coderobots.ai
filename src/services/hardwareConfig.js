@@ -1,14 +1,18 @@
 /**
  * LilyBot hardware configuration service.
  * Reads available parts from app_config and user wiring from auth metadata.
+ *
+ * Supabase app_config holds simple id arrays:
+ *   LILYBOT_MPUS:       ["rpi-picow"]
+ *   LILYBOT_COMPONENTS: ["adafruit-tb6612", "hc-sr04"]
+ *
+ * Part metadata (name, folder) lives in src/assets/fritzing/catalog.js.
+ * Fritzing files live in src/assets/fritzing/<folder>/.
  */
 
 import { supabase } from './supabase';
 import { parseFritzingModule, makeConnectorLabel } from '../utils/fritzing';
-import picoWFzpRaw from '../assets/fritzing/PicoW/PicoW.fzp?raw';
-import picoWSvgRaw from '../assets/fritzing/PicoW/PicoW.svg?raw';
-import adafruitTB6612FzpRaw from '../assets/fritzing/AdafruitTB6612MotorDriver/AdafruitTB6612.fzp?raw';
-import adafruitTB6612SvgRaw from '../assets/fritzing/AdafruitTB6612MotorDriver/AdafruitTB6612.svg?raw';
+import fritzingCatalog from '../assets/fritzing/catalog';
 
 const APP_CONFIG_MPU_KEY = 'LILYBOT_MPUS';
 const APP_CONFIG_COMPONENTS_KEY = 'LILYBOT_COMPONENTS';
@@ -17,67 +21,46 @@ const USER_CONFIG_KEY = 'lilybot_hardware_config';
 
 let cachedCatalogPromise = null;
 
-const LOCAL_PICO_W_IDS = new Set(['rpi-picow', 'rpi-pico-w', 'picow', 'pico-w']);
+// Eagerly load all .fzp and .svg files under src/assets/fritzing/<folder>/
+const fzpAssets = import.meta.glob('../assets/fritzing/*/*.fzp', { as: 'raw', eager: true });
+const svgAssets = import.meta.glob('../assets/fritzing/*/*.svg', { as: 'raw', eager: true });
 
-function isPicoWPart(part) {
-  const normalizedId = String(part?.id || '').toLowerCase();
-  const normalizedName = String(part?.name || '').toLowerCase();
-  return LOCAL_PICO_W_IDS.has(normalizedId) || normalizedName.includes('pico w');
+function buildFritzingRegistry() {
+  const registry = {};
+  for (const [path, content] of Object.entries(fzpAssets)) {
+    const folder = path.split('/').at(-2);
+    registry[folder] = { ...(registry[folder] || {}), fzp_raw: content };
+  }
+  for (const [path, content] of Object.entries(svgAssets)) {
+    const folder = path.split('/').at(-2);
+    registry[folder] = { ...(registry[folder] || {}), svg_raw: content };
+  }
+  return registry;
 }
 
-const LOCAL_ADAFRUIT_TB6612_IDS = new Set(['adafruit-tb6612', 'adafruit-tb6612fng', 'adafruit-tb6612-motor-driver']);
+const fritzingRegistry = buildFritzingRegistry();
 
-function isAdafruitTB6612Part(part) {
-  const normalizedId = String(part?.id || '').toLowerCase();
-  const normalizedName = String(part?.name || '').toLowerCase();
-  return LOCAL_ADAFRUIT_TB6612_IDS.has(normalizedId) || (normalizedName.includes('adafruit') && normalizedName.includes('tb6612'));
-}
+// Index catalog by id for fast lookup
+const catalogById = Object.fromEntries(fritzingCatalog.map((entry) => [entry.id, entry]));
 
-function applyLocalPartOverrides(parts, key) {
-  if (!Array.isArray(parts)) return parts;
-
-  return parts.map((part) => {
-    if (key === APP_CONFIG_MPU_KEY && isPicoWPart(part)) {
-      return {
-        ...part,
-        fzp_url: '',
-        fzp_raw: picoWFzpRaw,
-        svg_url: '',
-        svg_raw: picoWSvgRaw,
-      };
-    }
-    if (key === APP_CONFIG_COMPONENTS_KEY && isAdafruitTB6612Part(part)) {
-      return {
-        ...part,
-        fzp_url: '',
-        fzp_raw: adafruitTB6612FzpRaw,
-        svg_url: '',
-        svg_raw: adafruitTB6612SvgRaw,
-      };
-    }
-    return part;
-  });
-}
-
-function normalizePartRow(part) {
-  if (!part || typeof part !== 'object') return null;
-
-  const id = String(part.id || '').trim();
-  const name = String(part.name || '').trim();
-  if (!id || !name) return null;
-
+function resolvePartFromCatalog(id) {
+  const entry = catalogById[id];
+  if (!entry) {
+    console.warn(`Part id "${id}" not found in fritzing catalog — skipping.`);
+    return null;
+  }
+  const files = entry.folder ? fritzingRegistry[entry.folder] : {};
   return {
-    id,
-    name,
-    kind: part.kind || 'component',
-    fzp_url: part.fzp_url || '',
-    svg_url: part.svg_url || '',
-    svg_raw: part.svg_raw || '',
-    pins: Array.isArray(part.pins) ? part.pins : [],
+    id: entry.id,
+    name: entry.name,
+    kind: entry.kind || 'component',
+    fzp_raw: files?.fzp_raw || '',
+    svg_raw: files?.svg_raw || '',
+    pins: [],
   };
 }
 
-async function fetchPartsFromConfig(key) {
+async function fetchPartIdsFromConfig(key) {
   const { data, error } = await supabase
     .from('app_config')
     .select('value')
@@ -87,10 +70,10 @@ async function fetchPartsFromConfig(key) {
   if (error) throw new Error(`Failed to fetch ${key} from app_config: ${error.message}`);
   if (!data?.value) throw new Error(`No data found for ${key} in app_config`);
 
-  const rows = Array.isArray(data.value) ? data.value : [];
-  const normalized = rows.map(normalizePartRow).filter(Boolean);
-  if (normalized.length === 0) throw new Error(`${key} in app_config is empty or invalid`);
-  return applyLocalPartOverrides(normalized, key);
+  const ids = Array.isArray(data.value) ? data.value : [];
+  const parts = ids.map(resolvePartFromCatalog).filter(Boolean);
+  if (parts.length === 0) throw new Error(`${key} in app_config is empty or has no matching catalog entries`);
+  return parts;
 }
 
 async function fetchTemplatesFromConfig() {
@@ -109,34 +92,25 @@ async function fetchTemplatesFromConfig() {
   return raw;
 }
 
-async function resolvePartPins(part) {
-  if (Array.isArray(part.pins) && part.pins.length > 0) {
-    return part;
-  }
-  if (!part.fzp_url && !part.fzp_raw) {
+function resolvePartPins(part) {
+  if (!part.fzp_raw) {
     return { ...part, pins: [] };
   }
 
   try {
-    let xmlText = '';
-
-    if (part.fzp_raw) {
-      xmlText = part.fzp_raw;
-    } else {
-      const response = await fetch(part.fzp_url);
-      if (!response.ok) {
-        throw new Error(`Unable to fetch ${part.fzp_url}`);
-      }
-      xmlText = await response.text();
-    }
-
-    const parsed = parseFritzingModule(xmlText);
-    const pins = (parsed?.connectors || []).map((connector) => ({
-      id: connector.id,
-      name: connector.name || connector.id,
-      description: connector.description || '',
-      svgId: connector.svgId || '',
-    }));
+    const parsed = parseFritzingModule(part.fzp_raw);
+    const pins = (parsed?.connectors || []).map((connector) => {
+      const description = connector.description || '';
+      const descFirst = description.split('/')[0].trim();
+      const gpioMatch = descFirst.match(/^[GC]P(\d+)$/i);
+      const id = gpioMatch ? `gp${gpioMatch[1]}` : connector.id;
+      return {
+        id,
+        name: connector.name || connector.id,
+        description,
+        svgId: connector.svgId || '',
+      };
+    });
     return { ...part, pins };
   } catch (error) {
     console.error('Error resolving Fritzing pins:', error);
@@ -154,16 +128,16 @@ export async function getHardwareCatalog(forceRefresh = false) {
   }
 
   cachedCatalogPromise = (async () => {
-  const [mpus, components, templates] = await Promise.all([
-    fetchPartsFromConfig(APP_CONFIG_MPU_KEY),
-    fetchPartsFromConfig(APP_CONFIG_COMPONENTS_KEY),
-    fetchTemplatesFromConfig(),
-  ]);
+    const [mpus, components, templates] = await Promise.all([
+      fetchPartIdsFromConfig(APP_CONFIG_MPU_KEY),
+      fetchPartIdsFromConfig(APP_CONFIG_COMPONENTS_KEY),
+      fetchTemplatesFromConfig(),
+    ]);
 
-  const [resolvedMpus, resolvedComponents] = await Promise.all([
-    Promise.all(mpus.map(resolvePartPins)),
-    Promise.all(components.map(resolvePartPins)),
-  ]);
+    const [resolvedMpus, resolvedComponents] = await Promise.all([
+      Promise.all(mpus.map(resolvePartPins)),
+      Promise.all(components.map(resolvePartPins)),
+    ]);
 
     return {
       mpus: resolvedMpus,
