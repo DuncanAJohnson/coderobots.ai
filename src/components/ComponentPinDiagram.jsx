@@ -12,6 +12,7 @@ import {
   SIDE_LABEL_H, SIDE_LABEL_HALF_H, SIDE_LABEL_W, 
   TB_LABEL_W, TB_LABEL_H, TB_NEAR, TB_FAR,
 } from '../utils/pinDiagram';
+import { getMappingEntries } from '../services/hardwareConfig';
 import './MpuPinDiagram.css';
 
 const ComponentPinDiagram = ({
@@ -33,25 +34,66 @@ const ComponentPinDiagram = ({
     svgW, svgH, boardX, boardY, leftLabelRight, leftLabelX, rightLabelLeft, lensR,
   } = usePinDiagramLayout({ svgRaw, svgUrl, pins });
 
-  // Reverse mapping: componentPinId → mpuPinId (for this instance).
-  // Falls back from connector id to pin name so templates using human-readable
-  // names (e.g. "PWMB") still match.
-  const reverseMapping = useMemo(() => {
-    const nameToId = {};
-    (pins || []).forEach((p) => { if (p.name) nameToId[p.name.toLowerCase()] = p.id; });
+  const toKey = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+
+  const componentPinIdByKey = useMemo(() => {
+    const byKey = {};
+    (pins || []).forEach((pin) => {
+      if (pin.id) byKey[toKey(pin.id)] = pin.id;
+      if (pin.name) byKey[toKey(pin.name)] = pin.id;
+      const primary = getPrimaryLabel(pin);
+      if (primary) byKey[toKey(primary)] = pin.id;
+    });
+    return byKey;
+  }, [pins]);
+
+  const mpuPinByKey = useMemo(() => {
+    const byKey = {};
+    (mpuPins || []).forEach((pin) => {
+      if (pin.id) byKey[toKey(pin.id)] = pin;
+      if (pin.name) byKey[toKey(pin.name)] = pin;
+      const primary = getPrimaryLabel(pin);
+      if (primary) byKey[toKey(primary)] = pin;
+    });
+    return byKey;
+  }, [mpuPins]);
+
+  const resolveMpuPin = (mpuPinRef) => {
+    if (!mpuPinRef) return null;
+    return mpuPinByKey[toKey(mpuPinRef)] || null;
+  };
+
+  const resolveMpuPinId = (mpuPinRef) => {
+    const pin = resolveMpuPin(mpuPinRef);
+    return pin?.id || mpuPinRef;
+  };
+
+  const getMpuPinName = (mpuPinRef) => {
+    const pin = resolveMpuPin(mpuPinRef);
+    return getPrimaryLabel(pin) || pin?.name || mpuPinRef;
+  };
+
+  // Reverse mapping keyed by resolved component pin id.
+  // Supports templates that store either pin ids or pin names.
+  const mappingByComponentPinId = useMemo(() => {
     const map = {};
-    Object.entries(mappings || {}).forEach(([mpuPinId, m]) => {
-      if (m.instanceId === instanceId) {
-        const cpId       = m.componentPinId;
-        const resolvedId = nameToId[cpId?.toLowerCase()] ?? cpId;
-        map[resolvedId]  = mpuPinId;
-      }
+    Object.entries(mappings || {}).forEach(([rawMpuPinRef, mappingValue]) => {
+      const mappingEntries = getMappingEntries(mappingValue);
+      mappingEntries.forEach((mapping) => {
+        if (mapping.instanceId !== instanceId) return;
+        const rawComponentPinRef = mapping.componentPinId;
+        const resolvedComponentPinId =
+          componentPinIdByKey[toKey(rawComponentPinRef)] || rawComponentPinRef;
+        if (!resolvedComponentPinId) return;
+
+        map[resolvedComponentPinId] = {
+          mpuPinId: resolveMpuPinId(rawMpuPinRef),
+          mpuPinName: getMpuPinName(rawMpuPinRef),
+        };
+      });
     });
     return map;
-  }, [mappings, instanceId, pins]);
-
-  const getMpuPinName = (mpuPinId) =>
-    (mpuPins || []).find((p) => p.id === mpuPinId)?.name || mpuPinId;
+  }, [mappings, instanceId, componentPinIdByKey, mpuPinByKey, activeMpuPinId, hoveredMpuPinId]);
 
   if (!resolvedSvgRaw) {
     return <p className="mpu-diagram-placeholder">Loading component diagram…</p>;
@@ -88,16 +130,18 @@ const ComponentPinDiagram = ({
 
           const { cx: pinX, cy: pinY, side } = layout;
 
-          const mappedMpuPinId  = reverseMapping[pin.id];
-          const isMapped        = Boolean(mappedMpuPinId);
+          const mapped = mappingByComponentPinId[pin.id];
+          const mappedMpuPinId = mapped?.mpuPinId;
+          const mappedMpuPinName = mapped?.mpuPinName;
+          const isMapped = Boolean(mappedMpuPinId);
           const isCurrentTarget =
-            activeMpuPinId &&
-            mappings?.[activeMpuPinId]?.instanceId === instanceId &&
-            mappings?.[activeMpuPinId]?.componentPinId === pin.id;
+            Boolean(activeMpuPinId) &&
+            isMapped &&
+            mappedMpuPinId === resolveMpuPinId(activeMpuPinId);
           const isHoveredTarget =
-            hoveredMpuPinId &&
-            mappings?.[hoveredMpuPinId]?.instanceId === instanceId &&
-            mappings?.[hoveredMpuPinId]?.componentPinId === pin.id;
+            Boolean(hoveredMpuPinId) &&
+            isMapped &&
+            mappedMpuPinId === resolveMpuPinId(hoveredMpuPinId);
           const isReady = Boolean(activeMpuPinId) && !isMapped && !isCurrentTarget;
 
           let fillColor, strokeColor, textColor, lineColor, lineW, dotFill;
@@ -140,7 +184,7 @@ const ComponentPinDiagram = ({
                 {isCurrentTarget ? (
                   <text x={mappingX} y={pinY + 0.3} fontSize="2.5" fill="#1d4ed8" textAnchor="start" dominantBaseline="middle">● {trunc(getMpuPinName(activeMpuPinId), 9)}</text>
                 ) : isMapped ? (
-                  <text x={mappingX} y={pinY + 0.3} fontSize="2.6" fill={textColor} textAnchor="start" dominantBaseline="middle">{trunc(getMpuPinName(mappedMpuPinId), 10)}</text>
+                  <text x={mappingX} y={pinY + 0.3} fontSize="2.6" fill={textColor} textAnchor="start" dominantBaseline="middle">{trunc(mappedMpuPinName, 10)}</text>
                 ) : null}
                 <circle cx={pinX} cy={pinY} r={1.3} fill={dotFill} stroke="white" strokeWidth="0.4" />
               </g>
@@ -161,7 +205,7 @@ const ComponentPinDiagram = ({
                 {isCurrentTarget ? (
                   <text x={mappingX} y={pinY + 0.3} fontSize="2.5" fill="#1d4ed8" textAnchor="end" dominantBaseline="middle">{trunc(getMpuPinName(activeMpuPinId), 9)} ●</text>
                 ) : isMapped ? (
-                  <text x={mappingX} y={pinY + 0.3} fontSize="2.6" fill={textColor} textAnchor="end" dominantBaseline="middle">{trunc(getMpuPinName(mappedMpuPinId), 10)}</text>
+                  <text x={mappingX} y={pinY + 0.3} fontSize="2.6" fill={textColor} textAnchor="end" dominantBaseline="middle">{trunc(mappedMpuPinName, 10)}</text>
                 ) : null}
                 <circle cx={pinX} cy={pinY} r={1.3} fill={dotFill} stroke="white" strokeWidth="0.4" />
               </g>

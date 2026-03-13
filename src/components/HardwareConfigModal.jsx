@@ -10,6 +10,8 @@ import {
   getHardwareCatalog,
   getDefaultHardwareConfig,
   buildConnectionLabel,
+  getMappingEntries,
+  normalizeMappingsByMpuPin,
 } from '../services/hardwareConfig';
 
 function makeInstanceId(componentId) {
@@ -141,9 +143,12 @@ const HardwareConfigModal = ({ visible, onClose }) => {
 
   const removeComponent = (instanceId) => {
     updateConfig((prev) => {
-      const newMappings = { ...(prev.mappings || {}) };
-      Object.keys(newMappings).forEach((mpuPinId) => {
-        if (newMappings[mpuPinId]?.instanceId === instanceId) {
+      const newMappings = normalizeMappingsByMpuPin(prev.mappings);
+      Object.entries(newMappings).forEach(([mpuPinId, mappingValue]) => {
+        const filteredEntries = getMappingEntries(mappingValue).filter((entry) => entry.instanceId !== instanceId);
+        if (filteredEntries.length > 0) {
+          newMappings[mpuPinId] = filteredEntries;
+        } else {
           delete newMappings[mpuPinId];
         }
       });
@@ -167,17 +172,38 @@ const HardwareConfigModal = ({ visible, onClose }) => {
   const handlePinConnect = (component, pin) => {
     if (!activeMpuPinId) return;
 
-    updateConfig((prev) => ({
-      ...prev,
-      mappings: {
-        ...(prev.mappings || {}),
-        [activeMpuPinId]: {
-          instanceId: component.instanceId,
-          componentPinId: pin.id,
+    updateConfig((prev) => {
+      const nextMappings = normalizeMappingsByMpuPin(prev.mappings);
+      const targetInstanceId = component.instanceId;
+      const targetComponentPinId = pin.id;
+
+      Object.entries(nextMappings).forEach(([mpuPinId, mappingValue]) => {
+        const filteredEntries = getMappingEntries(mappingValue).filter(
+          (entry) =>
+            !(entry.instanceId === targetInstanceId && entry.componentPinId === targetComponentPinId),
+        );
+        if (filteredEntries.length > 0) {
+          nextMappings[mpuPinId] = filteredEntries;
+        } else {
+          delete nextMappings[mpuPinId];
+        }
+      });
+
+      const activeEntries = getMappingEntries(nextMappings[activeMpuPinId]);
+      nextMappings[activeMpuPinId] = [
+        ...activeEntries,
+        {
+          instanceId: targetInstanceId,
+          componentPinId: targetComponentPinId,
           label: buildConnectionLabel(component, pin),
         },
-      },
-    }));
+      ];
+
+      return {
+        ...prev,
+        mappings: nextMappings,
+      };
+    });
     setActiveMpuPinId(null);
   };
 
@@ -206,9 +232,21 @@ const HardwareConfigModal = ({ visible, onClose }) => {
     const validInstanceIds = new Set(validComponents.map((c) => c.instanceId));
 
     // Drop mappings that reference removed component instances
-    const validMappings = Object.fromEntries(
-      Object.entries(template.mappings || {}).filter(([, m]) => validInstanceIds.has(m.instanceId)),
-    );
+    const normalizedTemplateMappings = normalizeMappingsByMpuPin(template.mappings);
+    const seenComponentPins = new Set();
+    const validMappings = {};
+    Object.entries(normalizedTemplateMappings).forEach(([mpuPinId, mappingValue]) => {
+      const validEntries = getMappingEntries(mappingValue).filter((entry) => {
+        if (!validInstanceIds.has(entry.instanceId)) return false;
+        const dedupeKey = `${entry.instanceId}::${entry.componentPinId}`;
+        if (seenComponentPins.has(dedupeKey)) return false;
+        seenComponentPins.add(dedupeKey);
+        return true;
+      });
+      if (validEntries.length > 0) {
+        validMappings[mpuPinId] = validEntries;
+      }
+    });
 
     setConfig({
       selectedMpuId: resolvedMpuId,
@@ -226,6 +264,7 @@ const HardwareConfigModal = ({ visible, onClose }) => {
     try {
       await saveCurrentUserHardwareConfig(config);
       window.dispatchEvent(new Event('hardware-config-updated'));
+      onClose?.();
     } catch (err) {
       console.error('Failed to save hardware config:', err);
       setError('Unable to save hardware settings.');
@@ -308,20 +347,31 @@ const HardwareConfigModal = ({ visible, onClose }) => {
                     {renderPartPreview(selectedMpu, 'part-preview')}
                     <div className="mpu-pin-list">
                       {(selectedMpu?.pins || []).map((pin) => {
-                        const mapping = config.mappings?.[pin.id];
+                        const mappingEntries = getMappingEntries(config.mappings?.[pin.id]);
+                        const mappingCount = mappingEntries.length;
+                        const firstMapping = mappingEntries[0];
+                        const titleLabel = mappingEntries.length
+                          ? mappingEntries.map((entry) => entry.label || entry.componentPinId).join(', ')
+                          : 'No mapping yet';
+                        const buttonLabel =
+                          mappingCount === 0
+                            ? 'Click to map...'
+                            : mappingCount === 1
+                              ? (firstMapping.label || firstMapping.componentPinId)
+                              : `${mappingCount} mappings`;
                         return (
                           <div className="mpu-pin-row" key={pin.id}>
                             <span className="mpu-pin-name">{pin.name}</span>
                             <button
                               className={`mpu-pin-input ${activeMpuPinId === pin.id ? 'active' : ''}`}
-                              onClick={() => setActiveMpuPinId(pin.id)}
+                              onClick={() => setActiveMpuPinId((prev) => (prev === pin.id ? null : pin.id))}
                               onMouseEnter={() => setHoveredMpuPinId(pin.id)}
                               onMouseLeave={() => setHoveredMpuPinId(null)}
-                              title={mapping?.label || 'No mapping yet'}
+                              title={titleLabel}
                             >
-                              {mapping?.label || 'Click to map...'}
+                              {buttonLabel}
                             </button>
-                            {mapping && (
+                            {mappingCount > 0 && (
                               <button className="mpu-clear-button" onClick={() => clearMapping(pin.id)}>
                                 Clear
                               </button>
@@ -386,10 +436,13 @@ const HardwareConfigModal = ({ visible, onClose }) => {
                             <div className="component-pin-list">
                               {component.pins.map((pin) => {
                                 const shouldBlink = Object.entries(config.mappings || {}).some(
-                                  ([mpuPinId, mapping]) =>
+                                  ([mpuPinId, mappingValue]) =>
                                     mpuPinId === hoveredMpuPinId &&
-                                    mapping?.instanceId === component.instanceId &&
-                                    mapping?.componentPinId === pin.id,
+                                    getMappingEntries(mappingValue).some(
+                                      (mapping) =>
+                                        mapping.instanceId === component.instanceId &&
+                                        mapping.componentPinId === pin.id,
+                                    ),
                                 );
                                 return (
                                   <button

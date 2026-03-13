@@ -21,6 +21,51 @@ const USER_CONFIG_KEY = 'lilybot_hardware_config';
 
 let cachedCatalogPromise = null;
 
+function normalizeMappingEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  if (!entry.instanceId || !entry.componentPinId) return null;
+  return {
+    instanceId: entry.instanceId,
+    componentPinId: entry.componentPinId,
+    label: entry.label || '',
+  };
+}
+
+export function getMappingEntries(mappingValue) {
+  if (Array.isArray(mappingValue)) {
+    return mappingValue
+      .map(normalizeMappingEntry)
+      .filter(Boolean);
+  }
+  const singleEntry = normalizeMappingEntry(mappingValue);
+  return singleEntry ? [singleEntry] : [];
+}
+
+export function normalizeMappingsByMpuPin(mappings) {
+  const normalized = {};
+  Object.entries(mappings || {}).forEach(([mpuPinId, mappingValue]) => {
+    const entries = getMappingEntries(mappingValue);
+    if (entries.length > 0) {
+      normalized[mpuPinId] = entries;
+    }
+  });
+  return normalized;
+}
+
+export function flattenMappings(mappings) {
+  return Object.entries(mappings || {}).flatMap(([mpuPinId, mappingValue]) =>
+    getMappingEntries(mappingValue).map((entry) => ({ mpuPinId, ...entry })),
+  );
+}
+
+export function normalizeHardwareConfig(config) {
+  if (!config || typeof config !== 'object') return null;
+  return {
+    ...config,
+    mappings: normalizeMappingsByMpuPin(config.mappings),
+  };
+}
+
 // Eagerly load all .fzp and .svg files under src/assets/fritzing/<folder>/
 const fzpAssets = import.meta.glob('../assets/fritzing/*/*.fzp', { as: 'raw', eager: true });
 const svgAssets = import.meta.glob('../assets/fritzing/*/*.svg', { as: 'raw', eager: true });
@@ -142,7 +187,7 @@ export async function getHardwareCatalog(forceRefresh = false) {
     return {
       mpus: resolvedMpus,
       components: resolvedComponents,
-      templates,
+      templates: templates.map((template) => normalizeHardwareConfig(template)),
     };
   })();
 
@@ -153,18 +198,19 @@ export async function getCurrentUserHardwareConfig() {
   const { data, error } = await supabase.auth.getUser();
   if (error) throw error;
 
-  return data?.user?.user_metadata?.[USER_CONFIG_KEY] || null;
+  return normalizeHardwareConfig(data?.user?.user_metadata?.[USER_CONFIG_KEY]);
 }
 
 export async function saveCurrentUserHardwareConfig(config) {
   const { data, error } = await supabase.auth.getUser();
   if (error) throw error;
 
+  const normalizedConfig = normalizeHardwareConfig(config) || getDefaultHardwareConfig();
   const existingMetadata = data?.user?.user_metadata || {};
   const mergedData = {
     ...existingMetadata,
     [USER_CONFIG_KEY]: {
-      ...config,
+      ...normalizedConfig,
       updatedAt: new Date().toISOString(),
     },
   };
@@ -190,6 +236,17 @@ export function buildConnectionLabel(componentInstance, connector) {
   return makeConnectorLabel(componentName, connector);
 }
 
+function getPromptPinName(pin) {
+  if (!pin || typeof pin !== 'object') return '';
+  const description = typeof pin.description === 'string' ? pin.description.trim() : '';
+  if (description) {
+    const firstSegment = description.split('/')[0].trim();
+    const firstToken = firstSegment.split(/\s+/)[0];
+    if (firstToken) return firstToken;
+  }
+  return pin.name || pin.id || '';
+}
+
 export function toPromptHardwareConfig(config, catalog) {
   if (!config || !catalog) return null;
 
@@ -210,11 +267,11 @@ export function toPromptHardwareConfig(config, catalog) {
   }, {});
 
   const mpuPinMap = (mpu.pins || []).reduce((acc, pin) => {
-    acc[pin.id] = pin.name || pin.id;
+    acc[pin.id] = getPromptPinName(pin);
     return acc;
   }, {});
 
-  const mappingLines = Object.entries(config.mappings || {}).map(([mpuPinId, mapping]) => {
+  const mappingLines = flattenMappings(config.mappings).map(({ mpuPinId, ...mapping }) => {
     const mpuPinName = mpuPinMap[mpuPinId] || mpuPinId;
     const instance = instanceById[mapping.instanceId];
     const componentLabel = mapping.label || `${instance?.nickname || instance?.name || 'Component'} ${mapping.componentPinId}`;

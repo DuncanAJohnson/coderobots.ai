@@ -15,6 +15,7 @@ import {
   SIDE_LABEL_H, SIDE_LABEL_HALF_H, SIDE_LABEL_W, 
   TB_LABEL_W, TB_LABEL_H, TB_NEAR, TB_FAR,
 } from '../utils/pinDiagram';
+import { getMappingEntries } from '../services/hardwareConfig';
 import './MpuPinDiagram.css';
 
 const MpuPinDiagram = ({
@@ -34,6 +35,13 @@ const MpuPinDiagram = ({
     boardW, boardH, tbStagger, pinLayout,
     svgW, svgH, boardX, boardY, leftLabelRight, leftLabelX, rightLabelLeft, lensR,
   } = usePinDiagramLayout({ svgRaw, svgUrl, pins });
+
+  const getMappingPreview = (mappingEntries, maxLen = 18) => {
+    if (!mappingEntries.length) return '';
+    const firstLabel = mappingEntries[0].label || mappingEntries[0].componentPinId;
+    if (mappingEntries.length === 1) return trunc(firstLabel, maxLen);
+    return trunc(`${firstLabel} +${mappingEntries.length - 1}`, maxLen);
+  };
 
   if (!resolvedSvgRaw) {
     return <p className="mpu-diagram-placeholder">Loading board diagram…</p>;
@@ -71,8 +79,9 @@ const MpuPinDiagram = ({
           const { cx: pinX, cy: pinY, side } = layout;
           const isActive  = activePinId === pin.id;
           const isHovered = hoveredPinId === pin.id;
-          const mapping   = mappings?.[pin.id];
-          const isMapped  = Boolean(mapping);
+          const mappingEntries = getMappingEntries(mappings?.[pin.id]);
+          const isMapped  = mappingEntries.length > 0;
+          const mappingPreview = getMappingPreview(mappingEntries);
 
           const fillColor   = isActive ? '#dbeafe' : isMapped ? '#dcfce7' : isHovered ? '#f1f5f9' : '#f8fafc';
           const strokeColor = isActive ? '#3b82f6' : isMapped ? '#16a34a' : '#cbd5e1';
@@ -104,7 +113,7 @@ const MpuPinDiagram = ({
                 {isActive ? (
                   <text x={mappingX} y={pinY + 0.3} fontSize="2.5" fill="#2563eb" textAnchor="start" dominantBaseline="middle">← select component pin</text>
                 ) : isMapped ? (
-                  <text x={mappingX + 6} y={pinY + 0.3} fontSize="2.6" fill={textColor} textAnchor="start" dominantBaseline="middle">{trunc(mapping.label, 18)}</text>
+                  <text x={mappingX + 6} y={pinY + 0.3} fontSize="2.6" fill={textColor} textAnchor="start" dominantBaseline="middle">{mappingPreview}</text>
                 ) : null}
                 {isMapped && !isActive && (
                   <g onClick={(e) => { e.stopPropagation(); onClearMapping?.(pin.id); }} style={{ cursor: 'pointer' }}>
@@ -132,7 +141,7 @@ const MpuPinDiagram = ({
                 {isActive ? (
                   <text x={mappingX} y={pinY + 0.3} fontSize="2.5" fill="#2563eb" textAnchor="end" dominantBaseline="middle">select component pin →</text>
                 ) : isMapped ? (
-                  <text x={mappingX - 6} y={pinY + 0.3} fontSize="2.6" fill={textColor} textAnchor="end" dominantBaseline="middle">{trunc(mapping.label, 18)}</text>
+                  <text x={mappingX - 6} y={pinY + 0.3} fontSize="2.6" fill={textColor} textAnchor="end" dominantBaseline="middle">{mappingPreview}</text>
                 ) : null}
                 {isMapped && !isActive && (
                   <g onClick={(e) => { e.stopPropagation(); onClearMapping?.(pin.id); }} style={{ cursor: 'pointer' }}>
