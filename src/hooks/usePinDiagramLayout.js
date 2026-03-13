@@ -11,6 +11,7 @@ import {
   assignSides,
   PAD_LEFT, PAD_TOP, PAD_RIGHT, PAD_BOTTOM,
   SIDE_LABEL_W, SIDE_BOARD_GAP,
+  LENS_SCREEN_R,
 } from '../utils/pinDiagram';
 
 export function usePinDiagramLayout({ svgRaw, svgUrl, pins }) {
@@ -50,10 +51,14 @@ export function usePinDiagramLayout({ svgRaw, svgUrl, pins }) {
   const handleMouseMove = (e) => {
     const svg = svgRef.current;
     if (!svg) return;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return;
     const pt = svg.createSVGPoint();
     pt.x = e.clientX;
     pt.y = e.clientY;
-    setLens(pt.matrixTransform(svg.getScreenCTM().inverse()));
+    const pos = pt.matrixTransform(ctm.inverse());
+    // Convert constant CSS-pixel radius to SVG user units for this SVG's current scale.
+    setLens({ x: pos.x, y: pos.y, r: LENS_SCREEN_R / ctm.a });
   };
 
   // ── Pin geometry ──────────────────────────────────────────────────────────
@@ -106,7 +111,9 @@ export function usePinDiagramLayout({ svgRaw, svgUrl, pins }) {
   const leftLabelRight = boardX - SIDE_BOARD_GAP;
   const leftLabelX    = leftLabelRight - SIDE_LABEL_W;
   const rightLabelLeft = boardX + boardW + SIDE_BOARD_GAP;
-  const lensR         = boardW && boardH ? Math.min(boardW, boardH) * 0.28 : 15;
+  // lensR comes from lens.r (computed per-mousemove from the CTM).
+  // Expose as a convenience so components don't need to null-check inside {lens && ...}.
+  const lensR         = lens?.r ?? 0;
 
   return {
     resolvedSvgRaw, boardUrl,

@@ -1,12 +1,12 @@
 // Shared layout constants and pure helpers for MpuPinDiagram / ComponentPinDiagram.
 
-export const SIDE_LABEL_W      = 76;
-export const SIDE_LABEL_H      = 5.6;
+export const SIDE_LABEL_W      = 50;
+export const SIDE_LABEL_H      = 7;
 export const SIDE_LABEL_HALF_H = SIDE_LABEL_H / 2;
 export const SIDE_BOARD_GAP    = 9;
 
 export const TB_LABEL_W = 20;
-export const TB_LABEL_H = 5.6;
+export const TB_LABEL_H = 7;
 export const TB_NEAR    = 10;
 export const TB_FAR     = TB_NEAR + TB_LABEL_H + 2;
 
@@ -15,7 +15,8 @@ export const PAD_RIGHT  = SIDE_LABEL_W + SIDE_BOARD_GAP + 2;
 export const PAD_TOP    = TB_FAR + TB_LABEL_H + 3;
 export const PAD_BOTTOM = TB_FAR + TB_LABEL_H + 3;
 
-export const ZOOM = 2.5;
+export const LENS_SCREEN_R = 50
+export const ZOOM = 2;
 
 /**
  * Groups pins into sides by clustering: pins sharing a similar x-coordinate

@@ -192,13 +192,15 @@ const MpuPinDiagram = ({
               <circle cx={lens.x} cy={lens.y} r={lensR} />
             </clipPath>
           </defs>
+          {/* White background covers the original content beneath the lens */}
+          <circle cx={lens.x} cy={lens.y} r={lensR * ZOOM} fill="white" />
           <g
             clipPath={`url(#${lensClipId})`}
             transform={`translate(${lens.x * (1 - ZOOM)},${lens.y * (1 - ZOOM)}) scale(${ZOOM})`}
           >
             <use href={`#${contentId}`} />
           </g>
-          <circle cx={lens.x} cy={lens.y} r={lensR} fill="none" stroke="#475569" strokeWidth="1.2" opacity="0.8" />
+          <circle cx={lens.x} cy={lens.y} r={lensR * ZOOM} fill="none" stroke="#475569" strokeWidth="1.2" opacity="0.8" />
         </g>
       )}
     </svg>

@@ -110,6 +110,22 @@ function getElementCenter(el) {
  *
  * Returns { positions: { [svgId]: {cx, cy} }, boardW, boardH }.
  */
+/**
+ * Converts an SVG dimension attribute (e.g. "45.097mm", "0.75in") to mils.
+ * Returns null if the unit is unknown or the value is not parseable.
+ */
+function parseDimToMils(attr) {
+  if (!attr) return null;
+  const val = parseFloat(attr);
+  if (isNaN(val)) return null;
+  if (attr.includes('mm')) return (val / 25.4) * 1000;
+  if (attr.includes('cm')) return (val / 2.54) * 1000;
+  if (attr.includes('in')) return val * 1000;
+  if (attr.includes('px')) return (val / 96) * 1000; // 96 dpi
+  if (attr.includes('pt')) return (val / 72) * 1000;
+  return null;
+}
+
 export function parseSvgPinPositions(svgRaw, svgIds = []) {
   if (!svgRaw || typeof svgRaw !== 'string') {
     return { positions: {}, boardW: 0, boardH: 0 };
@@ -120,18 +136,34 @@ export function parseSvgPinPositions(svgRaw, svgIds = []) {
 
   const svgEl = doc.querySelector('svg');
   const viewBoxParts = (svgEl?.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
-  const boardW = viewBoxParts[2] || 0;
-  const boardH = viewBoxParts[3] || 0;
+  const vbW = viewBoxParts[2] || 0;
+  const vbH = viewBoxParts[3] || 0;
+
+  // Normalize to a consistent 10-mil coordinate unit so label/board proportions
+  // look correct regardless of the SVG's internal viewBox scale.
+  // Fritzing SVGs vary: some use 10-mil units (viewBox ≈ 21 for a 0.21in part),
+  // others use 1-mil units (viewBox ≈ 1775 for a 45mm part).
+  let scaleX = 1;
+  let scaleY = 1;
+  const widthMils  = parseDimToMils(svgEl?.getAttribute('width'));
+  const heightMils = parseDimToMils(svgEl?.getAttribute('height'));
+  if (widthMils && vbW)  scaleX = (widthMils / vbW) / 10;
+  if (heightMils && vbH) scaleY = (heightMils / vbH) / 10;
+
+  const boardW = vbW * scaleX;
+  const boardH = vbH * scaleY;
 
   const positions = {};
 
   const idsToFind = svgIds.length > 0 ? [...new Set(svgIds.filter(Boolean))] : null;
 
+  const scale = (pos) => pos && { cx: pos.cx * scaleX, cy: pos.cy * scaleY };
+
   if (idsToFind) {
     // Preferred path: look up each connector by its exact svgId from the FZP.
     idsToFind.forEach((svgId) => {
       const el = doc.getElementById(svgId);
-      const pos = getElementCenter(el);
+      const pos = scale(getElementCenter(el));
       if (pos) positions[svgId] = pos;
     });
   } else {
@@ -142,7 +174,7 @@ export function parseSvgPinPositions(svgRaw, svgIds = []) {
       if (!match) return;
       const pinKey = `${match[1]}pin`;
       if (pinKey in positions) return; // first occurrence wins
-      const pos = getElementCenter(el);
+      const pos = scale(getElementCenter(el));
       if (pos) positions[pinKey] = pos;
     });
   }

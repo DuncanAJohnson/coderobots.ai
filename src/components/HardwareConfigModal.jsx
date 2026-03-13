@@ -226,7 +226,6 @@ const HardwareConfigModal = ({ visible, onClose }) => {
     try {
       await saveCurrentUserHardwareConfig(config);
       window.dispatchEvent(new Event('hardware-config-updated'));
-      onClose?.();
     } catch (err) {
       console.error('Failed to save hardware config:', err);
       setError('Unable to save hardware settings.');
@@ -240,7 +239,7 @@ const HardwareConfigModal = ({ visible, onClose }) => {
       <div className="modal-content modal-content-wide hardware-config-modal" onClick={(e) => e.stopPropagation()}>
         <div className="hardware-config-header">
           <div className="hardware-config-header-text">
-            <h2>Hardware Configuration</h2>
+            <h2><b>Hardware Configuration</b></h2>
             <p>Select an MPU and map its pins to external components.</p>
           </div>
           <button className="hardware-config-save-button" onClick={handleSave} disabled={isSaving || loading || !config}>
