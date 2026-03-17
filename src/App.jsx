@@ -5,6 +5,7 @@ import ChatPanel from './components/ChatPanel';
 import TitleBar from './components/TitleBar';
 import DebugManager, { debugLog } from './components/DebugManager';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { HardwareProvider } from './contexts/HardwareContext';
 import en from './locales/en.json';
 import da from './locales/da.json';
 
@@ -22,6 +23,7 @@ function App() {
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
   const spikeEditorRef = useRef(null);
+  const chatPanelRef = useRef(null);
 
   // Load code from localStorage on mount
   useEffect(() => {
@@ -105,10 +107,12 @@ function App() {
 
   return (
     <LanguageProvider>
+    <HardwareProvider>
     <>
       <div className="app-container">
-        <TitleBar 
+        <TitleBar
           onShowDebug={() => setShowDebugModal(true)}
+          onClearChat={() => chatPanelRef.current?.clearHistory()}
         />
         <div className="main-content" ref={containerRef}>
           <div className="left-panel">
@@ -121,6 +125,7 @@ function App() {
           <div className="horizontal-resizer" ref={resizerRef}></div>
           <div className="right-panel">
             <ChatPanel
+              ref={chatPanelRef}
               onReplaceCode={handleReplaceCode}
               getCodeContent={getCodeContent}
               getConsoleContent={getConsoleContent}
@@ -135,6 +140,7 @@ function App() {
         onClose={() => setShowDebugModal(false)}
       />
     </>
+    </HardwareProvider>
     </LanguageProvider>
   );
 }

@@ -61,5 +61,14 @@
 
   "initialCode": "# Start dit projekt her!\n",
   "cannotSaveToSlot": "Kan ikke gemme til plads. Tilslut venligst en SPIKE-hub f\u00f8rst.",
-  "failedToSaveToSlot": "Kunne ikke gemme til plads: "
+  "failedToSaveToSlot": "Kunne ikke gemme til plads: ",
+
+  "switchHardwareConfirm": "Skift af hardware vil rydde din chathistorik. Fortsæt?",
+  "flashMicrobitConfirm": "MicroPython er ikke installeret på denne micro:bit. Installér firmware nu?",
+  "saveToMainPy": "Gem til main.py",
+  "cannotSaveToMainPy": "Kan ikke gemme. Tilslut venligst en micro:bit først.",
+  "failedToSaveMainPy": "Kunne ikke gemme main.py: ",
+  "installFirmware": "Installér MicroPython",
+  "flashingFirmware": "Flasher MicroPython-firmware...",
+  "flashComplete": "MicroPython installeret! Klik på Tilslut for at bruge din micro:bit."
 }

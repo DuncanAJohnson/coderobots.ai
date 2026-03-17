@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import Board from '../utils/microRepl.js';
 import { STOP_CODE } from '../utils/stopSpike.js';
+import { STOP_CODE_MICROBIT } from '../utils/stopMicroBit.js';
+import { shouldInstallMicrobitFirmware, openMicrobitInstallerSession } from '../utils/microbitFirmware.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useHardware } from '../contexts/HardwareContext';
 import './SPIKEEditor.css';
 
 const FIFO_SIZE = 10000;
@@ -11,12 +14,15 @@ const CODE_STORAGE_KEY = 'coderobots_editor_code';
 
 const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
   const { t } = useLanguage();
+  const { hardware, isMicrobit } = useHardware();
   const [connected, setConnected] = useState(false);
   const [mode, setMode] = useState('disconnected');
   const [code, setCode] = useState(t('initialCode'));
   const [isRunning, setIsRunning] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(0);
   const [buffer, setBuffer] = useState('');
+  const [flashProgress, setFlashProgress] = useState(null); // null = not flashing, 0-100 = progress
+  const [needsFirmware, setNeedsFirmware] = useState(false);
 
   const editorRef = useRef(null);
   const terminalRef = useRef(null);
@@ -24,6 +30,7 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
   const replContainerRef = useRef(null);
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
+  const replDetectedRef = useRef(false);
 
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
@@ -109,6 +116,7 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
 
           // Check if execution finished (prompt appears)
           if (chunk.includes('>>> ')) {
+            replDetectedRef.current = true;
             setTimeout(() => setIsRunning(false), 100);
           }
         },
@@ -196,13 +204,66 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
     } else {
       // Connect
       try {
-        await board.connect(replContainerRef.current, true);
+        console.log("Trying to connect to device");
+        if (isMicrobit) {
+          // Connect with named=false so it returns immediately after the user
+          // picks a device (named=true hangs forever if MicroPython is missing).
+          replDetectedRef.current = false;
+          const result = await board.connect(replContainerRef.current, false);
+          if (!result) {
+            throw new Error('did not respond like a MicroPython REPL');
+          }
+          // Port is now open. Send Ctrl+C and wait for the >>> prompt
+          // to confirm MicroPython is actually running.
+          await board.write('\x03');
+          const hasMicroPython = await new Promise((resolve) => {
+            const timeout = setTimeout(() => resolve(false), 4000);
+            const interval = setInterval(() => {
+              if (replDetectedRef.current) {
+                clearTimeout(timeout);
+                clearInterval(interval);
+                resolve(true);
+              }
+            }, 100);
+          });
+          if (!hasMicroPython) {
+            await board.disconnect();
+            throw new Error('Timed out while waiting for MicroPython REPL');
+          }
+        } else {
+          await board.connect(replContainerRef.current, true);
+        }
       } catch (error) {
         console.error('Connection failed:', error);
-        if (terminalRef.current) {
+        // Clean up partial connection before attempting firmware flash
+        if (board.connected) {
+          try { await board.disconnect(); } catch { /* already disconnected */ }
+        }
+        if (isMicrobit && shouldInstallMicrobitFirmware(error)) {
+          // Show the "Install Firmware" button — we can't open WebUSB here
+          // because the original user gesture has expired.
+          setNeedsFirmware(true);
+        } else if (terminalRef.current) {
           terminalRef.current.write(`\r\nConnection failed: ${error.message}\r\n`);
         }
       }
+    }
+  };
+
+  const handleFlashFirmware = async () => {
+    setNeedsFirmware(false);
+    setFlashProgress(0);
+    try {
+      const session = await openMicrobitInstallerSession();
+      await session.flashBundledFirmware({
+        onProgress: (pct) => setFlashProgress(pct ?? 0),
+      });
+      await session.close();
+      setFlashProgress(null);
+      alert(t('flashComplete'));
+    } catch (flashError) {
+      setFlashProgress(null);
+      console.error('Firmware flash failed:', flashError);
     }
   };
 
@@ -238,9 +299,10 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
     // Give a moment for buffer to update
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    // Stop motors
+    // Stop motors/outputs
     try {
-      await board.eval(STOP_CODE, { hidden: true });
+      const stopCode = isMicrobit ? STOP_CODE_MICROBIT : STOP_CODE;
+      await board.eval(stopCode, { hidden: true });
     } catch (error) {
       console.error('Failed to stop motors:', error);
     }
@@ -284,6 +346,23 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
     await board.reset();
     setMode('program-slot');
     board.terminal?.focus();
+  };
+
+  const handleSaveToMainPy = async () => {
+    const board = boardRef.current;
+    if (!board || !connected) {
+      alert(t('cannotSaveToMainPy'));
+      return;
+    }
+
+    const currentCode = editorRef.current?.getCode() || code;
+
+    try {
+      await board.upload('main.py', currentCode);
+    } catch (error) {
+      console.error('Failed to save main.py:', error);
+      alert(`${t('failedToSaveMainPy')}${error.message}`);
+    }
   };
 
   const handleSaveToSlot = async () => {
@@ -381,7 +460,25 @@ os.chdir('/flash')
             onEnterREPL={handleEnterREPL}
             onEnterProgramSlot={handleEnterProgramSlot}
             onSaveToSlot={handleSaveToSlot}
+            hardware={hardware}
+            onSaveToMainPy={handleSaveToMainPy}
           />
+          {needsFirmware && flashProgress === null && (
+            <div className="flash-prompt">
+              <span>{t('flashMicrobitConfirm')}</span>
+              <button className="button flash-button" onClick={handleFlashFirmware}>
+                {t('installFirmware')}
+              </button>
+            </div>
+          )}
+          {flashProgress !== null && (
+            <div className="flash-progress">
+              <div className="flash-progress-label">{t('flashingFirmware')} {flashProgress}%</div>
+              <div className="flash-progress-bar">
+                <div className="flash-progress-fill" style={{ width: `${flashProgress}%` }} />
+              </div>
+            </div>
+          )}
           <div className="terminal-wrapper" ref={replContainerRef}>
             {/* The micro_repl Board will render the xterm terminal here */}
           </div>

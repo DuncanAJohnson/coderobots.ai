@@ -61,5 +61,14 @@
 
   "initialCode": "# Start your project here!\n",
   "cannotSaveToSlot": "Cannot save to slot. Please connect to a SPIKE hub first.",
-  "failedToSaveToSlot": "Failed to save to slot: "
+  "failedToSaveToSlot": "Failed to save to slot: ",
+
+  "switchHardwareConfirm": "Switching hardware will clear your chat history. Continue?",
+  "flashMicrobitConfirm": "MicroPython is not installed on this micro:bit. Install firmware now?",
+  "saveToMainPy": "Save to main.py",
+  "cannotSaveToMainPy": "Cannot save. Please connect to a micro:bit first.",
+  "failedToSaveMainPy": "Failed to save main.py: ",
+  "installFirmware": "Install MicroPython",
+  "flashingFirmware": "Flashing MicroPython firmware...",
+  "flashComplete": "MicroPython installed successfully! Click Connect to use your micro:bit."
 }

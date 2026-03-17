@@ -6,11 +6,21 @@
 import { useState } from 'react';
 import AboutModal from './AboutModal';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useHardware } from '../contexts/HardwareContext';
 import './TitleBar.css';
 
-const TitleBar = ({ onShowDebug }) => {
+const TitleBar = ({ onShowDebug, onClearChat }) => {
   const [showAbout, setShowAbout] = useState(false);
   const { lang, switchLang, t } = useLanguage();
+  const { hardware, switchHardware } = useHardware();
+
+  const handleHardwareSwitch = (newHw) => {
+    if (newHw === hardware) return;
+    if (confirm(t('switchHardwareConfirm'))) {
+      switchHardware(newHw);
+      onClearChat?.();
+    }
+  };
 
   return (
     <>
@@ -33,6 +43,20 @@ const TitleBar = ({ onShowDebug }) => {
               {t('debug')}
             </button>
           )}
+          <div className="topbar-hw-toggle">
+            <button
+              className={`topbar-lang-btn${hardware === 'spike' ? ' topbar-lang-btn--active' : ''}`}
+              onClick={() => handleHardwareSwitch('spike')}
+            >
+              SPIKE
+            </button>
+            <button
+              className={`topbar-lang-btn${hardware === 'microbit' ? ' topbar-lang-btn--active' : ''}`}
+              onClick={() => handleHardwareSwitch('microbit')}
+            >
+              micro:bit
+            </button>
+          </div>
           <div className="topbar-lang-toggle">
             <button
               className={`topbar-lang-btn${lang === 'da' ? ' topbar-lang-btn--active' : ''}`}
