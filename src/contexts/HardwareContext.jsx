@@ -6,7 +6,7 @@ const HardwareContext = createContext(null);
 
 export const HardwareProvider = ({ children }) => {
   const [hardware, setHardware] = useState(() => {
-    return localStorage.getItem(HW_KEY) || 'spike';
+    return localStorage.getItem(HW_KEY) || 'microbit';
   });
 
   const switchHardware = (newHw) => {
