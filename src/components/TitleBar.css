@@ -1,8 +1,8 @@
 .topbar {
   width: 100%;
   height: 60px;
-  background: #002E6D;
-  border-bottom: 2px solid #1e40af;
+  background: var(--brand-primary);
+  border-bottom: 2px solid var(--brand-secondary);
   display: flex;
   align-items: center;
   padding: 0 20px;
@@ -16,16 +16,14 @@
   gap: 10px;
 }
 
-.logo-text {
-  color: white;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+.topbar-logo img {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
 }
 
 .topbar-title {
-  color: white;
+  color: var(--brand-primary-text);
   font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.5px;
@@ -38,7 +36,7 @@
 }
 
 .topbar-session-name-display {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--brand-primary-text);
   font-size: 16px;
   font-weight: 500;
   padding: 6px 12px;
@@ -48,16 +46,16 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background-color: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: color-mix(in srgb, var(--brand-primary-text) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-primary-text) 20%, transparent);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .topbar-session-name-display:hover {
-  background-color: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
+  background-color: color-mix(in srgb, var(--brand-primary-text) 15%, transparent);
+  border-color: color-mix(in srgb, var(--brand-primary-text) 30%, transparent);
 }
 
 .topbar-firmware-badge {
@@ -85,24 +83,24 @@
 
 .topbar-session-name-input {
   width: 100%;
-  color: white;
+  color: var(--brand-primary-text);
   font-size: 16px;
   font-weight: 500;
   padding: 6px 12px;
   border-radius: 6px;
-  background-color: rgba(255, 255, 255, 0.2);
-  border: 2px solid rgba(255, 255, 255, 0.5);
+  background-color: color-mix(in srgb, var(--brand-primary-text) 20%, transparent);
+  border: 2px solid color-mix(in srgb, var(--brand-primary-text) 50%, transparent);
   outline: none;
   font-family: inherit;
 }
 
 .topbar-session-name-input:focus {
-  background-color: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.7);
+  background-color: color-mix(in srgb, var(--brand-primary-text) 25%, transparent);
+  border-color: color-mix(in srgb, var(--brand-primary-text) 70%, transparent);
 }
 
 .topbar-session-name-input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+  color: color-mix(in srgb, var(--brand-primary-text) 50%, transparent);
 }
 
 .topbar-actions {
@@ -114,9 +112,9 @@
 
 .topbar-button {
   padding: 8px 16px;
-  background-color: rgba(255, 255, 255, 0.15);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background-color: color-mix(in srgb, var(--brand-primary-text) 15%, transparent);
+  color: var(--brand-primary-text);
+  border: 1px solid color-mix(in srgb, var(--brand-primary-text) 30%, transparent);
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
@@ -127,8 +125,8 @@
 }
 
 .topbar-button:hover {
-  background-color: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.5);
+  background-color: color-mix(in srgb, var(--brand-primary-text) 25%, transparent);
+  border-color: color-mix(in srgb, var(--brand-primary-text) 50%, transparent);
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
@@ -140,6 +138,7 @@
 
 .topbar-button.save {
   background-color: #26823b;
+  color: white;
 }
 
 .topbar-button.save:hover {
@@ -149,6 +148,7 @@
 .topbar-button.logout {
   background-color: rgba(183, 74, 74, 0.8);
   border-color: rgba(220, 38, 38, 0.9);
+  color: white;
 }
 
 .topbar-button.logout:hover {
@@ -163,9 +163,8 @@
 }
 
 .topbar-button:disabled:hover {
-  background-color: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
+  background-color: color-mix(in srgb, var(--brand-primary-text) 15%, transparent);
+  border-color: color-mix(in srgb, var(--brand-primary-text) 30%, transparent);
   transform: none;
   box-shadow: none;
 }
-

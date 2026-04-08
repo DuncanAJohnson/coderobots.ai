@@ -111,7 +111,7 @@
 .chat-tab-input {
   flex: 1;
   padding: 2px 4px;
-  border: 1px solid #002E6D;
+  border: 1px solid var(--brand-accent);
   border-radius: 2px;
   font-size: 0.8rem;
   font-family: inherit;

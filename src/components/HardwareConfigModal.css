@@ -168,8 +168,8 @@
 }
 
 .mpu-pin-input.active {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  border-color: var(--brand-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-accent) 20%, transparent);
 }
 
 .mpu-clear-button {
@@ -312,7 +312,7 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
-  color: #1e40af;
+  color: var(--brand-accent);
 }
 
 .wiring-feedback-dismiss {
@@ -320,7 +320,7 @@
   border: 1px solid #93c5fd;
   border-radius: 6px;
   background: white;
-  color: #1e40af;
+  color: var(--brand-accent);
   cursor: pointer;
   font-size: 12px;
 }
@@ -334,7 +334,7 @@
   width: 14px;
   height: 14px;
   border: 2px solid #93c5fd;
-  border-top-color: #1e40af;
+  border-top-color: var(--brand-accent);
   border-radius: 50%;
   animation: wiringSpinnerSpin 0.8s linear infinite;
   margin-right: 8px;
@@ -346,7 +346,7 @@
 }
 
 .wiring-feedback-loading {
-  color: #1e40af;
+  color: var(--brand-accent);
   margin: 0;
   font-size: 13px;
   font-style: italic;

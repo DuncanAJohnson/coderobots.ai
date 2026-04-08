@@ -30,7 +30,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: conic-gradient(#2563eb calc(var(--usage-percent) * 1%), #d1d5db 0);
+  background: conic-gradient(var(--brand-accent) calc(var(--usage-percent) * 1%), #d1d5db 0);
   mask: radial-gradient(circle, transparent 35%, black 35%);
   -webkit-mask: radial-gradient(circle, transparent 35%, black 35%);
   display: flex;

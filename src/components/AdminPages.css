@@ -22,8 +22,8 @@
 }
 
 .admin-header {
-  border-bottom: 2px solid #1e40af;
-  background: #002E6D;
+  border-bottom: 2px solid var(--brand-secondary);
+  background: var(--brand-primary);
   backdrop-filter: blur(4px);
   position: sticky;
   top: 0;
@@ -47,8 +47,8 @@
 
 .admin-back-button {
   padding: 8px 16px;
-  background-color: rgba(255, 255, 255, 0.15);
-  color: white;
+  background-color: color-mix(in srgb, var(--brand-primary-text) 15%, transparent);
+  color: var(--brand-primary-text);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 6px;
   font-size: 13px;
@@ -61,14 +61,14 @@
 }
 
 .admin-back-button:hover {
-  background-color: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.5);
+  background-color: color-mix(in srgb, var(--brand-primary-text) 25%, transparent);
+  border-color: color-mix(in srgb, var(--brand-primary-text) 50%, transparent);
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .admin-title {
-  color: white;
+  color: var(--brand-primary-text);
   font-size: 1rem;
   font-weight: 600;
   letter-spacing: -0.02em;

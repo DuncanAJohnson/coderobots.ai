@@ -6,6 +6,7 @@
 import { useState, useRef, useEffect } from 'react';
 import AboutModal from './AboutModal';
 import { signOut } from '../services/auth';
+import brand from '../config/brand';
 import './TitleBar.css';
 
 const TitleBar = ({
@@ -67,9 +68,13 @@ const TitleBar = ({
     <>
       <div className="topbar">
         <div className="topbar-logo">
-          <span className="logo-text">Purdue University</span>
+          <img
+            src={brand.logoSrc}
+            alt={brand.logoAlt}
+            style={{ height: brand.logoHeight }}
+          />
         </div>
-        <div className="topbar-title">LilyBot AI Editor</div>
+        <div className="topbar-title">{brand.name}</div>
         {activeSession && (
           <div className="topbar-session-name">
             {isEditingName ? (

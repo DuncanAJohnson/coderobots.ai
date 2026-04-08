@@ -80,7 +80,7 @@
 
 .dbg-button {
   padding: 12px 24px;
-  background-color: #3b82f6;
+  background-color: var(--brand-accent);
   color: white;
   border: none;
   border-radius: 8px;
@@ -91,7 +91,7 @@
 }
 
 .dbg-button:hover {
-  background-color: #2563eb;
+  background-color: var(--brand-accent-hover);
 }
 
 .dbg-button:active {
@@ -107,7 +107,7 @@
 }
 
 .dbg-footer a {
-  color: #3b82f6;
+  color: var(--brand-accent);
   text-decoration: none;
   font-size: 14px;
   font-weight: 600;

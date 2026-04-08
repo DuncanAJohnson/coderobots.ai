@@ -34,7 +34,7 @@
 
 .admin-controls button {
     padding: 2px 8px;
-    background: #002E6D;
+    background: var(--brand-secondary);
     color: white;
     border: none;
     border-radius: 4px;
@@ -188,7 +188,7 @@
 }
 
 .chat-bubble a {
-    color: #002E6D;
+    color: var(--brand-accent);
     text-decoration: underline;
 }
 
@@ -270,9 +270,9 @@
 }
 
 .context-checkbox-btn--active {
-    background: #002E6D;
+    background: var(--brand-secondary);
     color: #fff;
-    border-color: #002E6D;
+    border-color: var(--brand-secondary);
 }
 
 .context-checkbox-btn--active:hover:not(:disabled) {
@@ -323,7 +323,7 @@
 
 .chat-input-row button {
     padding:1rem 1rem;
-    background: #002E6D;
+    background: var(--brand-secondary);
     color:#ffffff;
     border:none;
     border-radius:6px;
@@ -367,7 +367,7 @@
 
 .console-btn {
     margin:.2rem 0;
-    background:#002E6D;
+    background:var(--brand-secondary);
     color:#fff;
     border:none;
     padding:.35rem .8rem;
@@ -409,7 +409,7 @@
 
 .console-btn {
     margin:.4rem 0;
-    background:#002E6D;
+    background:var(--brand-secondary);
     color:#fff;
     border:none;
     padding:.35rem .8rem;

@@ -76,23 +76,23 @@
 
 .auth-input:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--brand-accent);
 }
 
 .auth-button.password-button {
-  background-color: #3b82f6;
+  background-color: var(--brand-accent);
   color: white;
   border: none;
 }
 
 .auth-button.password-button:hover {
-  background-color: #2563eb;
+  background-color: var(--brand-accent-hover);
 }
 
 .auth-toggle-button {
   background: none;
   border: none;
-  color: #3b82f6;
+  color: var(--brand-accent);
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
@@ -102,7 +102,7 @@
 }
 
 .auth-toggle-button:hover {
-  color: #2563eb;
+  color: var(--brand-accent-hover);
 }
 
 .auth-divider {

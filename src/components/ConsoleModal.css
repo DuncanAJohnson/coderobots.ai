@@ -59,10 +59,10 @@
 }
 
 .console-actions button[data-act="copy"] {
-  background-color: #3b82f6;
+  background-color: var(--brand-accent);
   color: white;
 }
 
 .console-actions button[data-act="copy"]:hover {
-  background-color: #2563eb;
+  background-color: var(--brand-accent-hover);
 }
