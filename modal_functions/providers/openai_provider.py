@@ -48,6 +48,9 @@ class OpenAIProvider(BaseProvider):
             "input": input_messages,
             "max_output_tokens": max_tokens,
             "stream": stream,
+            "reasoning": {
+                "effort": "low"
+            },
             "text": {
                 "format": {
                     "type": "text"
