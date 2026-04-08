@@ -8,7 +8,14 @@ import AboutModal from './AboutModal';
 import { signOut } from '../services/auth';
 import './TitleBar.css';
 
-const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, onUpdateSessionName }) => {
+const TitleBar = ({
+  onSaveSession,
+  onOpenSessions,
+  onShowDebug,
+  onOpenHardwareConfig,
+  activeSession,
+  onUpdateSessionName,
+}) => {
   const [showAbout, setShowAbout] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
@@ -105,6 +112,15 @@ const TitleBar = ({ onSaveSession, onOpenSessions, onShowDebug, activeSession, o
               title="Switch between editor sessions"
             >
               EDITOR SESSIONS
+            </button>
+          )}
+          {onOpenHardwareConfig && (
+            <button
+              className="topbar-button"
+              onClick={onOpenHardwareConfig}
+              title="Configure your hardware pin mapping"
+            >
+              CONFIGURE HARDWARE
             </button>
           )}
           <button 

@@ -6,6 +6,7 @@ import ChatPanel from './components/ChatPanel';
 import AuthModal from './components/AuthModal';
 import SessionModal from './components/SessionModal';
 import TitleBar from './components/TitleBar';
+import HardwareConfigModal from './components/HardwareConfigModal';
 import DebugManager, { debugLog } from './components/DebugManager';
 import DataExtractor from './components/data_extractor/DataExtractor';
 import AdminUsageDashboard from './components/admin_usage/AdminUsageDashboard';
@@ -21,6 +22,7 @@ function AppContent() {
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [sessionModalCancellable, setSessionModalCancellable] = useState(false);
   const [showDebugModal, setShowDebugModal] = useState(false);
+  const [showHardwareConfigModal, setShowHardwareConfigModal] = useState(false);
   const [sessionsInitialized, setSessionsInitialized] = useState(false);
 
   const resizerRef = useRef(null);
@@ -173,6 +175,7 @@ function AppContent() {
         <div className="app-container">
           <TitleBar 
             onShowDebug={() => setShowDebugModal(true)}
+            onOpenHardwareConfig={() => setShowHardwareConfigModal(true)}
           />
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
             <p>Please sign in to continue</p>
@@ -201,6 +204,7 @@ function AppContent() {
           onSaveSession={handleSaveSession}
           onOpenSessions={openSessionSelector}
           onShowDebug={() => setShowDebugModal(true)}
+          onOpenHardwareConfig={() => setShowHardwareConfigModal(true)}
           activeSession={activeSession}
           onUpdateSessionName={updateSessionName}
         />
@@ -225,6 +229,10 @@ function AppContent() {
       <DebugManager 
         visible={showDebugModal} 
         onClose={() => setShowDebugModal(false)} 
+      />
+      <HardwareConfigModal
+        visible={showHardwareConfigModal}
+        onClose={() => setShowHardwareConfigModal(false)}
       />
     </>
   );
