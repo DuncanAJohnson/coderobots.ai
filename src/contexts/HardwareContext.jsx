@@ -32,6 +32,7 @@ export const HardwareProvider = ({ children }) => {
 
   const hasChosenHardware = hardware !== null;
   const isMicrobit = hardware === 'microbit';
+  const isLegoEducation = hardware === 'lego-education';
 
   return (
     <HardwareContext.Provider
@@ -40,6 +41,7 @@ export const HardwareProvider = ({ children }) => {
         hasChosenHardware,
         switchHardware,
         isMicrobit,
+        isLegoEducation,
         registerDisconnectHandler,
       }}
     >

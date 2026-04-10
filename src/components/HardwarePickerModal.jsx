@@ -31,6 +31,7 @@ const HardwarePickerModal = ({ visible, onClose, dismissable = true }) => {
   const options = [
     { id: 'microbit', label: t('microbit') },
     { id: 'spike', label: t('spikePrime') },
+    { id: 'lego-education', label: t('legoEducation') },
   ];
 
   return (

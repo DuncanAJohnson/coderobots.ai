@@ -16,6 +16,7 @@ import {
 } from '../prompts/codingLevels';
 import { spikePriming } from '../prompts/spike_priming';
 import { microbitPriming } from '../prompts/microbit_priming';
+import { legoEducationPriming } from '../prompts/legoEducation_priming';
 import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -38,7 +39,7 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
   const [currentConsoleContent, setCurrentConsoleContent] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
   const { t } = useLanguage();
-  const { isMicrobit } = useHardware();
+  const { isMicrobit, isLegoEducation } = useHardware();
 
   useImperativeHandle(ref, () => ({
     clearHistory: () => {
@@ -163,7 +164,11 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
     const conversation = [];
     
     // Add system priming
-    const priming = isMicrobit ? microbitPriming : spikePriming;
+    const priming = isLegoEducation
+      ? legoEducationPriming
+      : isMicrobit
+      ? microbitPriming
+      : spikePriming;
     conversation.push({
       role: 'system',
       content: priming,

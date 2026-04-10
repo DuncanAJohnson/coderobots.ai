@@ -17,6 +17,7 @@ const ControlPanel = ({
   onSaveToMainPy,
 }) => {
   const isMicrobit = hardware === 'microbit';
+  const isLegoEducation = hardware === 'lego-education';
   const { t } = useLanguage();
 
   return (
@@ -30,15 +31,17 @@ const ControlPanel = ({
       </div>
 
       <div className="button-group">
-        <button onClick={onConnect} className="button">
-          {connected ? t('disconnect') : t('connect')}
-        </button>
-        {!isMicrobit && (
+        {!isLegoEducation && (
+          <button onClick={onConnect} className="button">
+            {connected ? t('disconnect') : t('connect')}
+          </button>
+        )}
+        {!isMicrobit && !isLegoEducation && (
           <button onClick={onEnterREPL} className="button program-slot-only">
             {t('enterRepl')}
           </button>
         )}
-        {!isMicrobit && (
+        {!isMicrobit && !isLegoEducation && (
           <button onClick={onEnterProgramSlot} className="button repl-only">
             {t('enterProgramSlot')}
           </button>
@@ -55,11 +58,13 @@ const ControlPanel = ({
         <button onClick={onCtrlC} className="button">
           {t('stopProgram')}
         </button>
-        <button onClick={onReset} className="button">
-          {t('resetDevice')}
-        </button>
-        <div className="vertical-line"></div>
-        {isMicrobit ? (
+        {!isLegoEducation && (
+          <button onClick={onReset} className="button">
+            {t('resetDevice')}
+          </button>
+        )}
+        {!isLegoEducation && <div className="vertical-line"></div>}
+        {isLegoEducation ? null : isMicrobit ? (
           // <button onClick={onSaveToMainPy} className="button">
           //   {t('saveToMainPy')}
           // </button>
