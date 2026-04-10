@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
 import './ModalBase.css';
 import './HardwareConfigModal.css';
@@ -12,7 +12,30 @@ import {
   buildConnectionLabel,
   getMappingEntries,
   normalizeMappingsByMpuPin,
+  toPromptHardwareConfig,
+  flattenMappings,
 } from '../services/hardwareConfig';
+import { streamChatCompletionWithBudget } from '../utils/chatStream';
+import { fetchModelMetadata, pickInitialModel } from '../services/aiModels';
+
+const WIRING_CHECK_SYSTEM_PROMPT = `
+You are a helpful robotics teaching assistant. A student has configured wiring between a microcontroller and external components for their robot.
+
+Review their wiring configuration and identify any obvious mistakes:
+- I/O pins connected to power or ground pins (or vice versa)
+- Missing essential connections for a component to work (e.g., motor driver missing enable pin)
+- The same MPU pin mapped to multiple component pins that would conflict
+- Pins that are typically input-only being used as output (or vice versa)
+- Any other common beginner wiring mistakes
+
+Do not flag potential mistakes that simply have a chance of being an issue. 
+Only bring up issues you KNOW are going to cause a failure.
+
+Keep your response short. Use bullet points for issues found.
+If the wiring looks correct, say so briefly.
+Do NOT suggest code — only comment on the wiring/pin configuration.`;
+
+const MAX_WIRING_CHECK_TOKENS = 25000;
 
 function makeInstanceId(componentId) {
   return `${componentId}-${Math.random().toString(36).slice(2, 8)}`;
@@ -47,6 +70,10 @@ const HardwareConfigModal = ({ visible, onClose }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [wiringFeedback, setWiringFeedback] = useState('');
+  const [isCheckingWiring, setIsCheckingWiring] = useState(false);
+  const [wiringCheckError, setWiringCheckError] = useState('');
+  const wiringCheckActiveRef = useRef(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -82,6 +109,7 @@ const HardwareConfigModal = ({ visible, onClose }) => {
     load();
     return () => {
       active = false;
+      wiringCheckActiveRef.current = false;
     };
   }, [visible]);
 
@@ -273,6 +301,58 @@ const HardwareConfigModal = ({ visible, onClose }) => {
     }
   };
 
+  const handleCheckWiring = async () => {
+    const mappingCount = flattenMappings(config?.mappings).length;
+    if (mappingCount === 0) {
+      setWiringCheckError('Add some pin mappings first before checking your wiring.');
+      setWiringFeedback('');
+      return;
+    }
+
+    setIsCheckingWiring(true);
+    setWiringFeedback('');
+    setWiringCheckError('');
+    wiringCheckActiveRef.current = true;
+
+    try {
+      const promptConfig = toPromptHardwareConfig(config, catalog);
+      const lines = [`Hardware configuration to review:`, `MPU: ${promptConfig.selectedMpuName}`];
+      if (promptConfig.components.length > 0) {
+        lines.push(`External components: ${promptConfig.components.map((c) => c.nickname || c.name).join(', ')}`);
+      }
+      if (promptConfig.mappingLines.length > 0) {
+        lines.push('Pin mappings:');
+        promptConfig.mappingLines.forEach((m) => lines.push(`  ${m}`));
+      }
+      const userMessage = lines.join('\n');
+
+      const modelMeta = await fetchModelMetadata();
+      const model = pickInitialModel(modelMeta);
+
+      const messages = [
+        { role: 'system', content: WIRING_CHECK_SYSTEM_PROMPT },
+        { role: 'user', content: userMessage },
+      ];
+
+      let accumulated = '';
+      for await (const event of streamChatCompletionWithBudget(messages, model, MAX_WIRING_CHECK_TOKENS)) {
+        if (!wiringCheckActiveRef.current) break;
+        if (event.type === 'content') {
+          accumulated += event.content;
+          setWiringFeedback(accumulated);
+        }
+      }
+    } catch (err) {
+      console.error('Wiring check failed:', err);
+      if (wiringCheckActiveRef.current) {
+        setWiringCheckError('Unable to check wiring. Please try again.');
+      }
+    } finally {
+      wiringCheckActiveRef.current = false;
+      setIsCheckingWiring(false);
+    }
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content modal-content-wide hardware-config-modal" onClick={(e) => e.stopPropagation()}>
@@ -281,9 +361,18 @@ const HardwareConfigModal = ({ visible, onClose }) => {
             <h2><b>Hardware Configuration</b></h2>
             <p>Select an MPU and map its pins to external components.</p>
           </div>
-          <button className="hardware-config-save-button" onClick={handleSave} disabled={isSaving || loading || !config}>
-            {isSaving ? 'Saving...' : 'Save Configuration'}
-          </button>
+          <div className="hardware-config-header-actions">
+            <button
+              className="hardware-config-check-button"
+              onClick={handleCheckWiring}
+              disabled={isCheckingWiring || loading || !config}
+            >
+              {isCheckingWiring ? 'Checking...' : 'Check My Wiring'}
+            </button>
+            <button className="hardware-config-save-button" onClick={handleSave} disabled={isSaving || loading || !config}>
+              {isSaving ? 'Saving...' : 'Save Configuration'}
+            </button>
+          </div>
         </div>
 
         {loading && <div className="hardware-config-loading">Loading hardware catalog...</div>}
@@ -318,6 +407,28 @@ const HardwareConfigModal = ({ visible, onClose }) => {
                 Apply Template
               </button>
             </div>
+
+            {(isCheckingWiring || wiringFeedback || wiringCheckError) && (
+              <div className="wiring-feedback-panel">
+                <div className="wiring-feedback-header">
+                  <strong>
+                    {isCheckingWiring && <span className="wiring-spinner" />}
+                    Wiring Check Results
+                  </strong>
+                  {!isCheckingWiring && (
+                    <button
+                      className="wiring-feedback-dismiss"
+                      onClick={() => { setWiringFeedback(''); setWiringCheckError(''); }}
+                    >
+                      Dismiss
+                    </button>
+                  )}
+                </div>
+                {isCheckingWiring && !wiringFeedback && <p className="wiring-feedback-loading">Analyzing your wiring...</p>}
+                {wiringCheckError && <p className="wiring-feedback-error">{wiringCheckError}</p>}
+                {wiringFeedback && <div className="wiring-feedback-text">{wiringFeedback}</div>}
+              </div>
+            )}
 
             <div className="hardware-config-body">
               <section className="hardware-panel hardware-panel-left">

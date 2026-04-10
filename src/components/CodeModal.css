@@ -59,11 +59,11 @@
 
 .code-actions button[data-act="copy"],
 .code-actions button[data-act="replace"] {
-  background-color: #3b82f6;
+  background-color: var(--brand-accent);
   color: white;
 }
 
 .code-actions button[data-act="copy"]:hover,
 .code-actions button[data-act="replace"]:hover {
-  background-color: #2563eb;
+  background-color: var(--brand-accent-hover);
 }

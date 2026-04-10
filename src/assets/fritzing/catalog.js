@@ -41,6 +41,36 @@ const fritzingCatalog = [
     name: "LED 5mm",
     kind: "component",
     folder: 'LED5mm',
+  },
+  {
+    id: "us100ultrasonic",
+    name: "US-100 Ultrasonic Sensor",
+    kind: "component",
+    folder: 'US100Ultrasonic',
+  },
+  {
+    id: "buzzer",
+    name: "Buzzer",
+    kind: "component",
+    folder: 'Buzzer',
+  },
+  {
+    id: "lcd1602iic",
+    name: "LCD 1602 IIC Display Module",
+    kind: "component",
+    folder: 'LCD1602IIC',
+  },
+  {
+    id: "mpu6050gy521",
+    name: "MPU-6050 GY-521 Gyroscope",
+    kind: "component",
+    folder: 'MPU6050GY521',
+  },
+  {
+    id: "tb6612fng",
+    name: "TB6612FNG Motor Driver",
+    kind: "component",
+    folder: 'TB6612FNG',
   }
 ];
 

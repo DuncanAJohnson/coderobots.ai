@@ -29,7 +29,7 @@
 .budget-error-suggestion-block {
   padding: 15px;
   background-color: #eff6ff;
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid var(--brand-accent);
   border-radius: 8px;
   margin-bottom: 10px;
 }
@@ -42,7 +42,7 @@
 }
 
 .budget-error-suggestion strong {
-  color: #3b82f6;
+  color: var(--brand-accent);
 }
 
 .budget-error-model-list {

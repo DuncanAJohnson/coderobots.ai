@@ -119,7 +119,7 @@
 }
 
 .session-modal-new-button {
-  background-color: #3b82f6;
+  background-color: var(--brand-accent);
   color: white;
   font-weight: 600;
   text-align: center;
@@ -132,7 +132,7 @@
 }
 
 .session-modal-new-button:hover {
-  background-color: #2563eb;
+  background-color: var(--brand-accent-hover);
 }
 
 .session-modal-new-button:active {
