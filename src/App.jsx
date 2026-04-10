@@ -5,11 +5,24 @@ import ChatPanel from './components/ChatPanel';
 import TitleBar from './components/TitleBar';
 import DebugManager, { debugLog } from './components/DebugManager';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { HardwareProvider, useHardware } from './contexts/HardwareContext';
+import HardwarePickerModal from './components/HardwarePickerModal';
 import en from './locales/en.json';
 import da from './locales/da.json';
 
 const CODE_STORAGE_KEY = 'coderobots_editor_code';
 const locales = { en, da };
+
+const FirstLoadHardwareGate = () => {
+  const { hasChosenHardware } = useHardware();
+  return (
+    <HardwarePickerModal
+      visible={!hasChosenHardware}
+      onClose={() => {}}
+      dismissable={false}
+    />
+  );
+};
 
 function App() {
   const [showDebugModal, setShowDebugModal] = useState(false);
@@ -22,6 +35,7 @@ function App() {
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
   const spikeEditorRef = useRef(null);
+  const chatPanelRef = useRef(null);
 
   // Load code from localStorage on mount
   useEffect(() => {
@@ -105,10 +119,12 @@ function App() {
 
   return (
     <LanguageProvider>
+    <HardwareProvider>
     <>
       <div className="app-container">
-        <TitleBar 
+        <TitleBar
           onShowDebug={() => setShowDebugModal(true)}
+          onClearChat={() => chatPanelRef.current?.clearHistory()}
         />
         <div className="main-content" ref={containerRef}>
           <div className="left-panel">
@@ -121,6 +137,7 @@ function App() {
           <div className="horizontal-resizer" ref={resizerRef}></div>
           <div className="right-panel">
             <ChatPanel
+              ref={chatPanelRef}
               onReplaceCode={handleReplaceCode}
               getCodeContent={getCodeContent}
               getConsoleContent={getConsoleContent}
@@ -134,7 +151,9 @@ function App() {
         visible={showDebugModal}
         onClose={() => setShowDebugModal(false)}
       />
+      <FirstLoadHardwareGate />
     </>
+    </HardwareProvider>
     </LanguageProvider>
   );
 }

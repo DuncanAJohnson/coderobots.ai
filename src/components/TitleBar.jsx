@@ -5,12 +5,19 @@
 
 import { useState } from 'react';
 import AboutModal from './AboutModal';
+import HardwarePickerModal from './HardwarePickerModal';
 import { useLanguage } from '../contexts/LanguageContext';
 import './TitleBar.css';
 
-const TitleBar = ({ onShowDebug }) => {
+const TitleBar = ({ onShowDebug, onClearChat }) => {
   const [showAbout, setShowAbout] = useState(false);
+  const [showHardwarePicker, setShowHardwarePicker] = useState(false);
   const { lang, switchLang, t } = useLanguage();
+
+  const handleHardwarePickerClose = () => {
+    setShowHardwarePicker(false);
+    onClearChat?.();
+  };
 
   return (
     <>
@@ -33,6 +40,12 @@ const TitleBar = ({ onShowDebug }) => {
               {t('debug')}
             </button>
           )}
+          <button
+            className="topbar-button"
+            onClick={() => setShowHardwarePicker(true)}
+          >
+            {t('switchHardware')}
+          </button>
           <div className="topbar-lang-toggle">
             <button
               className={`topbar-lang-btn${lang === 'da' ? ' topbar-lang-btn--active' : ''}`}
@@ -51,6 +64,11 @@ const TitleBar = ({ onShowDebug }) => {
       </div>
 
       <AboutModal visible={showAbout} onClose={() => setShowAbout(false)} />
+      <HardwarePickerModal
+        visible={showHardwarePicker}
+        onClose={handleHardwarePickerClose}
+        dismissable
+      />
     </>
   );
 };

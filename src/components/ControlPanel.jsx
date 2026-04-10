@@ -12,8 +12,11 @@ const ControlPanel = ({
   onClear,
   onEnterREPL,
   onEnterProgramSlot,
-  onSaveToSlot
+  onSaveToSlot,
+  hardware,
+  onSaveToMainPy,
 }) => {
+  const isMicrobit = hardware === 'microbit';
   const { t } = useLanguage();
 
   return (
@@ -30,12 +33,16 @@ const ControlPanel = ({
         <button onClick={onConnect} className="button">
           {connected ? t('disconnect') : t('connect')}
         </button>
-        <button onClick={onEnterREPL} className="button program-slot-only">
-          {t('enterRepl')}
-        </button>
-        <button onClick={onEnterProgramSlot} className="button repl-only">
-          {t('enterProgramSlot')}
-        </button>
+        {!isMicrobit && (
+          <button onClick={onEnterREPL} className="button program-slot-only">
+            {t('enterRepl')}
+          </button>
+        )}
+        {!isMicrobit && (
+          <button onClick={onEnterProgramSlot} className="button repl-only">
+            {t('enterProgramSlot')}
+          </button>
+        )}
         <button onClick={onClear} className="button">
           {t('clearConsole')}
         </button>
@@ -52,19 +59,28 @@ const ControlPanel = ({
           {t('resetDevice')}
         </button>
         <div className="vertical-line"></div>
-        <select
-          value={selectedSlot}
-          onChange={(e) => onSlotChange(e.target.value)}
-          className="button slot-selector"
-          title={t('slotSelectorTitle')}
-        >
-          {[...Array(20)].map((_, i) => (
-            <option key={i} value={i}>{t('slot')} {i}</option>
-          ))}
-        </select>
-        <button onClick={onSaveToSlot} className="button">
-          {t('saveToSlot')}
-        </button>
+        {isMicrobit ? (
+          // <button onClick={onSaveToMainPy} className="button">
+          //   {t('saveToMainPy')}
+          // </button>
+          <></>
+        ) : (
+          <>
+            <select
+              value={selectedSlot}
+              onChange={(e) => onSlotChange(e.target.value)}
+              className="button slot-selector"
+              title={t('slotSelectorTitle')}
+            >
+              {[...Array(20)].map((_, i) => (
+                <option key={i} value={i}>{t('slot')} {i}</option>
+              ))}
+            </select>
+            <button onClick={onSaveToSlot} className="button">
+              {t('saveToSlot')}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

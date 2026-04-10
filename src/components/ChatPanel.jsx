@@ -4,27 +4,29 @@
  * Uses localStorage for conversation persistence (no cloud storage)
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { streamChatCompletion } from '../utils/aiStream';
-import { 
+import {
   LEVEL_INSTRUCTION_PREFIX,
   beginnerPrompt,
   intermediatePrompt,
   experiencedPrompt,
 } from '../prompts/codingLevels';
 import { spikePriming } from '../prompts/spike_priming';
+import { microbitPriming } from '../prompts/microbit_priming';
 import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useHardware } from '../contexts/HardwareContext';
 import './ChatPanel.css';
 
 const STORAGE_KEY = 'coderobots_chat_history';
 const SETTINGS_KEY = 'coderobots_chat_settings';
 
-const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent, isRobotConnected }) => {
-  
+const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent, isRobotConnected }, ref) => {
+
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [codingLevel, setCodingLevel] = useState('beginner');
@@ -36,6 +38,14 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent, isRobotCo
   const [currentConsoleContent, setCurrentConsoleContent] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
   const { t } = useLanguage();
+  const { isMicrobit } = useHardware();
+
+  useImperativeHandle(ref, () => ({
+    clearHistory: () => {
+      setMessages([]);
+      localStorage.removeItem(STORAGE_KEY);
+    },
+  }));
 
   const chatBodyRef = useRef(null);
   const streamingMessageRef = useRef(null);
@@ -153,9 +163,10 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent, isRobotCo
     const conversation = [];
     
     // Add system priming
+    const priming = isMicrobit ? microbitPriming : spikePriming;
     conversation.push({
       role: 'system',
-      content: spikePriming,
+      content: priming,
     });
 
     // Add coding level instructions
@@ -467,6 +478,8 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent, isRobotCo
       />
     </div>
   );
-};
+});
+
+ChatPanel.displayName = 'ChatPanel';
 
 export default ChatPanel;

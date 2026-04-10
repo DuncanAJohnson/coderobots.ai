@@ -194,6 +194,59 @@
   background-color: #138496;
 }
 
+/* Flash Firmware Prompt */
+.flash-prompt {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #856404;
+}
+
+.flash-button {
+  background-color: #ffc107 !important;
+  color: #856404 !important;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.flash-button:hover {
+  background-color: #e0a800 !important;
+}
+
+/* Flash Progress Bar */
+.flash-progress {
+  padding: 0.5rem;
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+}
+
+.flash-progress-label {
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: #856404;
+  margin-bottom: 0.35rem;
+}
+
+.flash-progress-bar {
+  height: 8px;
+  background-color: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.flash-progress-fill {
+  height: 100%;
+  background-color: #ffc107;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .button-group {
