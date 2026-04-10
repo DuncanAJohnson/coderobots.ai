@@ -15,6 +15,7 @@ const ControlPanel = ({
   onSaveToSlot,
   hardware,
   onSaveToMainPy,
+  isRunning,
 }) => {
   const isMicrobit = hardware === 'microbit';
   const isLegoEducation = hardware === 'lego-education';
@@ -49,15 +50,29 @@ const ControlPanel = ({
         <button onClick={onClear} className="button">
           {t('clearConsole')}
         </button>
+        {isLegoEducation && (
+          <>
+            <button onClick={onRun} className="button repl-action" disabled={isRunning}>
+              {t('runProgram')}
+            </button>
+            <button onClick={onCtrlC} className="button repl-action">
+              {t('stopProgram')}
+            </button>
+          </>
+        )}
       </div>
 
       <div className="button-group repl-only">
-        <button onClick={onRun} className="button">
-          {t('runProgram')}
-        </button>
-        <button onClick={onCtrlC} className="button">
-          {t('stopProgram')}
-        </button>
+        {!isLegoEducation && (
+          <button onClick={onRun} className="button" disabled={isRunning}>
+            {t('runProgram')}
+          </button>
+        )}
+        {!isLegoEducation && (
+          <button onClick={onCtrlC} className="button">
+            {t('stopProgram')}
+          </button>
+        )}
         {!isLegoEducation && (
           <button onClick={onReset} className="button">
             {t('resetDevice')}

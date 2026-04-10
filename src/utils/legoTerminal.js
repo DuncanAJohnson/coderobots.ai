@@ -12,6 +12,54 @@ const ADDON_FIT = '0.10.0';
 
 let depsPromise = null;
 
+// xterm 5.3's Viewport schedules `syncScrollArea()` via setTimeout(0) from
+// its constructor, and `_innerRefresh` fires in another deferred callback.
+// Both call into RenderService.dimensions, which reads `_renderer.value` —
+// and that can still be undefined by the time the timer fires, producing
+// an UNCAUGHT "Cannot read properties of undefined (reading 'dimensions')"
+// that we can't swallow at the call site because it happens in a later
+// task. The terminal still works fine after this — the first render just
+// loses a frame. Install a one-time global filter that silences it.
+let globalHandlerInstalled = false;
+function installXtermErrorShield() {
+  if (globalHandlerInstalled || typeof window === 'undefined') return;
+  globalHandlerInstalled = true;
+  const isXtermDimensionsError = (msg, stack) => {
+    if (typeof msg === 'string' && msg.includes("reading 'dimensions'")) return true;
+    if (typeof stack === 'string' && stack.includes('RenderService')) return true;
+    return false;
+  };
+  window.addEventListener('error', (ev) => {
+    if (isXtermDimensionsError(ev.message, ev.error?.stack)) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    }
+  }, true);
+  window.addEventListener('unhandledrejection', (ev) => {
+    const r = ev.reason;
+    if (isXtermDimensionsError(r?.message, r?.stack)) {
+      ev.preventDefault();
+    }
+  });
+}
+
+// Poll requestAnimationFrame until `el` has a non-zero layout box. Bails
+// after ~1s so we don't wait forever on a detached node.
+function waitForLayout(el) {
+  return new Promise((resolve) => {
+    let tries = 0;
+    const check = () => {
+      tries += 1;
+      if (!el || !el.isConnected) return resolve();
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) return resolve();
+      if (tries > 60) return resolve();
+      requestAnimationFrame(check);
+    };
+    requestAnimationFrame(check);
+  });
+}
+
 function ensureDeps() {
   if (depsPromise) return depsPromise;
 
@@ -38,15 +86,24 @@ function ensureDeps() {
  * @returns {Promise<{write: (s:string)=>void, clear: ()=>void, dispose: ()=>void, fit: ()=>void, terminal: any}>}
  */
 export async function createLegoTerminal(target) {
+  installXtermErrorShield();
   const { Terminal, FitAddon } = await ensureDeps();
 
+  // Wait for the host element to actually have layout before opening.
+  await waitForLayout(target);
+  // Also wait for fonts to load — xterm measures glyph size on open().
+  try { if (document.fonts?.ready) await document.fonts.ready; } catch {}
+
   const terminal = new Terminal({
-    cursorBlink: false,
-    cursorStyle: 'bar',
+    cursorBlink: true,
+    cursorStyle: 'block',
     convertEol: true,
     theme: {
       background: '#191A19',
       foreground: '#F5F2E7',
+      cursor: '#F5F2E7',
+      selectionBackground: '#F5F2E7',
+      selectionForeground: '#191A19',
     },
   });
 

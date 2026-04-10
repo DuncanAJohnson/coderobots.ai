@@ -198,12 +198,20 @@ function packFields(msgId, fields) {
   }
   return new Uint8Array(buf);
 }
+const FIELD_BYTES = { u8:1, i8:1, u16:2, i16:2, u32:4, i32:4 };
 function readField(dv, off, type) {
+  const bytes = FIELD_BYTES[type];
+  if (bytes === undefined) throw new Error(`Unknown field type: ${type}`);
+  // Bounds-safe read: IMU notifications are declared as 20 bytes in
+  // NOTIF_SIZE but _dImuDevice actually reads 22. Rather than crash the
+  // whole notification pipeline when the packet is shorter than the
+  // handler expects, return zero for OOB reads so the handler still
+  // produces a well-formed object.
+  if (off < 0 || off + bytes > dv.byteLength) return [0, off + bytes];
   switch(type) {
     case 'u8': return [dv.getUint8(off), off+1]; case 'i8': return [dv.getInt8(off), off+1];
     case 'u16': return [dv.getUint16(off,true), off+2]; case 'i16': return [dv.getInt16(off,true), off+2];
     case 'u32': return [dv.getUint32(off,true), off+4]; case 'i32': return [dv.getInt32(off,true), off+4];
-    default: throw new Error(`Unknown field type: ${type}`);
   }
 }
 

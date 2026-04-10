@@ -13,7 +13,7 @@ import ControlPanel from './ControlPanel.jsx';
 import FlashProgressModal from './FlashProgressModal.jsx';
 import LegoConnectPanel from './LegoConnectPanel.jsx';
 import { createLegoTerminal } from '../utils/legoTerminal.js';
-import { ensurePyodide, runPython, isPyodideReady } from '../utils/pyodideRunner.js';
+import { ensurePyodide, runPython, isPyodideReady, interruptPython, freezeBridge, terminatePyodide } from '../utils/pyodideRunner.js';
 import { disconnectAll as legoDisconnectAll, stopAllMotion as legoStopAllMotion } from '../utils/legoDevices.js';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useHardware } from '../contexts/HardwareContext';
@@ -181,6 +181,7 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
         legoTerminalRef.current = null;
         try { controller.dispose(); } catch {}
       }
+      try { terminatePyodide(); } catch {}
       setConnected(false);
       setMode('disconnected');
       onConnectionChange?.(false);
@@ -196,8 +197,10 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
         try { await board.reset(); } catch {}
         try { await board.disconnect(); } catch {}
       }
-      // LEGO Education: close all Bluetooth connections on hardware switch.
+      // LEGO Education: close all Bluetooth connections + kill Pyodide
+      // worker so the next mode has a clean slate.
       try { await legoDisconnectAll(); } catch {}
+      try { terminatePyodide(); } catch {}
       setNeedsFirmware(false);
       setFlashPhase(null);
       setFlashProgress(null);
@@ -225,7 +228,7 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
       const rect = container.getBoundingClientRect();
       const offsetY = e.clientY - rect.top;
       const percent = (offsetY / rect.height) * 100;
-      container.style.gridTemplateRows = `${percent}% 5px auto`;
+      container.style.gridTemplateRows = `${percent}% 5px minmax(0, 1fr)`;
       
       // Resize the terminal to fit the new container size
       if (boardRef.current) {
@@ -395,7 +398,15 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
         legoTerminalRef.current?.write('\r\n>>> run\r\n');
         await runPython(currentCode);
       } catch (error) {
-        console.error('Pyodide run failed:', error);
+        // KeyboardInterrupt is expected when the user presses Stop —
+        // it's how we unwind the script. Don't surface it as a failure.
+        const msg = String(error?.message || error);
+        if (msg.includes('KeyboardInterrupt') || msg.includes('Programmet blev stoppet')) {
+          legoTerminalRef.current?.write('\r\n\x1b[33m[stopped]\x1b[0m\r\n');
+        } else {
+          console.error('Pyodide run failed:', error);
+          legoTerminalRef.current?.write(`\r\n\x1b[31m${msg}\x1b[0m\r\n`);
+        }
       } finally {
         setIsRunning(false);
       }
@@ -424,7 +435,20 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
   const handleCtrlC = async () => {
     if (isLegoEducation) {
       setIsRunning(false);
+      // Freeze the bridge FIRST so the Python worker can no longer issue
+      // device commands — any in-flight RPC fails immediately, and any
+      // subsequent motor_run gets rejected on arrival instead of racing
+      // ahead of our motor_stop below.
+      try { freezeBridge(); } catch (e) { console.warn(e); }
+      // Raise KeyboardInterrupt so the script unwinds instead of
+      // continuing to issue (now-failing) commands.
+      try { interruptPython(); } catch (e) { console.warn(e); }
+      // Halt motors directly from the main thread — this BLE call is
+      // not routed through the paused bridge.
       try { await legoStopAllMotion(); } catch (e) { console.warn(e); }
+      // Send stop a second time once any late GATT writes have drained,
+      // in case the firmware received a motor_run after our first stop.
+      setTimeout(() => { legoStopAllMotion().catch(() => {}); }, 150);
       legoTerminalRef.current?.write('\r\n\x1b[33m[stop]\x1b[0m\r\n');
       return;
     }
@@ -605,6 +629,7 @@ os.chdir('/flash')
             onSaveToSlot={handleSaveToSlot}
             hardware={hardware}
             onSaveToMainPy={handleSaveToMainPy}
+            isRunning={isRunning}
           />
           {needsFirmware && flashPhase === null && (
             <div className="flash-prompt">
