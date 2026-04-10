@@ -53,7 +53,7 @@ export const sessionSchema = z.object({
   current_console_id: fields.idOptional,
   current_conversation_id: fields.idOptional,
   name: z.string().optional().nullable().default('Unnamed Session'),
-  firmware_version: z.string().optional().nullable().default('3'),
+  hardware_platform: z.string().optional().nullable(),
 });
 
 /**
@@ -61,7 +61,8 @@ export const sessionSchema = z.object({
  */
 export const sessionInsertSchema = z.object({
   user_id: fields.userId,
-  firmware_version: z.string().optional().default('3'),
+  hardware_platform: z.string(),
+  name: z.string().optional().nullable(),
 });
 
 /**
@@ -69,7 +70,6 @@ export const sessionInsertSchema = z.object({
  */
 export const sessionUpdateSchema = z.object({
   name: z.string().optional().nullable(),
-  firmware_version: z.string().optional(),
   current_code_id: fields.idOptional,
   current_console_id: fields.idOptional,
   current_conversation_id: fields.idOptional,

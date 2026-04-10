@@ -269,7 +269,7 @@ export default function Board({
      * @param {string | Element} target where the REPL shows its output or accepts its input.
      * @returns
      */
-    connect: async (target, named = true, { boardType = 'generic' } = {}) => {
+    connect: async (target, named = true, { boardType = 'generic', serialPort = null } = {}) => {
       if (port) return board;
       if (typeof target === 'string') {
         target = (
@@ -281,7 +281,9 @@ export default function Board({
       try {
         const libs = dependencies(target);
 
-        port = await serial.requestPort({});
+        // If the caller has a pre-authorized port (e.g. from navigator.serial.getPorts()
+        // or after a WebUSB flash), reuse it silently — no picker.
+        port = serialPort || await serial.requestPort({});
         onportselected();
 
         const [

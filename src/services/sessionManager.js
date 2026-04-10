@@ -51,21 +51,27 @@ export const getUserSessions = async () => {
 /**
  * Create a new session with associated conversation, code, and console records
  */
-export const createNewSession = async (firmwareVersion = '3') => {
+export const createNewSession = async ({ hardwarePlatform, name } = {}) => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    
+
     if (!user) {
       console.error('No authenticated user');
+      return null;
+    }
+
+    if (!hardwarePlatform) {
+      console.error('hardwarePlatform is required to create a session');
       return null;
     }
 
     console.log('Creating new session...');
 
     // Step 1: Create placeholder session to get ID
-    const sessionPayload = { 
+    const sessionPayload = {
       user_id: user.id,
-      firmware_version: firmwareVersion 
+      hardware_platform: hardwarePlatform,
+      ...(name ? { name } : {}),
     };
 
     const sessionValidation = validate(sessionInsertSchema, sessionPayload);
@@ -706,70 +712,37 @@ export const getCodeSnapshots = async (codeId) => {
 };
 
 /**
- * Get firmware version for a session
+ * Assign a hardware platform to an existing session.
+ * Writes directly since sessionUpdateSchema intentionally excludes hardware_platform
+ * (platform is fixed at creation for new sessions, and this path is only used to
+ * back-fill legacy rows).
  */
-export const getFirmwareVersion = async (sessionId) => {
+export const setSessionHardwarePlatform = async (sessionId, platformId) => {
   try {
-    if (!sessionId) {
-      console.error('session_id is required');
-      return '3'; // Default to SPIKE 3
-    }
-
-    const { data, error } = await supabase
-      .from(TABLES.SESSIONS)
-      .select('firmware_version')
-      .eq('id', sessionId)
-      .single();
-
-    if (error) {
-      console.error('Error fetching firmware version:', error);
-      return '3'; // Default to SPIKE 3
-    }
-
-    return data?.firmware_version || '3';
-  } catch (error) {
-    console.error('Error in getFirmwareVersion:', error);
-    return '3'; // Default to SPIKE 3
-  }
-};
-
-/**
- * Update session's firmware version
- */
-export const updateFirmwareVersion = async (sessionId, version) => {
-  try {
-    if (!sessionId) {
-      console.error('session_id is required');
-      return null;
-    }
-
-    const updatePayload = {
-      firmware_version: version,
-      last_updated: new Date().toISOString(),
-    };
-
-    const validation = validate(sessionUpdateSchema, updatePayload);
-    if (!validation.success) {
-      console.error('Session update validation failed:', validation.error.issues);
+    if (!sessionId || !platformId) {
+      console.error('session_id and platform_id are required');
       return null;
     }
 
     const { data, error } = await supabase
       .from(TABLES.SESSIONS)
-      .update(validation.data)
+      .update({
+        hardware_platform: platformId,
+        last_updated: new Date().toISOString(),
+      })
       .eq('id', sessionId)
       .select()
       .single();
 
     if (error) {
-      console.error('Error updating firmware version:', error);
+      console.error('Error setting session hardware platform:', error);
       return null;
     }
 
-    console.log(`✅ Successfully updated firmware version to ${version}`);
+    console.log(`✅ Set hardware_platform=${platformId} on session ${sessionId}`);
     return data;
   } catch (error) {
-    console.error('Error in updateFirmwareVersion:', error);
+    console.error('Error in setSessionHardwarePlatform:', error);
     return null;
   }
 };

@@ -7,6 +7,8 @@ import { useState, useRef, useEffect } from 'react';
 import AboutModal from './AboutModal';
 import { signOut } from '../services/auth';
 import brand from '../config/brand';
+import { getPlatform } from '../platforms';
+import './ModalBase.css';
 import './TitleBar.css';
 
 const TitleBar = ({
@@ -90,13 +92,18 @@ const TitleBar = ({
                 maxLength={100}
               />
             ) : (
-              <div 
+              <div
                 className="topbar-session-name-display"
                 onClick={handleNameClick}
                 title="Click to rename session"
               >
                 <span>{activeSession.name || 'Unnamed Session'}</span>
               </div>
+            )}
+            {getPlatform(activeSession.hardware_platform) && (
+              <span className="platform-badge" title="Hardware platform">
+                {getPlatform(activeSession.hardware_platform).label}
+              </span>
             )}
           </div>
         )}

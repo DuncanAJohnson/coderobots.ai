@@ -5,6 +5,7 @@ import SPIKEEditor from './components/SPIKEEditor';
 import ChatPanel from './components/ChatPanel';
 import AuthModal from './components/AuthModal';
 import SessionModal from './components/SessionModal';
+import NewSessionModal from './components/NewSessionModal';
 import TitleBar from './components/TitleBar';
 import HardwareConfigModal from './components/HardwareConfigModal';
 import DebugManager, { debugLog } from './components/DebugManager';
@@ -16,14 +17,33 @@ import { logConsole } from './services/dataLogger';
 
 function AppContent() {
   const { user, loading: authLoading } = useAuth();
-  const { activeSession, sessions, loadSessions, setActiveSessionById, updateSessionName, currentCodeContent, updateCurrentCodeContent, createSnapshot } = useSession();
-  
+  const {
+    activeSession,
+    sessions,
+    loadSessions,
+    setActiveSessionById,
+    updateSessionName,
+    currentCodeContent,
+    updateCurrentCodeContent,
+    createSnapshot,
+    availablePlatforms,
+    createSessionWithPlatform,
+    assignPlatformToSession,
+    pendingPlatformSession,
+    clearPendingPlatformSession,
+  } = useSession();
+
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [sessionModalCancellable, setSessionModalCancellable] = useState(false);
   const [showDebugModal, setShowDebugModal] = useState(false);
   const [showHardwareConfigModal, setShowHardwareConfigModal] = useState(false);
   const [sessionsInitialized, setSessionsInitialized] = useState(false);
+  const [newSessionModalState, setNewSessionModalState] = useState({
+    visible: false,
+    mode: 'create',
+    initialName: '',
+  });
 
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
@@ -47,13 +67,25 @@ function AppContent() {
           setSessionModalCancellable(false);
           setShowSessionModal(true);
         } else {
-          // Auto-create new session if none exist
-          setActiveSessionById('new');
+          // No sessions yet — open the new-session modal instead of silently creating one.
+          setNewSessionModalState({ visible: true, mode: 'create', initialName: '' });
         }
         setSessionsInitialized(true);
       });
     }
-  }, [user, authLoading, sessionsInitialized, loadSessions, setActiveSessionById]);
+  }, [user, authLoading, sessionsInitialized, loadSessions]);
+
+  // When SessionContext flags a legacy session that needs a platform, open the modal in assign mode.
+  useEffect(() => {
+    if (pendingPlatformSession) {
+      setShowSessionModal(false);
+      setNewSessionModalState({
+        visible: true,
+        mode: 'assign',
+        initialName: pendingPlatformSession.name || '',
+      });
+    }
+  }, [pendingPlatformSession]);
 
   // Resizable pane logic
   useEffect(() => {
@@ -101,9 +133,32 @@ function AppContent() {
     };
   }, [user, activeSession]);
 
-  const handleSessionSelect = async (sessionId, firmwareVersion) => {
+  const handleSessionSelect = async (sessionId) => {
     setShowSessionModal(false);
-    await setActiveSessionById(sessionId, firmwareVersion);
+    await setActiveSessionById(sessionId);
+  };
+
+  const handleOpenNewSessionModal = () => {
+    setShowSessionModal(false);
+    setNewSessionModalState({ visible: true, mode: 'create', initialName: '' });
+  };
+
+  const handleNewSessionSubmit = async ({ name, platformId }) => {
+    if (newSessionModalState.mode === 'assign' && pendingPlatformSession) {
+      const ok = await assignPlatformToSession(pendingPlatformSession.id, platformId);
+      if (ok) {
+        setNewSessionModalState({ visible: false, mode: 'create', initialName: '' });
+      }
+      return;
+    }
+    const ok = await createSessionWithPlatform({ name, platformId });
+    if (ok) {
+      setNewSessionModalState({ visible: false, mode: 'create', initialName: '' });
+    }
+  };
+
+  const handleNewSessionCancel = () => {
+    setNewSessionModalState({ visible: false, mode: 'create', initialName: '' });
   };
 
   const handleReplaceCode = async (newCode) => {
@@ -195,8 +250,25 @@ function AppContent() {
         visible={showSessionModal}
         sessions={sessions}
         onSelect={handleSessionSelect}
+        onCreateNew={handleOpenNewSessionModal}
         cancellable={sessionModalCancellable}
         onCancel={() => setShowSessionModal(false)}
+      />
+
+      <NewSessionModal
+        visible={newSessionModalState.visible}
+        mode={newSessionModalState.mode}
+        initialName={newSessionModalState.initialName}
+        platforms={availablePlatforms || []}
+        onSubmit={handleNewSessionSubmit}
+        onCancel={
+          newSessionModalState.mode === 'assign'
+            ? () => {
+                clearPendingPlatformSession();
+                handleNewSessionCancel();
+              }
+            : handleNewSessionCancel
+        }
       />
       
       <div className="app-container">

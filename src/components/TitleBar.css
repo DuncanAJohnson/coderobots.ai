@@ -32,7 +32,10 @@
 .topbar-session-name {
   margin-left: 15px;
   margin-right: auto;
-  max-width: 300px;
+  max-width: 400px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .topbar-session-name-display {
