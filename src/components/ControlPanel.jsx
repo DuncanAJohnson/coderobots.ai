@@ -15,8 +15,10 @@ const ControlPanel = ({
   onSaveToSlot,
   hardware,
   onSaveToMainPy,
+  isRunning,
 }) => {
   const isMicrobit = hardware === 'microbit';
+  const isLegoEducation = hardware === 'lego-education';
   const { t } = useLanguage();
 
   return (
@@ -24,21 +26,23 @@ const ControlPanel = ({
       <div className="mode-status">
         {t('statusLabel')}<span className="mode-indicator">
           {mode === 'disconnected' && t('disconnected')}
-          {mode === 'repl' && t('replMode')}
+          {mode === 'repl' && (isMicrobit ? t('microbitConnected') : isLegoEducation ? t('legoEducationConnected') : t('replMode'))}
           {mode === 'program-slot' && t('programSlotMode')}
         </span>
       </div>
 
       <div className="button-group">
-        <button onClick={onConnect} className="button">
-          {connected ? t('disconnect') : t('connect')}
-        </button>
-        {!isMicrobit && (
+        {!isLegoEducation && (
+          <button onClick={onConnect} className="button">
+            {connected ? t('disconnect') : t('connect')}
+          </button>
+        )}
+        {!isMicrobit && !isLegoEducation && (
           <button onClick={onEnterREPL} className="button program-slot-only">
             {t('enterRepl')}
           </button>
         )}
-        {!isMicrobit && (
+        {!isMicrobit && !isLegoEducation && (
           <button onClick={onEnterProgramSlot} className="button repl-only">
             {t('enterProgramSlot')}
           </button>
@@ -46,20 +50,36 @@ const ControlPanel = ({
         <button onClick={onClear} className="button">
           {t('clearConsole')}
         </button>
+        {isLegoEducation && (
+          <>
+            <button onClick={onRun} className="button repl-action" disabled={isRunning}>
+              {t('runProgram')}
+            </button>
+            <button onClick={onCtrlC} className="button repl-action">
+              {t('stopProgram')}
+            </button>
+          </>
+        )}
       </div>
 
       <div className="button-group repl-only">
-        <button onClick={onRun} className="button">
-          {t('runProgram')}
-        </button>
-        <button onClick={onCtrlC} className="button">
-          {t('stopProgram')}
-        </button>
-        <button onClick={onReset} className="button">
-          {t('resetDevice')}
-        </button>
-        <div className="vertical-line"></div>
-        {isMicrobit ? (
+        {!isLegoEducation && (
+          <button onClick={onRun} className="button" disabled={isRunning}>
+            {t('runProgram')}
+          </button>
+        )}
+        {!isLegoEducation && (
+          <button onClick={onCtrlC} className="button">
+            {t('stopProgram')}
+          </button>
+        )}
+        {!isLegoEducation && (
+          <button onClick={onReset} className="button">
+            {t('resetDevice')}
+          </button>
+        )}
+        {!isLegoEducation && <div className="vertical-line"></div>}
+        {isLegoEducation ? null : isMicrobit ? (
           // <button onClick={onSaveToMainPy} className="button">
           //   {t('saveToMainPy')}
           // </button>

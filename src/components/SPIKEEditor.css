@@ -20,7 +20,7 @@
 /* Split Layout */
 .spike-editor .parent {
   display: grid;
-  grid-template-rows: 50% 5px auto;
+  grid-template-rows: minmax(0, 1fr) 5px minmax(0, 1fr);
   flex-grow: 1;
   min-height: 0;
   width: 100%;
@@ -134,6 +134,14 @@
 }
 
 .right-panel .repl-only .button:hover:not(:disabled) {
+  background-color: #138496;
+}
+
+.right-panel .button.repl-action {
+  background-color: #17a2b8;
+}
+
+.right-panel .button.repl-action:hover:not(:disabled) {
   background-color: #138496;
 }
 
