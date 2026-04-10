@@ -5,12 +5,24 @@ import ChatPanel from './components/ChatPanel';
 import TitleBar from './components/TitleBar';
 import DebugManager, { debugLog } from './components/DebugManager';
 import { LanguageProvider } from './contexts/LanguageContext';
-import { HardwareProvider } from './contexts/HardwareContext';
+import { HardwareProvider, useHardware } from './contexts/HardwareContext';
+import HardwarePickerModal from './components/HardwarePickerModal';
 import en from './locales/en.json';
 import da from './locales/da.json';
 
 const CODE_STORAGE_KEY = 'coderobots_editor_code';
 const locales = { en, da };
+
+const FirstLoadHardwareGate = () => {
+  const { hasChosenHardware } = useHardware();
+  return (
+    <HardwarePickerModal
+      visible={!hasChosenHardware}
+      onClose={() => {}}
+      dismissable={false}
+    />
+  );
+};
 
 function App() {
   const [showDebugModal, setShowDebugModal] = useState(false);
@@ -139,6 +151,7 @@ function App() {
         visible={showDebugModal}
         onClose={() => setShowDebugModal(false)}
       />
+      <FirstLoadHardwareGate />
     </>
     </HardwareProvider>
     </LanguageProvider>

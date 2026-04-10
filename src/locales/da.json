@@ -70,5 +70,19 @@
   "failedToSaveMainPy": "Kunne ikke gemme main.py: ",
   "installFirmware": "Installér MicroPython",
   "flashingFirmware": "Flasher MicroPython-firmware...",
-  "flashComplete": "MicroPython installeret! Klik på Tilslut for at bruge din micro:bit."
+  "flashComplete": "MicroPython installeret! Klik på Tilslut for at bruge din micro:bit.",
+
+  "switchHardware": "Skift hardware",
+  "hardwarePickerTitle": "Vælg din hardware",
+  "hardwarePickerSubtitle": "Vælg den enhed, du vil programmere. Du kan ændre dette senere.",
+  "spikePrime": "SPIKE Prime",
+  "microbit": "micro:bit",
+  "flashTitleProbing": "Tjekker micro:bit…",
+  "flashTitleFlashing": "Installerer MicroPython",
+  "flashTitleReconnecting": "Tilslutter micro:bit igen…",
+  "flashTitleConnecting": "Tilslutter micro:bit",
+  "flashHint": "Lad micro:bit være tilsluttet. Dette kan tage op til et minut.",
+  "flashWorking": "Arbejder…",
+  "flashMsgInstalling": "Installerer MicroPython på din micro:bit…",
+  "flashMsgReconnecting": "Venter på, at micro:bit tilsluttes igen…"
 }

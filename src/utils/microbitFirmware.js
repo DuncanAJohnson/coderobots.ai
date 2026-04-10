@@ -6,76 +6,138 @@ import {
 } from '@microbit/microbit-connection';
 import microbitFirmwareHex from '../assets/microbit-v2-micropython-v2.1.1.hex?raw';
 
+// micro:bit DAPLink USB identifiers (v1 and v2).
+export const MICROBIT_USB_FILTERS = [
+  { vendorId: 0x0d28, productId: 0x0204 },
+];
+
 const noop = () => {};
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const firmwareDataSource = createUniversalHexFlashDataSource(microbitFirmwareHex);
 
-export const shouldInstallMicrobitFirmware = (error) => {
-  const message = error?.message || '';
-  return /did not respond like a MicroPython REPL|Timed out while waiting|not a compatible MicroPython REPL/i.test(message);
-};
+// Error classification ---------------------------------------------------
 
-export const isUserGestureError = (error) => {
-  const message = error?.message || '';
-  return /Must be handling a user gesture/i.test(message);
-};
-
-export const isNoDeviceSelectedError = (error) => {
-  const message = error?.message || '';
-  return /No device selected|no-device-selected/i.test(message);
-};
-
-const isRetryableWebUsbError = (error) => {
+const matchesAny = (error, patterns) => {
   const message = error?.message || '';
   const code = error?.code || '';
-  return (
-    /Bad response for 8 -> 17/i.test(message) ||
-    /\b521\b/.test(message) ||
-    /reconnect-microbit/i.test(code) ||
-    /clear-connect/i.test(code) ||
-    /timeout/i.test(code)
+  return patterns.some((rx) => rx.test(message) || rx.test(code));
+};
+
+export const isUserGestureError = (error) =>
+  matchesAny(error, [/Must be handling a user gesture/i]);
+
+export const isNoDeviceSelectedError = (error) =>
+  matchesAny(error, [/No device selected|no-device-selected/i]);
+
+export const isRetryableWebUsbError = (error) =>
+  matchesAny(error, [
+    /Bad response for 8 -> 17/i,
+    /\b521\b/,
+    /reconnect-microbit/i,
+    /clear-connect/i,
+    /timeout/i,
+  ]);
+
+export const looksLikeMissingMicroPython = (error) =>
+  matchesAny(error, [
+    /did not respond like a MicroPython REPL/i,
+    /Timed out while waiting/i,
+    /not a compatible MicroPython REPL/i,
+  ]);
+
+// Back-compat alias: existing call sites import this name.
+export const shouldInstallMicrobitFirmware = looksLikeMissingMicroPython;
+
+// Persisted-grant helpers -------------------------------------------------
+
+const matchesMicrobitUsb = (device) =>
+  MICROBIT_USB_FILTERS.some(
+    (f) => device.vendorId === f.vendorId && device.productId === f.productId,
+  );
+
+const matchesMicrobitSerial = (port) => {
+  const info = port.getInfo?.() || {};
+  return MICROBIT_USB_FILTERS.some(
+    (f) => info.usbVendorId === f.vendorId && info.usbProductId === f.productId,
   );
 };
 
-export const openMicrobitInstallerSession = async ({
-  allowDevicePrompt = true,
+export const findAuthorizedMicrobitSerialPort = async () => {
+  if (!navigator.serial?.getPorts) return null;
+  const ports = await navigator.serial.getPorts();
+  return ports.find(matchesMicrobitSerial) || null;
+};
+
+export const hasAuthorizedMicrobitUsbDevice = async () => {
+  if (!navigator.usb?.getDevices) return false;
+  const devices = await navigator.usb.getDevices();
+  return devices.some(matchesMicrobitUsb);
+};
+
+/**
+ * Poll navigator.serial.getPorts() until a micro:bit port (re)appears.
+ * Used after flashing, when the board re-enumerates.
+ */
+export const waitForMicrobitSerialPort = async (timeoutMs = 6000) => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const port = await findAuthorizedMicrobitSerialPort();
+    if (port) return port;
+    await sleep(200);
+  }
+  return null;
+};
+
+// USB installer session ---------------------------------------------------
+
+/**
+ * Open a WebUSB link to a micro:bit so we can flash firmware.
+ *
+ * @param {object} opts
+ * @param {boolean} [opts.reuseExisting=true] - Try an already-authorized device first.
+ * @param {(msg: string) => void} [opts.onStatus]
+ */
+export const openMicrobitUsbLink = async ({
+  reuseExisting = true,
   onStatus = noop,
 } = {}) => {
   if (!('usb' in navigator) || !navigator.usb) {
-    throw new Error('WebUSB is not available in this browser. Use a Chromium-based browser to install micro:bit MicroPython.');
+    throw new Error(
+      'WebUSB is not available in this browser. Use a Chromium-based browser to install micro:bit MicroPython.',
+    );
   }
 
+  const alreadyAuthorized = reuseExisting && (await hasAuthorizedMicrobitUsbDevice());
+
   const usbConnection = createWebUSBConnection({
-    deviceSelectionMode: allowDevicePrompt ? DeviceSelectionMode.AlwaysAsk : DeviceSelectionMode.UseAnyAllowed,
+    deviceSelectionMode: alreadyAuthorized
+      ? DeviceSelectionMode.UseAnyAllowed
+      : DeviceSelectionMode.AlwaysAsk,
   });
 
   try {
     await usbConnection.initialize();
 
-    if (allowDevicePrompt) {
-      onStatus('Select your micro:bit in the USB prompt to enable auto-install...');
+    if (!alreadyAuthorized) {
+      onStatus('Select your micro:bit in the USB prompt to install MicroPython...');
     }
-    let status;
-    try {
-      status = await usbConnection.connect();
-    } catch (error) {
-      if (!isRetryableWebUsbError(error)) {
-        throw error;
-      }
-      onStatus('WebUSB handshake failed. Retrying once...');
-      await sleep(300);
+
+    const connectWithRetries = async (attempt = 0) => {
       try {
-        status = await usbConnection.connect();
-      } catch (retryError) {
-        if (!allowDevicePrompt || !isRetryableWebUsbError(retryError)) {
-          throw retryError;
+        return await usbConnection.connect();
+      } catch (error) {
+        if (attempt >= 2 || !isRetryableWebUsbError(error)) throw error;
+        onStatus('WebUSB handshake unstable. Retrying...');
+        await sleep(300);
+        if (attempt === 1) {
+          try { await usbConnection.clearDevice(); } catch { /* best effort */ }
         }
-        onStatus('WebUSB still unstable. Please re-select micro:bit in USB prompt...');
-        await usbConnection.clearDevice();
-        status = await usbConnection.connect();
+        return connectWithRetries(attempt + 1);
       }
-    }
+    };
+
+    const status = await connectWithRetries();
     if (status !== ConnectionStatus.CONNECTED) {
       throw new Error('Unable to connect to micro:bit over WebUSB for firmware install.');
     }
@@ -83,51 +145,49 @@ export const openMicrobitInstallerSession = async ({
     return {
       flashBundledFirmware: async ({ onStatus: flashStatus = noop, onProgress = noop } = {}) => {
         flashStatus('Installing MicroPython on micro:bit. This can take up to a minute...');
-        const runFlash = async () => usbConnection.flash(firmwareDataSource, {
-          partial: false,
-          progress: (percentage) => {
-            if (typeof percentage === 'number') {
-              const pct = Math.max(0, Math.min(100, Math.round(percentage * 100)));
-              onProgress(pct);
-            } else {
-              onProgress(undefined);
-            }
-          },
-        });
+        const runFlash = () =>
+          usbConnection.flash(firmwareDataSource, {
+            partial: false,
+            progress: (percentage) => {
+              if (typeof percentage === 'number') {
+                const pct = Math.max(0, Math.min(100, Math.round(percentage * 100)));
+                onProgress(pct);
+              } else {
+                onProgress(undefined);
+              }
+            },
+          });
 
         try {
           await runFlash();
         } catch (error) {
-          if (!isRetryableWebUsbError(error)) {
-            throw error;
-          }
+          if (!isRetryableWebUsbError(error)) throw error;
           flashStatus('Flash link dropped. Reconnecting and retrying once...');
           await sleep(300);
           try {
             await usbConnection.connect();
           } catch (reconnectError) {
-            if (!isRetryableWebUsbError(reconnectError)) {
-              throw reconnectError;
-            }
-            throw new Error('WebUSB flashing link stayed unstable. Unplug/replug micro:bit, then click Connect micro:bit again.');
+            if (!isRetryableWebUsbError(reconnectError)) throw reconnectError;
+            throw new Error(
+              'WebUSB flashing link stayed unstable. Unplug/replug micro:bit, then click Connect again.',
+            );
           }
           await runFlash();
         }
-        flashStatus('MicroPython installation complete. Reconnecting...');
+        flashStatus('MicroPython installation complete.');
         return { status: 'installed' };
       },
       close: async () => {
-        try {
-          await usbConnection.disconnect();
-        } catch {}
-        usbConnection.dispose();
+        try { await usbConnection.disconnect(); } catch { /* already gone */ }
+        try { usbConnection.dispose(); } catch { /* already gone */ }
       },
     };
   } catch (error) {
-    try {
-      await usbConnection.disconnect();
-    } catch {}
-    usbConnection.dispose();
+    try { await usbConnection.disconnect(); } catch { /* already gone */ }
+    try { usbConnection.dispose(); } catch { /* already gone */ }
     throw error;
   }
 };
+
+// Back-compat alias: existing call sites import this name.
+export const openMicrobitInstallerSession = openMicrobitUsbLink;

@@ -186,7 +186,7 @@ export default function Board({
      * @param {string | Element} target where the REPL shows its output or accepts its input.
      * @returns
      */
-    connect: async (target, named = true) => {
+    connect: async (target, named = true, preselectedPort = null) => {
       if (port) return board;
       if (typeof target === 'string') {
         target = (
@@ -197,9 +197,13 @@ export default function Board({
       try {
         const libs = dependencies(target);
 
-        port = await serial.getPorts()
-          .then(ports => ports.map(port => port.getInfo()))
-          .then(filters => serial.requestPort({ filters }));
+        if (preselectedPort) {
+          port = preselectedPort;
+        } else {
+          port = await serial.getPorts()
+            .then(ports => ports.map(port => port.getInfo()))
+            .then(filters => serial.requestPort({ filters }));
+        }
 
         const [
           { default: codedent },

@@ -2,9 +2,15 @@ import { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 're
 import Board from '../utils/microRepl.js';
 import { STOP_CODE } from '../utils/stopSpike.js';
 import { STOP_CODE_MICROBIT } from '../utils/stopMicroBit.js';
-import { shouldInstallMicrobitFirmware, openMicrobitInstallerSession } from '../utils/microbitFirmware.js';
+import {
+  shouldInstallMicrobitFirmware,
+  openMicrobitInstallerSession,
+  waitForMicrobitSerialPort,
+  findAuthorizedMicrobitSerialPort,
+} from '../utils/microbitFirmware.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
+import FlashProgressModal from './FlashProgressModal.jsx';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useHardware } from '../contexts/HardwareContext';
 import './SPIKEEditor.css';
@@ -14,15 +20,18 @@ const CODE_STORAGE_KEY = 'coderobots_editor_code';
 
 const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
   const { t } = useLanguage();
-  const { hardware, isMicrobit } = useHardware();
+  const { hardware, isMicrobit, registerDisconnectHandler } = useHardware();
   const [connected, setConnected] = useState(false);
   const [mode, setMode] = useState('disconnected');
   const [code, setCode] = useState(t('initialCode'));
   const [isRunning, setIsRunning] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(0);
   const [buffer, setBuffer] = useState('');
-  const [flashProgress, setFlashProgress] = useState(null); // null = not flashing, 0-100 = progress
+  const [flashPhase, setFlashPhase] = useState(null); // null | 'probing' | 'flashing' | 'reconnecting'
+  const [flashProgress, setFlashProgress] = useState(null); // null = indeterminate, 0-100 = determinate
+  const [flashMessage, setFlashMessage] = useState('');
   const [needsFirmware, setNeedsFirmware] = useState(false);
+  const connectedRef = useRef(false);
 
   const editorRef = useRef(null);
   const terminalRef = useRef(null);
@@ -89,12 +98,14 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
         dataType: 'string',
         onconnect: () => {
           console.log('Device connected');
+          connectedRef.current = true;
           setConnected(true);
           setMode('repl');
           onConnectionChange?.(true);
         },
         ondisconnect: () => {
           console.log('Device disconnected');
+          connectedRef.current = false;
           setConnected(false);
           setMode('disconnected');
           setBuffer('');
@@ -127,6 +138,22 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
       });
     }
   }, []);
+
+  // Register a disconnect handler so hardware switches clean up the board.
+  useEffect(() => {
+    if (!registerDisconnectHandler) return;
+    return registerDisconnectHandler(async () => {
+      const board = boardRef.current;
+      if (board && connectedRef.current) {
+        try { await board.reset(); } catch {}
+        try { await board.disconnect(); } catch {}
+      }
+      setNeedsFirmware(false);
+      setFlashPhase(null);
+      setFlashProgress(null);
+      setFlashMessage('');
+    });
+  }, [registerDisconnectHandler]);
 
   // Resizable pane logic
   useEffect(() => {
@@ -193,76 +220,110 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
     };
   }, []);
 
+  // Connect to a micro:bit and verify MicroPython is present.
+  // If `preselectedPort` is null, the browser serial picker appears;
+  // otherwise the already-authorized port is reused with no prompt.
+  const connectMicrobit = async (preselectedPort) => {
+    const board = boardRef.current;
+    replDetectedRef.current = false;
+    const result = await board.connect(replContainerRef.current, false, preselectedPort);
+    if (!result) {
+      throw new Error('did not respond like a MicroPython REPL');
+    }
+    await board.write('\x03');
+    const hasMicroPython = await new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(false), 4000);
+      const interval = setInterval(() => {
+        if (replDetectedRef.current) {
+          clearTimeout(timeout);
+          clearInterval(interval);
+          resolve(true);
+        }
+      }, 100);
+    });
+    if (!hasMicroPython) {
+      await board.disconnect();
+      throw new Error('Timed out while waiting for MicroPython REPL');
+    }
+  };
+
   const handleConnect = async () => {
     const board = boardRef.current;
     if (!board) return;
 
     if (connected) {
-      // Disconnect
       await board.reset();
       await board.disconnect();
-    } else {
-      // Connect
-      try {
-        console.log("Trying to connect to device");
-        if (isMicrobit) {
-          // Connect with named=false so it returns immediately after the user
-          // picks a device (named=true hangs forever if MicroPython is missing).
-          replDetectedRef.current = false;
-          const result = await board.connect(replContainerRef.current, false);
-          if (!result) {
-            throw new Error('did not respond like a MicroPython REPL');
-          }
-          // Port is now open. Send Ctrl+C and wait for the >>> prompt
-          // to confirm MicroPython is actually running.
-          await board.write('\x03');
-          const hasMicroPython = await new Promise((resolve) => {
-            const timeout = setTimeout(() => resolve(false), 4000);
-            const interval = setInterval(() => {
-              if (replDetectedRef.current) {
-                clearTimeout(timeout);
-                clearInterval(interval);
-                resolve(true);
-              }
-            }, 100);
-          });
-          if (!hasMicroPython) {
-            await board.disconnect();
-            throw new Error('Timed out while waiting for MicroPython REPL');
-          }
-        } else {
-          await board.connect(replContainerRef.current, true);
-        }
-      } catch (error) {
-        console.error('Connection failed:', error);
-        // Clean up partial connection before attempting firmware flash
-        if (board.connected) {
-          try { await board.disconnect(); } catch { /* already disconnected */ }
-        }
-        if (isMicrobit && shouldInstallMicrobitFirmware(error)) {
-          // Show the "Install Firmware" button — we can't open WebUSB here
-          // because the original user gesture has expired.
-          setNeedsFirmware(true);
-        } else if (terminalRef.current) {
-          terminalRef.current.write(`\r\nConnection failed: ${error.message}\r\n`);
-        }
+      return;
+    }
+
+    try {
+      console.log('Trying to connect to device');
+      if (isMicrobit) {
+        // Reuse a previously-authorized micro:bit port so the browser
+        // doesn't keep re-prompting for port selection.
+        const existingPort = await findAuthorizedMicrobitSerialPort();
+        await connectMicrobit(existingPort);
+      } else {
+        await board.connect(replContainerRef.current, true);
+      }
+    } catch (error) {
+      console.error('Connection failed:', error);
+      if (board.connected) {
+        try { await board.disconnect(); } catch { /* already disconnected */ }
+      }
+      if (isMicrobit && shouldInstallMicrobitFirmware(error)) {
+        // Show the "Install Firmware" button — we can't open WebUSB here
+        // because the original user gesture has expired.
+        setNeedsFirmware(true);
+      } else if (terminalRef.current) {
+        terminalRef.current.write(`\r\nConnection failed: ${error.message}\r\n`);
       }
     }
   };
 
   const handleFlashFirmware = async () => {
     setNeedsFirmware(false);
+    setFlashPhase('flashing');
     setFlashProgress(0);
+    setFlashMessage(t('flashMsgInstalling'));
+    let session = null;
     try {
-      const session = await openMicrobitInstallerSession();
+      session = await openMicrobitInstallerSession();
       await session.flashBundledFirmware({
-        onProgress: (pct) => setFlashProgress(pct ?? 0),
+        onStatus: (msg) => { if (msg) setFlashMessage(msg); },
+        onProgress: (pct) => setFlashProgress(typeof pct === 'number' ? pct : null),
       });
       await session.close();
+      session = null;
+
+      setFlashPhase('reconnecting');
       setFlashProgress(null);
-      alert(t('flashComplete'));
+      setFlashMessage(t('flashMsgReconnecting'));
+      const reconnectedPort = await waitForMicrobitSerialPort();
+
+      setFlashPhase(null);
+      setFlashProgress(null);
+      setFlashMessage('');
+
+      // Auto-reconnect — the port is already authorized, so no prompt.
+      if (reconnectedPort) {
+        try {
+          await connectMicrobit(reconnectedPort);
+        } catch (reconnectError) {
+          console.error('Post-flash auto-connect failed:', reconnectError);
+          if (terminalRef.current) {
+            terminalRef.current.write(`\r\nReconnect failed: ${reconnectError.message}\r\n`);
+          }
+        }
+      }
     } catch (flashError) {
+      if (session) {
+        try { await session.close(); } catch {}
+      }
+      setFlashPhase(null);
       setFlashProgress(null);
+      setFlashMessage('');
       console.error('Firmware flash failed:', flashError);
     }
   };
@@ -463,7 +524,7 @@ os.chdir('/flash')
             hardware={hardware}
             onSaveToMainPy={handleSaveToMainPy}
           />
-          {needsFirmware && flashProgress === null && (
+          {needsFirmware && flashPhase === null && (
             <div className="flash-prompt">
               <span>{t('flashMicrobitConfirm')}</span>
               <button className="button flash-button" onClick={handleFlashFirmware}>
@@ -471,14 +532,12 @@ os.chdir('/flash')
               </button>
             </div>
           )}
-          {flashProgress !== null && (
-            <div className="flash-progress">
-              <div className="flash-progress-label">{t('flashingFirmware')} {flashProgress}%</div>
-              <div className="flash-progress-bar">
-                <div className="flash-progress-fill" style={{ width: `${flashProgress}%` }} />
-              </div>
-            </div>
-          )}
+          <FlashProgressModal
+            open={flashPhase !== null}
+            phase={flashPhase}
+            progress={flashProgress}
+            message={flashMessage}
+          />
           <div className="terminal-wrapper" ref={replContainerRef}>
             {/* The micro_repl Board will render the xterm terminal here */}
           </div>

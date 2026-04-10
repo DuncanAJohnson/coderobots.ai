@@ -1,0 +1,72 @@
+.hw-picker-content {
+  max-width: 520px;
+  text-align: center;
+}
+
+.hw-picker-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 10px 0;
+}
+
+.hw-picker-subtitle {
+  font-size: 15px;
+  color: #6b7280;
+  margin: 0 0 28px 0;
+  line-height: 1.5;
+}
+
+.hw-picker-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.hw-picker-tile {
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 32px 16px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+}
+
+.hw-picker-tile:hover {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.hw-picker-tile:active {
+  transform: translateY(1px);
+}
+
+.hw-picker-tile--active {
+  border-color: #3b82f6;
+  background: #dbeafe;
+}
+
+.hw-picker-tile-label {
+  display: block;
+}
+
+.hw-picker-close-button {
+  width: 100%;
+  padding: 12px 24px;
+  background-color: transparent;
+  color: #6b7280;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.hw-picker-close-button:hover {
+  background-color: #f3f4f6;
+}

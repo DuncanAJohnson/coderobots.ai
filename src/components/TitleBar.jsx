@@ -5,21 +5,18 @@
 
 import { useState } from 'react';
 import AboutModal from './AboutModal';
+import HardwarePickerModal from './HardwarePickerModal';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useHardware } from '../contexts/HardwareContext';
 import './TitleBar.css';
 
 const TitleBar = ({ onShowDebug, onClearChat }) => {
   const [showAbout, setShowAbout] = useState(false);
+  const [showHardwarePicker, setShowHardwarePicker] = useState(false);
   const { lang, switchLang, t } = useLanguage();
-  const { hardware, switchHardware } = useHardware();
 
-  const handleHardwareSwitch = (newHw) => {
-    if (newHw === hardware) return;
-    if (confirm(t('switchHardwareConfirm'))) {
-      switchHardware(newHw);
-      onClearChat?.();
-    }
+  const handleHardwarePickerClose = () => {
+    setShowHardwarePicker(false);
+    onClearChat?.();
   };
 
   return (
@@ -43,20 +40,12 @@ const TitleBar = ({ onShowDebug, onClearChat }) => {
               {t('debug')}
             </button>
           )}
-          <div className="topbar-hw-toggle">
-            <button
-              className={`topbar-lang-btn${hardware === 'spike' ? ' topbar-lang-btn--active' : ''}`}
-              onClick={() => handleHardwareSwitch('spike')}
-            >
-              SPIKE
-            </button>
-            <button
-              className={`topbar-lang-btn${hardware === 'microbit' ? ' topbar-lang-btn--active' : ''}`}
-              onClick={() => handleHardwareSwitch('microbit')}
-            >
-              micro:bit
-            </button>
-          </div>
+          <button
+            className="topbar-button"
+            onClick={() => setShowHardwarePicker(true)}
+          >
+            {t('switchHardware')}
+          </button>
           <div className="topbar-lang-toggle">
             <button
               className={`topbar-lang-btn${lang === 'da' ? ' topbar-lang-btn--active' : ''}`}
@@ -75,6 +64,11 @@ const TitleBar = ({ onShowDebug, onClearChat }) => {
       </div>
 
       <AboutModal visible={showAbout} onClose={() => setShowAbout(false)} />
+      <HardwarePickerModal
+        visible={showHardwarePicker}
+        onClose={handleHardwarePickerClose}
+        dismissable
+      />
     </>
   );
 };

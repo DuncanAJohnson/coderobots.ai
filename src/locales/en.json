@@ -70,5 +70,19 @@
   "failedToSaveMainPy": "Failed to save main.py: ",
   "installFirmware": "Install MicroPython",
   "flashingFirmware": "Flashing MicroPython firmware...",
-  "flashComplete": "MicroPython installed successfully! Click Connect to use your micro:bit."
+  "flashComplete": "MicroPython installed successfully! Click Connect to use your micro:bit.",
+
+  "switchHardware": "Switch Hardware",
+  "hardwarePickerTitle": "Choose your hardware",
+  "hardwarePickerSubtitle": "Pick the board you want to program. You can change this later.",
+  "spikePrime": "SPIKE Prime",
+  "microbit": "micro:bit",
+  "flashTitleProbing": "Checking micro:bit…",
+  "flashTitleFlashing": "Installing MicroPython",
+  "flashTitleReconnecting": "Reconnecting micro:bit…",
+  "flashTitleConnecting": "Connecting micro:bit",
+  "flashHint": "Keep the micro:bit plugged in. This can take up to a minute.",
+  "flashWorking": "Working…",
+  "flashMsgInstalling": "Installing MicroPython on your micro:bit…",
+  "flashMsgReconnecting": "Waiting for micro:bit to reconnect…"
 }
