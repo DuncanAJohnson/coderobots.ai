@@ -25,7 +25,7 @@ const ControlPanel = ({
       <div className="mode-status">
         {t('statusLabel')}<span className="mode-indicator">
           {mode === 'disconnected' && t('disconnected')}
-          {mode === 'repl' && t('replMode')}
+          {mode === 'repl' && (isMicrobit ? t('microbitConnected') : isLegoEducation ? t('legoEducationConnected') : t('replMode'))}
           {mode === 'program-slot' && t('programSlotMode')}
         </span>
       </div>

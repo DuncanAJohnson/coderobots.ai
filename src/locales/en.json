@@ -28,6 +28,8 @@
   "statusLabel": "Status: ",
   "disconnected": "Disconnected",
   "replMode": "REPL Mode",
+  "microbitConnected": "Connected to micro:bit",
+  "legoEducationConnected": "Connected to LEGO Education",
   "programSlotMode": "Program Slot Mode",
   "connect": "Connect",
   "disconnect": "Disconnect",
