@@ -8,7 +8,7 @@ import react from '@vitejs/plugin-react'
 // requires both headers below. Production hosts must emit the same headers.
 const crossOriginIsolationHeaders = {
     'Cross-Origin-Opener-Policy': 'same-origin',
-    'Cross-Origin-Embedder-Policy': 'require-corp',
+    'Cross-Origin-Embedder-Policy': 'credentialless',
 }
 
 export default defineConfig({
