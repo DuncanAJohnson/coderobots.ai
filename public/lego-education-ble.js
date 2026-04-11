@@ -178,7 +178,7 @@ const MSG = {
   IMU_RESET_YAW_AXIS_COMMAND:192, IMU_RESET_YAW_AXIS_RESULT:193,
 };
 
-const NOTIF = { INFO_DEVICE:0, IMU_DEVICE:1, CARD:3, BUTTON_STATE:4, MOTOR:10, COLOR_SENSOR:12, CONTROLLER:15, IMU_GESTURE:16 };
+const NOTIF = { INFO_DEVICE:0, IMU_DEVICE:1, CARD:3, BUTTON_STATE:4, MOTOR:10, COLOR_SENSOR:12, CONTROLLER:13, IMU_GESTURE:16 };
 
 // ============================================================
 //  RPC Serialization Helpers
@@ -277,9 +277,9 @@ function deserializeMotorResult(p) { return { motorBitMask: p[0], status: p[1] }
 //  Notification Deserializers
 // ============================================================
 
-const NOTIF_SIZE = { [NOTIF.INFO_DEVICE]:2, [NOTIF.IMU_DEVICE]:20, [NOTIF.CARD]:3, [NOTIF.BUTTON_STATE]:1, [NOTIF.MOTOR]:12, [NOTIF.COLOR_SENSOR]:12, [NOTIF.CONTROLLER]:6, [NOTIF.IMU_GESTURE]:1 };
+const NOTIF_SIZE = { [NOTIF.INFO_DEVICE]:1, [NOTIF.IMU_DEVICE]:20, [NOTIF.CARD]:3, [NOTIF.BUTTON_STATE]:1, [NOTIF.MOTOR]:12, [NOTIF.COLOR_SENSOR]:16, [NOTIF.CONTROLLER]:6, [NOTIF.IMU_GESTURE]:1 };
 
-function _dInfoDevice(dv,o) { let v; [v,o]=readField(dv,o,'u8'); const bl=v; [v,o]=readField(dv,o,'u8'); const up=v; return {type:'InfoDeviceNotification',batteryLevel:bl,UsbPowerState:up}; }
+function _dInfoDevice(dv,o) { let v; [v,o]=readField(dv,o,'u8'); const bl=v; return {type:'InfoDeviceNotification',batteryLevel:bl,UsbPowerState:USB_POWER_STATE_USB_NOT_CONNECTED}; }
 function _dImuDevice(dv,o) { let v; [v,o]=readField(dv,o,'u8'); const ori=v; [v,o]=readField(dv,o,'u8'); const yf=v;
   [v,o]=readField(dv,o,'i16'); const yaw=v; [v,o]=readField(dv,o,'i16'); const pitch=v; [v,o]=readField(dv,o,'i16'); const roll=v;
   [v,o]=readField(dv,o,'i16'); const ax=v; [v,o]=readField(dv,o,'i16'); const ay=v; [v,o]=readField(dv,o,'i16'); const az=v;
@@ -293,8 +293,9 @@ function _dMotor(dv,o) { let v; [v,o]=readField(dv,o,'u8'); const mbm=v; [v,o]=r
   return {type:'MotorNotification',motorBitMask:mbm,motorState:ms,absolutePosition:ap,power:pw,speed:sp,position:pos,gesture:g}; }
 function _dColorSensor(dv,o) { let v; [v,o]=readField(dv,o,'i8'); const c=v; [v,o]=readField(dv,o,'u8'); const ref=v;
   [v,o]=readField(dv,o,'u16'); const rr=v; [v,o]=readField(dv,o,'u16'); const rg=v; [v,o]=readField(dv,o,'u16'); const rb=v;
-  [v,o]=readField(dv,o,'u16'); const h=v; [v,o]=readField(dv,o,'u8'); const s=v; [v,o]=readField(dv,o,'u8'); const val=v;
-  return {type:'ColorSensorNotification',color:c,reflection:ref,rawRed:rr,rawGreen:rg,rawBlue:rb,hue:h,saturation:s,value:val}; }
+  [v,o]=readField(dv,o,'u16'); const rw=v; [v,o]=readField(dv,o,'u16'); const h=v;
+  [v,o]=readField(dv,o,'u16'); const s=v; [v,o]=readField(dv,o,'u16'); const val=v;
+  return {type:'ColorSensorNotification',color:c,reflection:ref,rawRed:rr,rawGreen:rg,rawBlue:rb,rawWhite:rw,hue:h,saturation:s,value:val}; }
 function _dController(dv,o) { let v; [v,o]=readField(dv,o,'i8'); const lp=v; [v,o]=readField(dv,o,'i8'); const rp=v;
   [v,o]=readField(dv,o,'i16'); const la=v; [v,o]=readField(dv,o,'i16'); const ra=v;
   return {type:'ControllerNotification',leftPercent:lp,rightPercent:rp,leftAngle:la,rightAngle:ra}; }
@@ -304,13 +305,40 @@ function _dImuGesture(dv,o) { let v; [v,o]=readField(dv,o,'i8'); return {type:'I
 //  Device Notification Parser
 // ============================================================
 
+function _hexDump(u8, start = 0, end = u8.length) {
+  const parts = [];
+  for (let i = start; i < end; i++) parts.push(u8[i].toString(16).padStart(2, '0'));
+  return parts.join(' ');
+}
+
+let _legoDiagLastWarnMs = 0;
+function _legoDiag(label, obj) {
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  if (now - _legoDiagLastWarnMs < 2000) return;
+  _legoDiagLastWarnMs = now;
+  console.warn(`[LEGO-DIAG] ${label}`, obj);
+  if (typeof window !== 'undefined') window.__LEGO_BLE_LAST_BAD_PAYLOAD = obj;
+}
+
 function device_notification_parser(payload) {
   const dv = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
   let off = 0, deviceDataLength; [deviceDataLength, off] = readField(dv, off, 'u16');
   const notifications = [], dataEnd = off + deviceDataLength;
   while (off < dataEnd) {
+    const ntOff = off;
     const nt = dv.getUint8(off); off += 1;
-    const size = NOTIF_SIZE[nt]; if (size === undefined) { console.warn(`Unknown notification type: ${nt}`); break; }
+    const size = NOTIF_SIZE[nt];
+    if (size === undefined) {
+      _legoDiag(`Unknown notification type: ${nt} at offset ${ntOff}`, {
+        nt, ntOff, deviceDataLength, dataEnd,
+        payloadLen: payload.length,
+        payloadHex: _hexDump(payload),
+        remainingHex: _hexDump(payload, ntOff),
+        parsedSoFar: notifications.map(n => n.type),
+        lastParsed: notifications[notifications.length - 1] || null,
+      });
+      break;
+    }
     let item;
     switch(nt) {
       case NOTIF.INFO_DEVICE: item=_dInfoDevice(dv,off); break; case NOTIF.IMU_DEVICE: item=_dImuDevice(dv,off); break;
@@ -445,6 +473,17 @@ class LegoDevice {
   _handleDeviceNotification(payload) {
     try {
       const notifications = device_notification_parser(payload);
+      if (typeof window !== 'undefined' && window.__LEGO_BLE_DEBUG) {
+        this._diagDumpCount = (this._diagDumpCount || 0) + 1;
+        const maxDumps = window.__LEGO_BLE_DEBUG_MAX || 20;
+        if (this._diagDumpCount <= maxDumps) {
+          console.log(`[LEGO-DIAG] batch #${this._diagDumpCount}`, {
+            payloadLen: payload.length,
+            payloadHex: _hexDump(payload),
+            parsed: notifications,
+          });
+        }
+      }
       for (const item of notifications) this._updateLiveState(item);
       if (this._notification_callback) this._notification_callback(notifications);
     } catch(err) { console.error('Error parsing device notification:', err); }
@@ -670,7 +709,7 @@ class Controller extends LegoDevice {
 
 class ColorSensor extends LegoDevice {
   constructor() { super(); this.search_name='Color Sensor'; this.product_id=PRODUCT_GROUP_DEVICE_COLOR_SENSOR;
-    this.sensor = {type:'ColorSensorNotification',color:NaN,reflection:NaN,rawRed:NaN,rawGreen:NaN,rawBlue:NaN,hue:NaN,saturation:NaN,value:NaN}; }
+    this.sensor = {type:'ColorSensorNotification',color:NaN,reflection:NaN,rawRed:NaN,rawGreen:NaN,rawBlue:NaN,rawWhite:NaN,hue:NaN,saturation:NaN,value:NaN}; }
   _updateLiveState(item) { super._updateLiveState(item); if (item.type === 'ColorSensorNotification') this.sensor = item; }
 }
 
