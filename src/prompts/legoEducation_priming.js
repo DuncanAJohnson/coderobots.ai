@@ -35,10 +35,8 @@ Modulet 'legoeducation' (importeret som 'le') giver adgang til fire enhedsklasse
   le.ColorSensor()   — Farvesensor
   le.Controller()    — Controller med to håndtag
 
-Hver enhed skal FØRST være forbundet via knapperne i browser-UI'et. Eleven trykker
-på "Forbind enkelt motor" osv. og vælger enheden i Bluetooth-dialogen. DEREFTER kan
-Python-koden kalde .connect() for at binde Python-objektet til den JS-instans, der
-allerede er forbundet.
+Hver enhed har et "Connection Card" med en farve og et serienummer, som bruges til
+at identificere den fysiske enhed. Python-koden angiver disse værdier i .connect().
 
 Standardmønster:
 
@@ -46,19 +44,25 @@ Standardmønster:
 import legoeducation as le
 import time
 
-# Opret et Python-objekt og bind det til den allerede-forbundne hardware
+# Opdatér disse værdier så de matcher enhedens Connection Card
+card_color = le.LEGO_COLOR_AZURE
+card_serial = '3683'
+
+# Opret Python-objektet og forbind til hardwaren
 motor = le.SingleMotor()
-motor.connect()
+motor.connect(card_color=card_color, card_serial=card_serial)
 
+# Tjek forbindelsen
 if not motor.connected:
-    print('Fejl: Motor ikke forbundet')
-else:
-    # Din kode her
-    motor.motor_run(speed=50)
-    time.sleep(1)
-    motor.motor_stop()
+    print('Fejl: Kunne ikke forbinde til motoren.')
+    exit(1)
 
+# Din kode her
+motor.motor_run_for_time(1000, speed=50)
+
+# Afbryd forbindelsen til sidst
 motor.disconnect()
+exit(0)
 \`\`\`
 
 ─────────────────────────────────────────────────────────────────────────────
@@ -66,103 +70,142 @@ ENKELT MOTOR — le.SingleMotor
 ─────────────────────────────────────────────────────────────────────────────
 
 Metoder:
-  motor.connect()
+  motor.connect(card_color=..., card_serial=...)
   motor.disconnect()
-  motor.motor_run(speed=50, direction=le.MOTOR_MOVE_DIRECTION_CLOCKWISE)
-      Starter motoren i den angivne retning. Kører til motor_stop() kaldes.
-  motor.motor_run_for_degrees(degrees, speed=50, direction=le.MOTOR_MOVE_DIRECTION_CLOCKWISE)
+  motor.motor_run(direction=le.MOTOR_MOVE_DIRECTION_CLOCKWISE, speed=50)
+      Starter motoren. Kører til motor_stop() kaldes.
+  motor.motor_run_for_degrees(degrees=360, direction=le.MOTOR_MOVE_DIRECTION_CLOCKWISE, speed=50)
       Kører motoren et bestemt antal grader og stopper.
-  motor.motor_run_for_time(time_ms, speed=50, direction=le.MOTOR_MOVE_DIRECTION_CLOCKWISE)
+  motor.motor_run_for_time(time_ms=2000, direction=le.MOTOR_MOVE_DIRECTION_CLOCKWISE, speed=50)
       Kører motoren i et bestemt antal millisekunder.
-  motor.motor_run_to_absolute_position(position, speed=50)
-      Kører til absolut position (0-359 grader).
-  motor.motor_run_to_relative_position(position, speed=50)
-      Kører til relativ position (grader fra nuværende position).
+  motor.motor_set_speed(40)
   motor.motor_stop()
-  motor.motor_set_speed(speed)
-  motor.motor_reset_relative_position(position=0)
 
-Live data (opdateres automatisk):
-  motor.motor.position         # relativ position i grader
-  motor.motor.absolutePosition # absolut position (0-359)
-  motor.motor.speed            # aktuel hastighed
-  motor.motor.motorState       # motor-tilstand
-
-Fælles metoder (alle enheder):
-  motor.light_color(le.LEGO_COLOR_BLUE)
-  motor.beep()
-  motor.stop_beep()
-  motor.info_device.batteryLevel  # batteriprocent
-  motor.button.state              # 0=sluppet, 1=trykket
+Live data (motor.motor):
+  motor.motor.position      # relativ position i grader
+  motor.motor.absolutePos   # absolut position
+  motor.motor.speed         # aktuel hastighed
+  motor.motor.power
+  motor.motor.motorState    # sammenlign med Motor State-konstanter
+  motor.motor.gesture       # sammenlign med Motor Gesture-konstanter
 
 ─────────────────────────────────────────────────────────────────────────────
 DOBBELT MOTOR — le.DoubleMotor
 ─────────────────────────────────────────────────────────────────────────────
 
-Har to motorer + IMU. Arver alle SingleMotor-metoder (brug motor= for at vælge
-venstre/højre) og tilføjer koordinerede bevægelseskommandoer.
+Har to motorer + IMU (bevægelsessensor). Understøtter både koordinerede
+"movement"-kommandoer og individuel motor-styring.
 
-Individuelle motor-metoder (med motor-argument):
-  dm.motor_run(speed=50, motor=le.MOTOR_LEFT)
-  dm.motor_run(speed=50, motor=le.MOTOR_RIGHT)
-  dm.motor_run_for_degrees(360, speed=50, motor=le.MOTOR_BOTH)
-  dm.motor_stop(motor=le.MOTOR_BOTH)
+Koordinerede bevægelseskommandoer (begge motorer samtidig):
+  dm.movement_move_for_degrees(degrees=180, direction=le.MOVEMENT_DIRECTION_FORWARD, speed=50)
+  dm.movement_move_for_time(time_ms=1000, direction=le.MOVEMENT_DIRECTION_BACKWARD, speed=50)
+  dm.movement_turn_for_degrees(degrees=90, direction=le.MOVEMENT_TURN_DIRECTION_LEFT, speed=40)
 
-Bevægelseskommandoer (koordinerer begge motorer):
-  dm.movement_move(direction=le.MOVEMENT_DIRECTION_FORWARD, speed=50)
-  dm.movement_move(direction=le.MOVEMENT_DIRECTION_BACKWARD, speed=50)
-  dm.movement_move_for_time(2000, direction=le.MOVEMENT_DIRECTION_FORWARD, speed=50)
-  dm.movement_move_for_degrees(360, direction=le.MOVEMENT_DIRECTION_FORWARD, speed=50)
-  dm.movement_move_tank(speed_left, speed_right)  # uafhængig venstre/højre
-  dm.movement_turn_for_degrees(90, direction=le.MOVEMENT_TURN_DIRECTION_LEFT, speed=40)
-  dm.movement_stop()
-  dm.movement_set_speed(50)
+Individuelle motor-metoder (brug motor=-argument til at vælge):
+  dm.motor_run(direction=le.MOTOR_MOVE_DIRECTION_COUNTERCLOCKWISE, motor=le.MOTOR_RIGHT, speed=50)
+  dm.motor_run_for_degrees(360, motor=le.MOTOR_LEFT, speed=30)
+  dm.motor_run_for_time(2000)
+  dm.motor_stop()
+
+IMU-indstillinger:
+  dm.imu_reset_yaw_axis(0)
+  dm.imu_set_yaw_face(yaw_face=le.DEVICE_FACE_LEFT)
 
 Live data:
-  dm.motor[0].position   # venstre motor position
-  dm.motor[1].position   # højre motor position
-  dm.imu_device.yaw      # rotation omkring z-akse
+  dm.motor[le.MOTOR_LEFT].position    # venstre motor position
+  dm.motor[le.MOTOR_RIGHT].position   # højre motor position
+  dm.motor[le.MOTOR_LEFT].speed
+  dm.motor[le.MOTOR_LEFT].motorState  # eller .absolutePos, .power, .gesture
+
+  dm.imu_device.yaw           # rotation omkring z-akse
   dm.imu_device.pitch
   dm.imu_device.roll
+  dm.imu_device.orientation   # sammenlign med Device Face-konstanter
+  dm.imu_device.accelerometerX, accelerometerY, accelerometerZ
+  dm.imu_device.gyroscopeX, gyroscopeY, gyroscopeZ
+  dm.imu_gesture.gesture      # sammenlign med Motion Gesture-konstanter
 
 ─────────────────────────────────────────────────────────────────────────────
 FARVESENSOR — le.ColorSensor
 ─────────────────────────────────────────────────────────────────────────────
 
 \`\`\`python
+card_color = le.LEGO_COLOR_AZURE
+card_serial = '3683'
+
 sensor = le.ColorSensor()
-sensor.connect()
+sensor.connect(card_color=card_color, card_serial=card_serial)
+
+if not sensor.connected:
+    print('Fejl: Kunne ikke forbinde til farvesensoren.')
+    exit(1)
 
 farve = sensor.sensor.color
 if farve == le.LEGO_COLOR_RED:
     print('Ser rød!')
 elif farve == le.LEGO_COLOR_BLUE:
     print('Ser blå!')
+
+sensor.disconnect()
 \`\`\`
 
-Live data:
-  sensor.sensor.color       # le.LEGO_COLOR_* konstant
-  sensor.sensor.reflection  # 0-100
-  sensor.sensor.rawRed, rawGreen, rawBlue
-  sensor.sensor.hue, saturation, value
+Live data (sensor.sensor):
+  color                     # sammenlign med LEGO_COLOR_*-konstanter
+  reflection
+  rawRed, rawGreen, rawBlue
+  hue, saturation, value
 
 ─────────────────────────────────────────────────────────────────────────────
 CONTROLLER — le.Controller
 ─────────────────────────────────────────────────────────────────────────────
 
 \`\`\`python
+card_color = le.LEGO_COLOR_AZURE
+card_serial = '3683'
+
 controller = le.Controller()
-controller.connect()
+controller.connect(card_color=card_color, card_serial=card_serial)
 
 venstre = controller.sensor.leftPercent   # -100 til 100
 højre   = controller.sensor.rightPercent  # -100 til 100
 \`\`\`
 
+Live data (controller.sensor):
+  leftPercent, rightPercent
+  leftAngle, rightAngle
+
+─────────────────────────────────────────────────────────────────────────────
+FÆLLES HARDWARE-KONTROL (alle enheder)
+─────────────────────────────────────────────────────────────────────────────
+
+  enhed.light_color(le.LEGO_COLOR_BLUE, pattern=le.LIGHT_PATTERN_BREATHE, intensity=100)
+  enhed.beep(pattern=le.SOUND_PATTERN_BEEP_SINGLE, frequency=440)
+
+─────────────────────────────────────────────────────────────────────────────
+NOTIFIKATIONS-CALLBACKS (avanceret)
+─────────────────────────────────────────────────────────────────────────────
+
+Alle enheder kan streame data via en callback i stedet for inline-læsning:
+
+\`\`\`python
+def notification_callback(data):
+    parsed_items = le.device_notification_parser(data)
+    for parsed_item in parsed_items:
+        if isinstance(parsed_item, le.MotorNotification):
+            print(f"Position: {parsed_item.position}")
+        # også: le.ColorSensorNotification, le.ControllerNotification
+
+enhed.set_notification_callback(notification_callback)
+\`\`\`
+
+For DoubleMotor kan man skelne venstre/højre via parsed_item.motorBitMask:
+  le.MOTOR_BITS_LEFT, le.MOTOR_BITS_RIGHT
+
 ─────────────────────────────────────────────────────────────────────────────
 KONSTANTER
 ─────────────────────────────────────────────────────────────────────────────
 
-Farver (bruges til light_color og sensor.color):
+Farver (bruges til light_color, sensor.color og card_color):
   le.LEGO_COLOR_NOCOLOR, le.LEGO_COLOR_RED, le.LEGO_COLOR_YELLOW,
   le.LEGO_COLOR_BLUE, le.LEGO_COLOR_TEAL, le.LEGO_COLOR_GREEN,
   le.LEGO_COLOR_PURPLE, le.LEGO_COLOR_WHITE, le.LEGO_COLOR_MAGENTA,
@@ -179,28 +222,43 @@ Bevægelsesretning (DoubleMotor):
   le.MOVEMENT_TURN_DIRECTION_RIGHT
 
 Motor-vælger (DoubleMotor):
-  le.MOTOR_LEFT, le.MOTOR_RIGHT, le.MOTOR_BOTH
+  le.MOTOR_LEFT, le.MOTOR_RIGHT
+  le.MOTOR_BITS_LEFT, le.MOTOR_BITS_RIGHT  # til notification-callbacks
+
+Lys-mønstre:
+  le.LIGHT_PATTERN_BREATHE, m.fl.
+
+Lyd-mønstre:
+  le.SOUND_PATTERN_BEEP_SINGLE, m.fl.
+
+Device Face (IMU):
+  le.DEVICE_FACE_LEFT, m.fl.
 
 ─────────────────────────────────────────────────────────────────────────────
 VIGTIGE REGLER
 ─────────────────────────────────────────────────────────────────────────────
 
-1. BRUG ALTID NØGLEORDSARGUMENTER for speed, direction, motor osv.
+1. BRUG ALTID NØGLEORDSARGUMENTER for speed, direction, motor, degrees, time_ms osv.
    Eksempel: motor.motor_run(speed=50) — IKKE motor.motor_run(50).
 
-2. Modulet 'time' fungerer: import time; time.sleep(1) er ok til korte ventetider.
+2. .connect() SKAL kaldes med card_color og card_serial, som matcher enhedens
+   fysiske Connection Card. Mind eleven om at opdatere disse værdier i starten
+   af programmet.
 
-3. Brug ALDRIG Bluetooth-funktioner direkte — alt går gennem le.SingleMotor()
-   osv., og forbindelsen er allerede etableret via UI-knapperne.
+3. Tjek ALTID 'enhed.connected' efter .connect() og giv en fejlbesked hvis
+   forbindelsen fejler (exit(1)).
 
-4. Brug ALTID den eksisterende 'legoeducation'-import alias 'le'. Import aldrig
-   via BLE-biblioteket eller js-modulet — eleven skal kun se ren Python.
+4. Modulet 'time' fungerer: import time; time.sleep(1) er ok til korte ventetider.
 
-5. Der findes INGEN hub-modul, motor_pair-modul eller port-modul her — det er
-   en anden platform end SPIKE Prime. Brug kun le.SingleMotor/DoubleMotor/
-   ColorSensor/Controller.
+5. Brug ALDRIG Bluetooth-funktioner direkte — alt går gennem le.SingleMotor(),
+   le.DoubleMotor(), le.ColorSensor() og le.Controller().
 
-6. Afslut altid programmet rent: kald .disconnect() på alle enheder til sidst
-   (dette frigør kun Python-objektet — Bluetooth-forbindelsen bevares til
-   næste kørsel).
+6. Brug ALTID importen 'import legoeducation as le'. Importér aldrig via et
+   BLE-bibliotek eller et js-modul — eleven skal kun se ren Python.
+
+7. Der findes INGEN hub-modul, motor_pair-modul eller port-modul her — det er
+   en anden platform end SPIKE Prime. Brug kun de fire enhedsklasser ovenfor.
+
+8. Afslut altid programmet rent: kald .disconnect() på alle enheder til sidst,
+   efterfulgt af exit(0) ved succes.
 `;
