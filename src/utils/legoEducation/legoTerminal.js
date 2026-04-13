@@ -12,6 +12,26 @@ const ADDON_FIT = '0.10.0';
 
 let depsPromise = null;
 
+// Make xterm actually fill its wrapper. Without this the .xterm element keeps
+// its initial measured size (24 rows ≈ 360px) and FitAddon.fit() computes the
+// same row count every time because it measures from an element whose size
+// never changes. Injected once per document.
+const FIT_STYLE_ID = 'lego-terminal-fit-fix';
+const FIT_STYLE_CSS = `
+  [data-lego-terminal-host] { position: relative; overflow: hidden; }
+  [data-lego-terminal-host] > .xterm { position: absolute; inset: 0; width: 100%; height: 100%; }
+  [data-lego-terminal-host] .xterm-viewport { width: 100% !important; height: 100% !important; }
+  [data-lego-terminal-host] .xterm-screen { width: 100% !important; }
+`;
+function ensureFitStyles() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById(FIT_STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = FIT_STYLE_ID;
+  style.textContent = FIT_STYLE_CSS;
+  document.head.appendChild(style);
+}
+
 // xterm 5.3's Viewport schedules `syncScrollArea()` via setTimeout(0) from
 // its constructor, and `_innerRefresh` fires in another deferred callback.
 // Both call into RenderService.dimensions, which reads `_renderer.value` —
@@ -87,6 +107,7 @@ function ensureDeps() {
  */
 export async function createLegoTerminal(target) {
   installXtermErrorShield();
+  ensureFitStyles();
   const { Terminal, FitAddon } = await ensureDeps();
 
   // Wait for the host element to actually have layout before opening.
@@ -109,8 +130,27 @@ export async function createLegoTerminal(target) {
 
   const fitAddon = new FitAddon();
   terminal.loadAddon(fitAddon);
+  target.setAttribute('data-lego-terminal-host', '');
   terminal.open(target);
   try { fitAddon.fit(); } catch {}
+
+  // Reflow xterm whenever the target resizes (splitter drag, ControlPanel
+  // gaining a new button row after connect, window resize, etc.). Without
+  // this the .xterm element follows the container via CSS but the terminal
+  // model keeps its original row count, so the bottom rows scroll past the
+  // visible area.
+  let resizeObserver = null;
+  if (typeof ResizeObserver !== 'undefined') {
+    let rafId = 0;
+    resizeObserver = new ResizeObserver(() => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        try { fitAddon.fit(); } catch { /* torn down */ }
+      });
+    });
+    resizeObserver.observe(target);
+  }
 
   const controller = {
     terminal,
@@ -118,6 +158,8 @@ export async function createLegoTerminal(target) {
     clear: () => terminal.clear(),
     fit: () => { try { fitAddon.fit(); } catch {} },
     dispose: () => {
+      try { resizeObserver?.disconnect(); } catch {}
+      try { target.removeAttribute('data-lego-terminal-host'); } catch {}
       try { terminal.dispose(); } catch {}
     },
   };

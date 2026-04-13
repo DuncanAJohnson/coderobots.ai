@@ -36,6 +36,14 @@ const encoder = new TextEncoder;
  * @param {Element} target
  * @returns {Promise<unknown>[]}
  */
+const FIT_STYLE_ID = 'microrepl-xterm-fit-fix';
+const FIT_STYLE_CSS = `
+  .xterm { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .xterm .xterm-viewport { width: 100% !important; height: 100% !important; }
+  .xterm .xterm-screen { width: 100% !important; }
+  [data-microrepl-target] { position: relative; overflow: hidden; }
+`;
+
 const dependencies = ({ ownerDocument }) => {
   const rel = 'stylesheet';
   const href = `${CDN}/xterm@${XTERM}/css/xterm.min.css`;
@@ -44,6 +52,12 @@ const dependencies = ({ ownerDocument }) => {
     ownerDocument.head.append(
       assign(ownerDocument.createElement('link'), { rel, href })
     );
+  }
+  if (!ownerDocument.getElementById(FIT_STYLE_ID)) {
+    const style = ownerDocument.createElement('style');
+    style.id = FIT_STYLE_ID;
+    style.textContent = FIT_STYLE_CSS;
+    ownerDocument.head.append(style);
   }
   return [
     import(`${CDN}/codedent@${CODEDENT}/+esm`),
@@ -149,6 +163,7 @@ export default function Board({
   let port = null;
   let terminal = null;
   let fitAddon = null;
+  let resizeObserver = null;
   let name = 'unknown';
   let accumulator = '';
   let aborter, dedent, readerClosed, writer, writerClosed;
@@ -324,9 +339,26 @@ export default function Board({
         fitAddon = new FitAddon;
         terminal.loadAddon(fitAddon);
         terminal.loadAddon(new WebLinksAddon);
+        target.setAttribute('data-microrepl-target', '');
         terminal.open(target);
         fitAddon.fit();
         terminal.focus();
+
+        // Reflow xterm whenever the target container resizes (drag of the
+        // splitter, ControlPanel gaining a new button row, window resize,
+        // etc.). Without this, xterm keeps its initial row count and either
+        // clips the bottom rows or overflows the container.
+        if (typeof ResizeObserver !== 'undefined') {
+          let rafId = 0;
+          resizeObserver = new ResizeObserver(() => {
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+              rafId = 0;
+              try { fitAddon?.fit(); } catch { /* terminal torn down */ }
+            });
+          });
+          resizeObserver.observe(target);
+        }
 
         if (named) {
           // bootstrap with board name details
@@ -373,6 +405,10 @@ export default function Board({
         port = null;
         terminal = null;
         fitAddon = null;
+        if (resizeObserver) {
+          try { resizeObserver.disconnect(); } catch { /* already gone */ }
+          resizeObserver = null;
+        }
         try {
           aborter.abort('disconnect');
           writer.close();
