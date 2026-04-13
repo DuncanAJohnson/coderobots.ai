@@ -1,20 +1,28 @@
 import { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import Board from '../utils/microRepl.js';
-import { STOP_CODE } from '../utils/stopSpike.js';
-import { STOP_CODE_MICROBIT } from '../utils/stopMicroBit.js';
+import { STOP_CODE } from '../utils/spike/stopSpike.js';
+import { STOP_CODE_MICROBIT } from '../utils/microbit/stopMicroBit.js';
 import {
   shouldInstallMicrobitFirmware,
   openMicrobitInstallerSession,
   waitForMicrobitSerialPort,
   findAuthorizedMicrobitSerialPort,
-} from '../utils/microbitFirmware.js';
+} from '../utils/microbit/microbitFirmware.js';
+import {
+  connectEsp32,
+  flashBinary as flashEsp32Binary,
+  resetEsp32,
+  disconnectEsp32,
+} from '../utils/esp32/esp32Flasher.js';
+import { findAuthorizedEsp32SerialPort } from '../utils/esp32/esp32UsbFilters.js';
+import { compileSketch, Esp32CompileError } from '../utils/esp32/esp32Compile.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import FlashProgressModal from './FlashProgressModal.jsx';
 import LegoConnectPanel from './LegoConnectPanel.jsx';
-import { createLegoTerminal } from '../utils/legoTerminal.js';
-import { ensurePyodide, runPython, isPyodideReady, interruptPython, freezeBridge, terminatePyodide } from '../utils/pyodideRunner.js';
-import { disconnectAll as legoDisconnectAll, stopAllMotion as legoStopAllMotion } from '../utils/legoDevices.js';
+import { createLegoTerminal } from '../utils/legoEducation/legoTerminal.js';
+import { ensurePyodide, runPython, isPyodideReady, interruptPython, freezeBridge, terminatePyodide } from '../utils/legoEducation/pyodideRunner.js';
+import { disconnectAll as legoDisconnectAll, stopAllMotion as legoStopAllMotion } from '../utils/legoEducation/legoDevices.js';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useHardware } from '../contexts/HardwareContext';
 import './SPIKEEditor.css';
@@ -24,7 +32,7 @@ const CODE_STORAGE_KEY = 'coderobots_editor_code';
 
 const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
   const { t } = useLanguage();
-  const { hardware, isMicrobit, isLegoEducation, registerDisconnectHandler } = useHardware();
+  const { hardware, isMicrobit, isLegoEducation, isEsp32, registerDisconnectHandler } = useHardware();
   const [connected, setConnected] = useState(false);
   const [mode, setMode] = useState('disconnected');
   const [code, setCode] = useState(t('initialCode'));
@@ -45,6 +53,8 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
   const containerRef = useRef(null);
   const replDetectedRef = useRef(false);
   const legoTerminalRef = useRef(null);
+  const esp32SessionRef = useRef(null);
+  const esp32TerminalRef = useRef(null);
 
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
@@ -95,9 +105,10 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
     return () => clearTimeout(timeoutId);
   }, [code]);
 
-  // Initialize board on mount (skip for LEGO Education — it uses Pyodide, not a serial REPL)
+  // Initialize board on mount (skip for LEGO Education — Pyodide instead, and
+  // skip for ESP32 — Arduino C via esptool-js, not a MicroPython REPL)
   useEffect(() => {
-    if (isLegoEducation) return;
+    if (isLegoEducation || isEsp32) return;
     if (!boardRef.current) {
       boardRef.current = new Board({
         baudRate: 115200,
@@ -143,7 +154,43 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
         }
       });
     }
-  }, [isLegoEducation]);
+  }, [isLegoEducation, isEsp32]);
+
+  // ESP32 mode: mount a standalone xterm for the Arduino serial monitor.
+  useEffect(() => {
+    if (!isEsp32) return;
+    let cancelled = false;
+    let controller = null;
+
+    (async () => {
+      const host = replContainerRef.current;
+      if (!host) return;
+      try {
+        controller = await createLegoTerminal(host);
+        if (cancelled) { controller.dispose(); return; }
+        esp32TerminalRef.current = controller;
+        controller.write(`ESP32 ${t('disconnected')}. ${t('connect')}…\r\n`);
+      } catch (err) {
+        console.error('[ESP32] terminal init failed:', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      const session = esp32SessionRef.current;
+      esp32SessionRef.current = null;
+      if (session) {
+        disconnectEsp32(session).catch(() => {});
+      }
+      if (controller && esp32TerminalRef.current === controller) {
+        esp32TerminalRef.current = null;
+        try { controller.dispose(); } catch {}
+      }
+      setConnected(false);
+      setMode('disconnected');
+      onConnectionChange?.(false);
+    };
+  }, [isEsp32]);
 
   // LEGO Education mode: mount a standalone xterm + lazy-load Pyodide.
   useEffect(() => {
@@ -196,6 +243,12 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
       if (board && connectedRef.current) {
         try { await board.reset(); } catch {}
         try { await board.disconnect(); } catch {}
+      }
+      // ESP32: release the serial port and xterm so the next mode starts clean.
+      const esp32Session = esp32SessionRef.current;
+      esp32SessionRef.current = null;
+      if (esp32Session) {
+        try { await disconnectEsp32(esp32Session); } catch {}
       }
       // LEGO Education: close all Bluetooth connections + kill Pyodide
       // worker so the next mode has a clean slate.
@@ -305,6 +358,37 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
     // so the generic Connect button in ControlPanel is a no-op.
     if (isLegoEducation) return;
 
+    if (isEsp32) {
+      const terminal = esp32TerminalRef.current?.terminal;
+      if (esp32SessionRef.current) {
+        // Disconnect path
+        try {
+          await disconnectEsp32(esp32SessionRef.current);
+        } catch (err) {
+          console.warn('ESP32 disconnect failed:', err);
+        }
+        esp32SessionRef.current = null;
+        setConnected(false);
+        setMode('disconnected');
+        onConnectionChange?.(false);
+        esp32TerminalRef.current?.write(`\r\n${t('disconnected')}\r\n`);
+        return;
+      }
+      try {
+        const existingPort = await findAuthorizedEsp32SerialPort();
+        const session = await connectEsp32({ terminal, preselectedPort: existingPort });
+        esp32SessionRef.current = session;
+        setConnected(true);
+        setMode('repl');
+        onConnectionChange?.(true);
+        esp32TerminalRef.current?.write(`\r\n${t('esp32Connected')}\r\n`);
+      } catch (err) {
+        console.error('ESP32 connect failed:', err);
+        esp32TerminalRef.current?.write(`\r\n\x1b[31m${err.message || err}\x1b[0m\r\n`);
+      }
+      return;
+    }
+
     const board = boardRef.current;
     if (!board) return;
 
@@ -388,6 +472,40 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
   const handleRun = async () => {
     const currentCode = editorRef.current?.getCode() || code;
 
+    if (isEsp32) {
+      const session = esp32SessionRef.current;
+      const term = esp32TerminalRef.current;
+      if (!session) {
+        term?.write(`\r\n\x1b[33m${t('connect')}…\x1b[0m\r\n`);
+        return;
+      }
+      setIsRunning(true);
+      try {
+        term?.write(`\r\n\x1b[36m${t('esp32Compiling')}\x1b[0m\r\n`);
+        const compileResult = await compileSketch(currentCode);
+        const { binary, flashOffset } = compileResult;
+        console.log('[esp32 compile stdout]\n' + (compileResult.stdout || '(empty)'));
+        term?.write(`\r\n\x1b[36m${t('esp32Flashing')}\x1b[0m\r\n`);
+        await flashEsp32Binary(session, binary, flashOffset, (written, total) => {
+          const pct = Math.round((written / total) * 100);
+          term?.write(`\rFlash: ${pct}% (${written}/${total})`);
+        });
+        term?.write(`\r\n\x1b[32mDone.\x1b[0m\r\n`);
+      } catch (err) {
+        if (err instanceof Esp32CompileError) {
+          term?.write(`\r\n\x1b[31m${t('esp32CompileFailed')}\x1b[0m\r\n`);
+          if (err.stderr) term?.write(`\x1b[31m${err.stderr.replace(/\n/g, '\r\n')}\x1b[0m\r\n`);
+          else term?.write(`\x1b[31m${err.message}\x1b[0m\r\n`);
+        } else {
+          console.error('ESP32 flash failed:', err);
+          term?.write(`\r\n\x1b[31m${err.message || err}\x1b[0m\r\n`);
+        }
+      } finally {
+        setIsRunning(false);
+      }
+      return;
+    }
+
     if (isLegoEducation) {
       if (!isPyodideReady()) {
         legoTerminalRef.current?.write(`\r\n\x1b[33m${t('legoLoadingPython')}\x1b[0m\r\n`);
@@ -433,6 +551,19 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
   };
 
   const handleCtrlC = async () => {
+    if (isEsp32) {
+      const session = esp32SessionRef.current;
+      if (!session) return;
+      setIsRunning(false);
+      try {
+        await resetEsp32(session);
+        esp32TerminalRef.current?.write('\r\n\x1b[33m[reset]\x1b[0m\r\n');
+      } catch (err) {
+        console.warn('ESP32 reset failed:', err);
+      }
+      return;
+    }
+
     if (isLegoEducation) {
       setIsRunning(false);
       // Freeze the bridge FIRST so the Python worker can no longer issue
@@ -472,6 +603,19 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
   };
 
   const handleReset = async () => {
+    if (isEsp32) {
+      const session = esp32SessionRef.current;
+      if (!session) return;
+      setIsRunning(false);
+      try {
+        await resetEsp32(session);
+        esp32TerminalRef.current?.write('\r\n\x1b[33m[reset]\x1b[0m\r\n');
+      } catch (err) {
+        console.warn('ESP32 reset failed:', err);
+      }
+      return;
+    }
+
     const board = boardRef.current;
     if (!board || !connected) return;
 
@@ -492,6 +636,9 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
     }
     if (legoTerminalRef.current) {
       legoTerminalRef.current.clear();
+    }
+    if (esp32TerminalRef.current) {
+      esp32TerminalRef.current.clear();
     }
     setBuffer('');
   };

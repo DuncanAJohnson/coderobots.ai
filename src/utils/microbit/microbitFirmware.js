@@ -4,7 +4,7 @@ import {
   createUniversalHexFlashDataSource,
   createWebUSBConnection,
 } from '@microbit/microbit-connection';
-import microbitFirmwareHex from '../assets/microbit-v2-micropython-v2.1.1.hex?raw';
+import microbitFirmwareHex from '../../assets/microbit-v2-micropython-v2.1.1.hex?raw';
 
 // micro:bit DAPLink USB identifiers (v1 and v2).
 export const MICROBIT_USB_FILTERS = [
