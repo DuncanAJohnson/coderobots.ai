@@ -41,6 +41,7 @@
   "enterProgramSlot": "Enter Program Slot Mode",
   "clearConsole": "Clear Console",
   "runProgram": "\u25b6 Run Program",
+  "esp32CompileAndUpload": "\u25b6 Compile and Upload",
   "stopProgram": "Stop Program",
   "resetDevice": "Reset Device",
   "slot": "Slot",

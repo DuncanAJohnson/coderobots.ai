@@ -13,17 +13,6 @@ const FLASH_BAUD = 921600;
  * @property {boolean} monitorStopped
  */
 
-// esptool-js writeFlash expects the image as a *binary string* (each byte as
-// a char code), not a Uint8Array. Convert once before handing it off.
-const uint8ToBinaryString = (u8) => {
-  let s = '';
-  const CHUNK = 0x8000;
-  for (let i = 0; i < u8.length; i += CHUNK) {
-    s += String.fromCharCode.apply(null, u8.subarray(i, i + CHUNK));
-  }
-  return s;
-};
-
 const createLoaderTerminal = (xterm) => ({
   clean: () => xterm?.clear(),
   writeLine: (data) => xterm?.writeln(data),
@@ -113,11 +102,11 @@ export const flashBinary = async (session, binary, offset, onProgress) => {
   try {
     await loader.main();
     await loader.writeFlash({
-      fileArray: [{ data: uint8ToBinaryString(binary), address: offset }],
+      fileArray: [{ data: binary, address: offset }],
       flashMode: 'keep',
       flashFreq: 'keep',
       flashSize: 'keep',
-      eraseAll: false,
+      eraseAll: true,
       compress: true,
       reportProgress: (_i, written, total) => onProgress?.(written, total),
     });

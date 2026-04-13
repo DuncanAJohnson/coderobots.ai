@@ -74,7 +74,7 @@ const ControlPanel = ({
       <div className="button-group repl-only">
         {!isLegoEducation && (
           <button onClick={onRun} className="button" disabled={isRunning}>
-            {t('runProgram')}
+            {isEsp32 ? t('esp32CompileAndUpload') : t('runProgram')}
           </button>
         )}
         {!isLegoEducation && (

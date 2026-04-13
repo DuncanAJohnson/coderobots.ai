@@ -35,6 +35,7 @@ image = (
         "https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json",
         "arduino-cli core update-index",
         "arduino-cli core install esp32:esp32",
+        "arduino-cli lib install \"Adafruit SSD1306\" \"Adafruit GFX Library\" \"Adafruit BusIO\"",
     )
 )
 
@@ -65,12 +66,14 @@ def _compile_sketch(sketch: str, fqbn: str) -> dict:
         out_dir = os.path.join(tmp, "build")
         os.makedirs(out_dir)
 
+        build_fqbn = f"{fqbn}:FlashMode=dio"
+
         result = subprocess.run(
             [
                 "arduino-cli",
                 "compile",
                 "--fqbn",
-                fqbn,
+                build_fqbn,
                 "--output-dir",
                 out_dir,
                 "--warnings",
@@ -110,13 +113,23 @@ def _compile_sketch(sketch: str, fqbn: str) -> dict:
                 }
 
         with open(merged_path, "rb") as f:
-            return {
-                "ok": True,
-                "flash_offset": 0x0,
-                "binary": base64.b64encode(f.read()).decode("ascii"),
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-            }
+            data = f.read()
+        header_info = ""
+        if len(data) >= 4 and data[0] == 0xE9:
+            mode_names = {0: "QIO", 1: "QOUT", 2: "DIO", 3: "DOUT"}
+            header_info = (
+                f"\n[diag] merged.bin size={len(data)} "
+                f"header: magic=0xE9 "
+                f"spi_mode=0x{data[2]:02x} ({mode_names.get(data[2], '?')}) "
+                f"spi_size_freq=0x{data[3]:02x}"
+            )
+        return {
+            "ok": True,
+            "flash_offset": 0x0,
+            "binary": base64.b64encode(data).decode("ascii"),
+            "stdout": result.stdout + header_info,
+            "stderr": result.stderr,
+        }
 
 
 @app.function(image=image, timeout=300)

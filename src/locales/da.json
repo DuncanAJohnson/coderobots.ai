@@ -41,6 +41,7 @@
   "enterProgramSlot": "G\u00e5 til programplads-tilstand",
   "clearConsole": "Ryd konsol",
   "runProgram": "\u25b6 K\u00f8r program",
+  "esp32CompileAndUpload": "\u25b6 Kompil\u00e9r og upload",
   "stopProgram": "Stop program",
   "resetDevice": "Nulstil enhed",
   "slot": "Plads",

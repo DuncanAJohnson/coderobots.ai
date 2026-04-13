@@ -482,7 +482,9 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
       setIsRunning(true);
       try {
         term?.write(`\r\n\x1b[36m${t('esp32Compiling')}\x1b[0m\r\n`);
-        const { binary, flashOffset } = await compileSketch(currentCode);
+        const compileResult = await compileSketch(currentCode);
+        const { binary, flashOffset } = compileResult;
+        console.log('[esp32 compile stdout]\n' + (compileResult.stdout || '(empty)'));
         term?.write(`\r\n\x1b[36m${t('esp32Flashing')}\x1b[0m\r\n`);
         await flashEsp32Binary(session, binary, flashOffset, (written, total) => {
           const pct = Math.round((written / total) * 100);
