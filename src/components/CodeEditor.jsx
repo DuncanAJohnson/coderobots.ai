@@ -1,9 +1,12 @@
 import { useRef, forwardRef, useImperativeHandle } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
+import { cpp } from '@codemirror/lang-cpp';
 import { EditorView } from '@codemirror/view';
+import { useHardware } from '../contexts/HardwareContext';
 
 const CodeEditor = forwardRef(({ initialCode = '# Start your project here!\n', onChange }, ref) => {
+  const { isEsp32 } = useHardware();
   const editorViewRef = useRef(null);
   const codeRef = useRef(initialCode);
 
@@ -39,7 +42,7 @@ const CodeEditor = forwardRef(({ initialCode = '# Start your project here!\n', o
       value={initialCode}
       height="100%"
       extensions={[
-        python(),
+        isEsp32 ? cpp() : python(),
         EditorView.theme({
           '&': {
             height: '100%',

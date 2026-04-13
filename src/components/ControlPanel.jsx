@@ -19,14 +19,23 @@ const ControlPanel = ({
 }) => {
   const isMicrobit = hardware === 'microbit';
   const isLegoEducation = hardware === 'lego-education';
+  const isEsp32 = hardware === 'esp32';
   const { t } = useLanguage();
+
+  const connectedLabel = isMicrobit
+    ? t('microbitConnected')
+    : isEsp32
+    ? t('esp32Connected')
+    : isLegoEducation
+    ? t('legoEducationConnected')
+    : t('replMode');
 
   return (
     <div className={`control-panel right-panel ${mode}-mode`}>
       <div className="mode-status">
         {t('statusLabel')}<span className="mode-indicator">
           {mode === 'disconnected' && t('disconnected')}
-          {mode === 'repl' && (isMicrobit ? t('microbitConnected') : isLegoEducation ? t('legoEducationConnected') : t('replMode'))}
+          {mode === 'repl' && connectedLabel}
           {mode === 'program-slot' && t('programSlotMode')}
         </span>
       </div>
@@ -37,12 +46,12 @@ const ControlPanel = ({
             {connected ? t('disconnect') : t('connect')}
           </button>
         )}
-        {!isMicrobit && !isLegoEducation && (
+        {!isMicrobit && !isLegoEducation && !isEsp32 && (
           <button onClick={onEnterREPL} className="button program-slot-only">
             {t('enterRepl')}
           </button>
         )}
-        {!isMicrobit && !isLegoEducation && (
+        {!isMicrobit && !isLegoEducation && !isEsp32 && (
           <button onClick={onEnterProgramSlot} className="button repl-only">
             {t('enterProgramSlot')}
           </button>
@@ -79,10 +88,7 @@ const ControlPanel = ({
           </button>
         )}
         {!isLegoEducation && <div className="vertical-line"></div>}
-        {isLegoEducation ? null : isMicrobit ? (
-          // <button onClick={onSaveToMainPy} className="button">
-          //   {t('saveToMainPy')}
-          // </button>
+        {isLegoEducation ? null : (isMicrobit || isEsp32) ? (
           <></>
         ) : (
           <>

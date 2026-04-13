@@ -5,7 +5,7 @@ import {
   getConnectionState,
   subscribe,
   LEGO_SLOT_NAMES,
-} from '../utils/legoDevices';
+} from '../utils/legoEducation/legoDevices';
 import { useLanguage } from '../contexts/LanguageContext';
 import './LegoConnectPanel.css';
 
