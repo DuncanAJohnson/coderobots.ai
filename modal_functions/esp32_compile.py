@@ -35,7 +35,8 @@ image = (
         "https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json",
         "arduino-cli core update-index",
         "arduino-cli core install esp32:esp32",
-        "arduino-cli lib install \"Adafruit SSD1306\" \"Adafruit GFX Library\" \"Adafruit BusIO\"",
+        "arduino-cli lib install \"Adafruit SSD1306\" \"Adafruit GFX Library\" "
+        "\"Adafruit BusIO\" \"Adafruit Unified Sensor\" \"Adafruit ADXL345\"",
     )
 )
 
