@@ -133,8 +133,14 @@ def _compile_sketch(sketch: str, fqbn: str) -> dict:
         }
 
 
-@app.function(image=image, timeout=300)
-@modal.concurrent(max_inputs=4, target_inputs=2)
+@app.function(
+    image=image,
+    timeout=300,
+    cpu=2.0,
+    min_containers=1,
+    scaledown_window=600,
+)
+@modal.concurrent(max_inputs=2, target_inputs=1)
 @modal.fastapi_endpoint(method="POST")
 async def compile_endpoint(request: dict):
     from fastapi.responses import JSONResponse

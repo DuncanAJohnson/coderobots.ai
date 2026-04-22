@@ -1,4 +1,4 @@
-import { ESPLoader, Transport } from 'esptool-js';
+import { ESPLoader, Transport, UsbJtagSerialReset } from 'esptool-js';
 import { ESP32_USB_FILTERS } from './esp32UsbFilters.js';
 
 const MONITOR_BAUD = 115200;
@@ -97,6 +97,9 @@ export const flashBinary = async (session, binary, offset, onProgress) => {
     romBaudrate: MONITOR_BAUD,
     terminal: session.terminal ? createLoaderTerminal(session.terminal) : undefined,
     enableTracing: false,
+    resetConstructors: {
+      hardReset: (t) => new UsbJtagSerialReset(t),
+    },
   });
 
   try {
@@ -135,6 +138,9 @@ export const resetEsp32 = async (session) => {
     baudrate: MONITOR_BAUD,
     romBaudrate: MONITOR_BAUD,
     enableTracing: false,
+    resetConstructors: {
+      hardReset: (t) => new UsbJtagSerialReset(t),
+    },
   });
 
   try {
