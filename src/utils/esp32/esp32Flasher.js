@@ -1,8 +1,29 @@
 import { ESPLoader, Transport, UsbJtagSerialReset } from 'esptool-js';
-import { ESP32_USB_FILTERS } from './esp32UsbFilters.js';
+import { ESP32_USB_FILTERS, waitForEsp32SerialPort } from './esp32UsbFilters.js';
 
 const MONITOR_BAUD = 115200;
 const FLASH_BAUD = 921600;
+// Native USB-JTAG chips take ~150 ms to re-enumerate after a hard reset.
+const REENUMERATE_SETTLE_MS = 150;
+const REENUMERATE_TIMEOUT_MS = 6000;
+
+/**
+ * After a hard reset the XIAO ESP32-C3's native USB-JTAG interface
+ * re-enumerates, which invalidates the SerialPort handle we were holding.
+ * Wait for the re-enumerated port to show up and swap it into the session
+ * so the monitor reconnects to a live handle.
+ */
+const reacquirePortAfterReset = async (session) => {
+  await new Promise((resolve) => setTimeout(resolve, REENUMERATE_SETTLE_MS));
+  const freshPort = await waitForEsp32SerialPort(REENUMERATE_TIMEOUT_MS);
+  if (freshPort) {
+    session.port = freshPort;
+  } else {
+    session.terminal?.writeln?.(
+      '\x1b[33mCould not reacquire ESP32 port after reset — try unplugging and reconnecting.\x1b[0m',
+    );
+  }
+};
 
 /**
  * @typedef {Object} Esp32Session
@@ -118,6 +139,7 @@ export const flashBinary = async (session, binary, offset, onProgress) => {
     try { await transport.disconnect(); } catch { /* ignore */ }
   }
 
+  await reacquirePortAfterReset(session);
   await session.port.open({ baudRate: MONITOR_BAUD });
   startMonitor(session);
 };
@@ -152,6 +174,7 @@ export const resetEsp32 = async (session) => {
     try { await transport.disconnect(); } catch { /* ignore */ }
   }
 
+  await reacquirePortAfterReset(session);
   try { await session.port.open({ baudRate: MONITOR_BAUD }); } catch { /* ignore */ }
   startMonitor(session);
 };
