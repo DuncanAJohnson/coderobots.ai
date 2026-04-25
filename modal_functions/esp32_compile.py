@@ -137,7 +137,6 @@ def _compile_sketch(sketch: str, fqbn: str) -> dict:
     image=image,
     timeout=300,
     cpu=2.0,
-    min_containers=1,
     scaledown_window=600,
 )
 @modal.concurrent(max_inputs=2, target_inputs=1)

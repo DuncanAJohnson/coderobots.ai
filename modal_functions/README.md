@@ -45,11 +45,10 @@ Per-request work is I/O-bound (waiting on the upstream LLM), so a single contain
 `arduino-cli compile` is CPU-bound, so the tuning is the opposite: one compile per container, fan out horizontally. Current config:
 
 - `cpu=2.0` — two cores per compile for speed.
-- `min_containers=1` — keeps one warm container live so the first compile of the day skips the ~20s cold start (the image bundles the full ESP32 toolchain + libraries, which is heavy).
-- `scaledown_window=600` — bursts stay warm for 10 min, so a class of students compiling every few minutes stays on hot capacity.
+- `scaledown_window=600` — containers stay warm for 10 min after the last request, so a class of students compiling every few minutes stays on hot capacity. The first compile after an idle period pays a ~20s cold start (the image bundles the full ESP32 toolchain + libraries, which is heavy).
 - `max_inputs=2, target_inputs=1` — Modal fans out to a new container as soon as a second request lands, instead of packing compiles onto one CPU.
 
-If you're not running a class, dropping `min_containers` to `0` removes the idle cost at the price of one cold start per idle period.
+To eliminate cold starts entirely (at the cost of running 24/7), add `min_containers=1` to keep one warm container always live.
 
 Allowed boards are pinned in `ALLOWED_FQBNS`; adding a new FQBN requires only adding it to that set (the ESP32 core is already installed). Adding a new Arduino **library** requires editing the `arduino-cli lib install` line in the image and redeploying.
 
