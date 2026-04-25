@@ -84,7 +84,7 @@
   "hardwarePickerSubtitle": "Vælg den enhed, du vil programmere. Du kan ændre dette senere.",
   "spikePrime": "SPIKE Prime",
   "microbit": "micro:bit",
-  "esp32": "ESP32",
+  "esp32": "XIAO ESP32-C3",
   "legoEducation": "LEGO Education",
   "legoConnectTitle": "Forbind LEGO Education-enheder",
   "legoSingleMotor": "Enkelt motor",

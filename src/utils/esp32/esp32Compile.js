@@ -1,6 +1,7 @@
 const COMPILE_URL = import.meta.env.VITE_ESP32_COMPILE_URL;
 
 const base64ToUint8Array = (b64) => {
+  if (!b64) return null;
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
@@ -20,7 +21,15 @@ export class Esp32CompileError extends Error {
  * Compile an Arduino sketch via the Modal backend.
  * @param {string} sketch  Arduino source
  * @param {string} [board] FQBN, defaults to XIAO ESP32-C3
- * @returns {Promise<{ binary: Uint8Array, flashOffset: number, stdout: string }>}
+ * @returns {Promise<{
+ *   merged: Uint8Array | null,
+ *   mergedOffset: number,
+ *   app: Uint8Array | null,
+ *   appOffset: number,
+ *   partitionsHash: string | null,
+ *   cacheHit: boolean,
+ *   stdout: string,
+ * }>}
  */
 export const compileSketch = async (sketch, board = 'esp32:esp32:XIAO_ESP32C3') => {
   if (!COMPILE_URL) {
@@ -54,8 +63,12 @@ export const compileSketch = async (sketch, board = 'esp32:esp32:XIAO_ESP32C3') 
   }
 
   return {
-    binary: base64ToUint8Array(payload.binary),
-    flashOffset: payload.flash_offset ?? 0x0,
+    merged: base64ToUint8Array(payload.binary),
+    mergedOffset: payload.flash_offset ?? 0x0,
+    app: base64ToUint8Array(payload.app_binary),
+    appOffset: payload.app_offset ?? 0x10000,
+    partitionsHash: payload.partitions_hash || null,
+    cacheHit: payload.cache_hit === true,
     stdout: payload.stdout || '',
   };
 };
