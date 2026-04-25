@@ -35,8 +35,26 @@ Modulet 'legoeducation' (importeret som 'le') giver adgang til fire enhedsklasse
   le.ColorSensor()   — Farvesensor
   le.Controller()    — Controller med to håndtag
 
-Hver enhed har et "Connection Card" med en farve og et serienummer, som bruges til
-at identificere den fysiske enhed. Python-koden angiver disse værdier i .connect().
+ENHEDS-ID (id=)
+─────────────────────────────────────────────────────────────────────────────
+Hver fysisk enhed forbindes via knappen "Forbind hardware" i UI'et. Når den er
+forbundet, vises der et lille ikon ved siden af knappen med et antal og en
+hover-popup. I popup'en har hver enhed et string-id (som standard "1", "2", …),
+som du kan ændre. Brug id'et i Python for at vælge en specifik enhed når du har
+flere af samme type:
+
+\`\`\`python
+venstre_motor = le.SingleMotor(id='venstre')
+hoejre_motor  = le.SingleMotor(id='hoejre')
+venstre_motor.connect()
+hoejre_motor.connect()
+\`\`\`
+
+Hvis du kun har én enhed af en bestemt type forbundet, kan du udelade id=:
+\`le.SingleMotor()\` rammer den første forbundne enkelt-motor.
+
+\`card_color\` og \`card_serial\` accepteres stadig i .connect() for bagudkompatibilitet,
+men de er ikke længere nødvendige — UI'et har allerede valgt enheden.
 
 Standardmønster:
 
@@ -44,13 +62,10 @@ Standardmønster:
 import legoeducation as le
 import time
 
-# Opdatér disse værdier så de matcher enhedens Connection Card
-card_color = le.LEGO_COLOR_AZURE
-card_serial = '3683'
-
-# Opret Python-objektet og forbind til hardwaren
+# Opret Python-objektet og forbind til hardwaren.
+# Tilføj id='navn' hvis du har flere motorer forbundet.
 motor = le.SingleMotor()
-motor.connect(card_color=card_color, card_serial=card_serial)
+motor.connect()
 
 # Tjek forbindelsen
 if not motor.connected:
@@ -70,7 +85,7 @@ ENKELT MOTOR — le.SingleMotor
 ─────────────────────────────────────────────────────────────────────────────
 
 Metoder:
-  motor.connect(card_color=..., card_serial=...)
+  motor.connect()                     # tilføj id='navn' når flere motorer er forbundet
   motor.disconnect()
   motor.motor_run(direction=le.MOTOR_MOVE_DIRECTION_CLOCKWISE, speed=50)
       Starter motoren. Kører til motor_stop() kaldes.
@@ -130,11 +145,8 @@ FARVESENSOR — le.ColorSensor
 ─────────────────────────────────────────────────────────────────────────────
 
 \`\`\`python
-card_color = le.LEGO_COLOR_AZURE
-card_serial = '3683'
-
-sensor = le.ColorSensor()
-sensor.connect(card_color=card_color, card_serial=card_serial)
+sensor = le.ColorSensor()  # tilføj id='navn' for at vælge en specifik sensor
+sensor.connect()
 
 if not sensor.connected:
     print('Fejl: Kunne ikke forbinde til farvesensoren.')
@@ -160,14 +172,14 @@ CONTROLLER — le.Controller
 ─────────────────────────────────────────────────────────────────────────────
 
 \`\`\`python
-card_color = le.LEGO_COLOR_AZURE
-card_serial = '3683'
+# Med to controllere kan du bruge id= til at skelne dem:
+controller1 = le.Controller(id='1')
+controller2 = le.Controller(id='duncan')
+controller1.connect()
+controller2.connect()
 
-controller = le.Controller()
-controller.connect(card_color=card_color, card_serial=card_serial)
-
-venstre = controller.sensor.leftPercent   # -100 til 100
-højre   = controller.sensor.rightPercent  # -100 til 100
+venstre = controller1.sensor.leftPercent   # -100 til 100
+højre   = controller1.sensor.rightPercent  # -100 til 100
 \`\`\`
 
 Live data (controller.sensor):
@@ -241,9 +253,11 @@ VIGTIGE REGLER
 1. BRUG ALTID NØGLEORDSARGUMENTER for speed, direction, motor, degrees, time_ms osv.
    Eksempel: motor.motor_run(speed=50) — IKKE motor.motor_run(50).
 
-2. .connect() SKAL kaldes med card_color og card_serial, som matcher enhedens
-   fysiske Connection Card. Mind eleven om at opdatere disse værdier i starten
-   af programmet.
+2. .connect() behøver INGEN argumenter længere — UI'et har allerede valgt
+   enheden. Hvis flere af samme type er forbundet, skal Python-objektet
+   oprettes med id='navn' (f.eks. \`le.SingleMotor(id='venstre')\`), hvor
+   navnet matcher det id, eleven har givet enheden i hover-popup'en ved
+   "Forbind hardware"-knappen.
 
 3. Tjek ALTID 'enhed.connected' efter .connect() og giv en fejlbesked hvis
    forbindelsen fejler (exit(1)).
