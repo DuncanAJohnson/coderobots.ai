@@ -84,7 +84,7 @@
   "hardwarePickerSubtitle": "Pick the board you want to program. You can change this later.",
   "spikePrime": "SPIKE Prime",
   "microbit": "micro:bit",
-  "esp32": "ESP32",
+  "esp32": "XIAO ESP32-C3",
   "legoEducation": "LEGO Education",
   "legoConnectTitle": "Connect LEGO Education devices",
   "legoSingleMotor": "Single Motor",

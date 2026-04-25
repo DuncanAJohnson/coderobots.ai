@@ -480,17 +480,37 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
         return;
       }
       setIsRunning(true);
+      const tTotal = performance.now();
       try {
         term?.write(`\r\n\x1b[36m${t('esp32Compiling')}\x1b[0m\r\n`);
+        const tCompile = performance.now();
         const compileResult = await compileSketch(currentCode);
-        const { binary, flashOffset } = compileResult;
+        const compileMs = Math.round(performance.now() - tCompile);
         console.log('[esp32 compile stdout]\n' + (compileResult.stdout || '(empty)'));
         term?.write(`\r\n\x1b[36m${t('esp32Flashing')}\x1b[0m\r\n`);
-        await flashEsp32Binary(session, binary, flashOffset, (written, total) => {
-          const pct = Math.round((written / total) * 100);
-          term?.write(`\rFlash: ${pct}% (${written}/${total})`);
-        });
-        term?.write(`\r\n\x1b[32mDone.\x1b[0m\r\n`);
+        const tFlash = performance.now();
+        await flashEsp32Binary(
+          session,
+          {
+            merged: compileResult.merged,
+            mergedOffset: compileResult.mergedOffset,
+            app: compileResult.app,
+            appOffset: compileResult.appOffset,
+            partitionsHash: compileResult.partitionsHash,
+            mode: 'auto',
+          },
+          (written, total) => {
+            const pct = Math.round((written / total) * 100);
+            term?.write(`\rFlash: ${pct}% (${written}/${total})`);
+          },
+        );
+        const flashMs = Math.round(performance.now() - tFlash);
+        const totalMs = Math.round(performance.now() - tTotal);
+        console.log(
+          `[esp32] compile=${compileMs}ms (cacheHit=${compileResult.cacheHit}) ` +
+          `flash+reconnect=${flashMs}ms total=${totalMs}ms`,
+        );
+        term?.write(`\r\n\x1b[32mDone (${totalMs}ms).\x1b[0m\r\n`);
       } catch (err) {
         if (err instanceof Esp32CompileError) {
           term?.write(`\r\n\x1b[31m${t('esp32CompileFailed')}\x1b[0m\r\n`);

@@ -27,18 +27,3 @@ export const findAuthorizedEsp32SerialPort = async () => {
     }) || null
   );
 };
-
-/**
- * Poll navigator.serial.getPorts() until an ESP32 port (re)appears. Used
- * after a hard reset, when the native USB-JTAG interface re-enumerates and
- * the pre-reset SerialPort handle is no longer valid.
- */
-export const waitForEsp32SerialPort = async (timeoutMs = 6000) => {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const port = await findAuthorizedEsp32SerialPort();
-    if (port) return port;
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-  return null;
-};
