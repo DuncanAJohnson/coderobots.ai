@@ -24,8 +24,17 @@ def error_event(message: str) -> str:
     return f"data: {json.dumps({'type': 'error', 'error': message})}\n\n"
 
 
-def progress_event(stage: str, status: str = "done") -> str:
-    return f"data: {json.dumps({'type': 'progress', 'stage': stage, 'status': status})}\n\n"
+def progress_event(stage: str, status: str = "done", payload: dict | None = None) -> str:
+    """Emit an SSE progress event for a non-streaming stage.
+
+    'payload' is an optional stage-specific dict (e.g. selected doc bundles, an
+    outline preview) shown to the client as chain-of-thought. Keep it small —
+    it travels over SSE on every stage transition.
+    """
+    body: dict = {"type": "progress", "stage": stage, "status": status}
+    if payload:
+        body["payload"] = payload
+    return f"data: {json.dumps(body)}\n\n"
 
 
 async def as_sse(token_iter: AsyncIterator[str]) -> AsyncIterator[str]:

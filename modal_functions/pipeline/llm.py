@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import time
 from typing import AsyncIterator
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,15 @@ async def stream_gemma(
     api_key = os.environ.get("SKOLEGPT_API_KEY")
     if not api_url or not api_key:
         raise RuntimeError("SKOLEGPT_API_URL and SKOLEGPT_API_KEY must be set")
+
+    total_chars = sum(len(m.get("content", "")) for m in messages)
+    logger.info(
+        "stream_gemma: %d messages, ~%d input chars (~%d tokens), max_tokens=%s, temp=%.2f",
+        len(messages), total_chars, total_chars // 4, max_tokens, temperature,
+    )
+    t0 = time.monotonic()
+    yielded_chars = 0
+    yielded_tokens = 0
 
     payload: dict = {
         "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
@@ -65,6 +75,10 @@ async def stream_gemma(
                         continue
                     data_str = line_str[6:]
                     if data_str == "[DONE]":
+                        logger.info(
+                            "stream_gemma done: %d tokens, %d chars in %.2fs",
+                            yielded_tokens, yielded_chars, time.monotonic() - t0,
+                        )
                         return
                     try:
                         data = json.loads(data_str)
@@ -79,8 +93,15 @@ async def stream_gemma(
                     choice = choices[0]
                     content = (choice.get("delta") or {}).get("content")
                     if content:
+                        yielded_tokens += 1
+                        yielded_chars += len(content)
                         yield content
                     if choice.get("finish_reason"):
+                        logger.info(
+                            "stream_gemma finished (%s): %d tokens, %d chars in %.2fs",
+                            choice.get("finish_reason"), yielded_tokens, yielded_chars,
+                            time.monotonic() - t0,
+                        )
                         return
 
 

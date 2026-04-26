@@ -26,6 +26,9 @@ class Stage:
 
     `output_budget` is passed to the LLM as max_tokens. `input_budget` is advisory —
     stages can use it inside `build_messages` to trim history (see budget.fit).
+
+    Stages that need conditional execution or that mutate scratch.history (e.g. a
+    summarization stage) override `run()` instead of `build_messages` / `parse`.
     """
 
     name: str = "stage"
@@ -37,3 +40,20 @@ class Stage:
 
     def parse(self, response: str) -> Any:
         return response
+
+    async def run(self, scratch: Scratch) -> None:
+        """Default flow: build_messages → call_gemma → parse → store under self.name."""
+        from .llm import call_gemma
+
+        messages = self.build_messages(scratch)
+        response = await call_gemma(messages, max_tokens=self.output_budget)
+        scratch.artifacts[self.name] = self.parse(response)
+
+    def progress_payload(self, scratch: Scratch) -> dict:
+        """Optional chain-of-thought payload attached to the SSE progress event.
+
+        Defaults to empty. Override to surface stage-specific reasoning to the
+        client (selected docs, outline preview, summarised history note, etc).
+        Keep payloads small — they travel on the wire each transition.
+        """
+        return {}
