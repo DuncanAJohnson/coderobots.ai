@@ -13,17 +13,34 @@ aiStream.js client tolerates the in-between {type:"progress"} events.
 """
 
 import logging
+import os
 import pathlib
 
 import modal
 
-# Modal captures stdout/stderr; configure root logging once so module-level
-# loggers actually emit at INFO without needing per-handler setup.
+# Modal captures stdout/stderr. Set LOG_LEVEL=DEBUG (in the Modal Secret or env)
+# to dump every LLM call's full input messages and full response — verbose but
+# invaluable for diagnosing routing / prompt-assembly issues.
+#
+# IMPORTANT: LOG_LEVEL only affects OUR loggers (tutor_pipeline + pipeline.*).
+# The root logger stays at INFO so we don't drown in DEBUG noise from hpack,
+# h2, asyncio, aiohttp, modal client, etc. that fire on every gRPC frame.
+_LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
+logging.getLogger().setLevel(logging.INFO)
+# Crank up only our own loggers. setLevel on the parent ('pipeline') cascades
+# to all child loggers (pipeline.llm, pipeline.pipeline, pipeline.extras, etc.).
+logging.getLogger("tutor_pipeline").setLevel(_LOG_LEVEL)
+logging.getLogger("pipeline").setLevel(_LOG_LEVEL)
+# Belt and suspenders: hard-silence the noisiest third-party DEBUG sources in
+# case some library has already configured them propagatively.
+for _noisy in ("hpack", "h2", "asyncio", "urllib3", "aiohttp", "modal", "grpclib", "grpc"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 logger = logging.getLogger("tutor_pipeline")
+logger.info("tutor_pipeline module loaded; LOG_LEVEL=%s (applies only to tutor_pipeline + pipeline.*)", _LOG_LEVEL)
 
 app = modal.App("coderobots-tutor")
 
@@ -360,6 +377,13 @@ async def tutor_endpoint(request: dict):
         request.get("level"),
         len(request.get("history", []) or []),
     )
+    if logger.isEnabledFor(10):  # logging.DEBUG
+        import json as _json
+        try:
+            body = _json.dumps(request, ensure_ascii=False, indent=2)
+        except (TypeError, ValueError):
+            body = repr(request)
+        logger.debug("tutor_endpoint REQUEST BODY:\n%s\n--- end request ---", body)
 
     if not request.get("user_msg") or not request.get("hw_mode"):
         logger.warning("tutor_endpoint: missing user_msg or hw_mode; rejecting")

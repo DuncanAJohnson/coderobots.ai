@@ -32,9 +32,18 @@ async def stream_gemma(
         "stream_gemma: %d messages, ~%d input chars (~%d tokens), max_tokens=%s, temp=%.2f",
         len(messages), total_chars, total_chars // 4, max_tokens, temperature,
     )
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("stream_gemma INPUT (%d messages):", len(messages))
+        for i, m in enumerate(messages):
+            content = m.get("content", "")
+            logger.debug(
+                "  [%d/%d %s] (%d chars)\n%s\n--- end message %d ---",
+                i + 1, len(messages), m.get("role", "?"), len(content), content, i + 1,
+            )
     t0 = time.monotonic()
     yielded_chars = 0
     yielded_tokens = 0
+    debug_chunks: list[str] = [] if logger.isEnabledFor(logging.DEBUG) else None  # type: ignore[assignment]
 
     payload: dict = {
         "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
@@ -79,6 +88,12 @@ async def stream_gemma(
                             "stream_gemma done: %d tokens, %d chars in %.2fs",
                             yielded_tokens, yielded_chars, time.monotonic() - t0,
                         )
+                        if debug_chunks is not None:
+                            full = "".join(debug_chunks)
+                            logger.debug(
+                                "stream_gemma OUTPUT (%d chars):\n%s\n--- end output ---",
+                                len(full), full,
+                            )
                         return
                     try:
                         data = json.loads(data_str)
@@ -95,6 +110,8 @@ async def stream_gemma(
                     if content:
                         yielded_tokens += 1
                         yielded_chars += len(content)
+                        if debug_chunks is not None:
+                            debug_chunks.append(content)
                         yield content
                     if choice.get("finish_reason"):
                         logger.info(
@@ -102,6 +119,12 @@ async def stream_gemma(
                             choice.get("finish_reason"), yielded_tokens, yielded_chars,
                             time.monotonic() - t0,
                         )
+                        if debug_chunks is not None:
+                            full = "".join(debug_chunks)
+                            logger.debug(
+                                "stream_gemma OUTPUT (%d chars):\n%s\n--- end output ---",
+                                len(full), full,
+                            )
                         return
 
 
