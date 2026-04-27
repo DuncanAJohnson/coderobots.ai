@@ -17,16 +17,35 @@ four device classes apply.
 When responding with code, format the code block as ```python and comment thoroughly.
 The student cannot see the documentation; never reference "above" or "the docs".
 
+Hardware-id (id=):
+Hver fysisk enhed forbindes via knappen "Forbind hardware" i UI'et. Naar den er
+forbundet, vises et lille ikon ved siden af knappen med en hover-popup. I popup'en
+har hver enhed et string-id (som standard "1", "2", ...), som eleven kan aendre.
+Brug id'et i Python for at vaelge en specifik enhed naar flere af samme type er
+forbundet:
+
+```python
+venstre_motor = le.SingleMotor(id='venstre')
+hoejre_motor  = le.SingleMotor(id='hoejre')
+venstre_motor.connect()
+hoejre_motor.connect()
+```
+
+Hvis kun én enhed af en bestemt type er forbundet, kan id= udelades:
+`le.SingleMotor()` rammer den foerste forbundne enkelt-motor.
+
+`card_color` og `card_serial` accepteres stadig i .connect() for bagudkompatibilitet,
+men er ikke laengere noedvendige — UI'et har allerede valgt enheden.
+
 Standardmoenster (always show this scaffold to the student):
 ```python
 import legoeducation as le
 import time
 
-card_color = le.LEGO_COLOR_AZURE
-card_serial = '3683'
-
+# Opret Python-objektet og forbind til hardwaren.
+# Tilfoej id='navn' hvis flere enheder af samme type er forbundet.
 device = le.SingleMotor()  # eller DoubleMotor / ColorSensor / Controller
-device.connect(card_color=card_color, card_serial=card_serial)
+device.connect()
 
 if not device.connected:
     print('Fejl: Kunne ikke forbinde.')
@@ -41,7 +60,7 @@ exit(0)
 _SINGLE_MOTOR = """\
 --- le.SingleMotor ---
 Methods:
-  motor.connect(card_color=..., card_serial=...)
+  motor.connect()                     # tilfoej id='navn' naar flere motorer er forbundet
   motor.disconnect()
   motor.motor_run(direction=le.MOTOR_MOVE_DIRECTION_CLOCKWISE, speed=50)
       Starter motoren. Koerer til motor_stop() kaldes.
@@ -91,8 +110,8 @@ Live data:
 _COLOR_SENSOR = """\
 --- le.ColorSensor ---
 ```python
-sensor = le.ColorSensor()
-sensor.connect(card_color=le.LEGO_COLOR_AZURE, card_serial='3683')
+sensor = le.ColorSensor()  # tilfoej id='navn' for at vaelge en specifik sensor
+sensor.connect()
 
 if not sensor.connected:
     print('Fejl: Kunne ikke forbinde til farvesensoren.')
@@ -117,11 +136,14 @@ Live data (sensor.sensor):
 _CONTROLLER = """\
 --- le.Controller ---
 ```python
-controller = le.Controller()
-controller.connect(card_color=le.LEGO_COLOR_AZURE, card_serial='3683')
+# Med to controllere kan du bruge id= til at skelne dem:
+controller1 = le.Controller(id='1')
+controller2 = le.Controller(id='duncan')
+controller1.connect()
+controller2.connect()
 
-venstre = controller.sensor.leftPercent     # -100 til 100
-hoejre  = controller.sensor.rightPercent
+venstre = controller1.sensor.leftPercent    # -100 til 100
+hoejre  = controller1.sensor.rightPercent   # -100 til 100
 ```
 
 Live data (controller.sensor):
@@ -168,8 +190,10 @@ Device Face (IMU): le.DEVICE_FACE_LEFT m.fl.
 --- Vigtige regler ---
 1. BRUG ALTID NOEGLEORDSARGUMENTER for speed, direction, motor, degrees, time_ms.
    Eksempel: motor.motor_run(speed=50) — IKKE motor.motor_run(50).
-2. .connect() skal kaldes med card_color og card_serial. Mind eleven om at opdatere
-   disse vaerdier efter Connection Card paa enheden.
+2. .connect() behoever INGEN argumenter laengere — UI'et har allerede valgt
+   enheden. Hvis flere af samme type er forbundet, skal Python-objektet oprettes
+   med id='navn' (f.eks. `le.SingleMotor(id='venstre')`), hvor navnet matcher
+   det id, eleven har givet enheden i hover-popup'en ved "Forbind hardware"-knappen.
 3. Tjek altid 'enhed.connected' efter .connect() og giv en fejlbesked hvis det fejler
    (exit(1)).
 4. 'time' modulet fungerer: import time; time.sleep(1) er ok til korte ventetider.

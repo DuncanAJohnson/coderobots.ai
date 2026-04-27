@@ -123,22 +123,23 @@ def _clean(opts):
     return {k: v for k, v in opts.items() if v is not None}
 
 
-def _call(slot, method, positional=None, **opts):
+def _call(slot, method, positional=None, id=None, **opts):
     return _rpc({
         "kind": "call",
         "slot": slot,
+        "id": id,
         "method": method,
         "positional": list(positional) if positional else [],
         "opts": _clean(opts),
     })
 
 
-def _get(slot, *path):
-    return _rpc({"kind": "get", "slot": slot, "path": list(path)})
+def _get(slot, *path, id=None):
+    return _rpc({"kind": "get", "slot": slot, "id": id, "path": list(path)})
 
 
-def _has(slot):
-    return bool(_rpc({"kind": "has", "slot": slot}))
+def _has(slot, id=None):
+    return bool(_rpc({"kind": "has", "slot": slot, "id": id}))
 
 
 # ---------------------------------------------------------------------------
@@ -148,23 +149,30 @@ def _has(slot):
 class _LegoDeviceBase:
     _slot_name = ""  # overridden by subclasses
 
-    def __init__(self):
+    def __init__(self, id=None):
+        # `id` is the user-assigned string shown in the UI next to the
+        # "Connect Hardware" button. With multiple devices of the same type
+        # connected, pass id='left' / id='right' / etc. to address a
+        # specific one. Leave as None to use the first connected device of
+        # this type.
+        self._id = id
         self._attached = False
 
     # -- connection -------------------------------------------------------
 
     def connect(self, card_color=None, card_serial=None):
-        """Attach this Python object to the JS device instance that was
-        already connected via the UI's 'Forbind …' button.
+        """Attach this Python object to a JS device instance that was
+        already connected via the UI's "Connect Hardware" button.
 
         `card_color` / `card_serial` are accepted for API compatibility with
         the local LEGO Education Python package but are currently ignored —
         the browser connection flow already picked the device.
         """
-        if not _has(self._slot_name):
+        if not _has(self._slot_name, id=self._id):
+            suffix = f" med id='{self._id}'" if self._id is not None else ""
             raise RuntimeError(
-                f"Enheden '{self._slot_name}' er ikke forbundet. "
-                f"Klik 'Forbind' i UI'et først."
+                f"Enheden '{self._slot_name}'{suffix} er ikke forbundet. "
+                f"Klik 'Connect Hardware' i UI'et først."
             )
         self._attached = True
         return True
@@ -177,7 +185,7 @@ class _LegoDeviceBase:
 
     @property
     def connected(self):
-        return self._attached and _has(self._slot_name)
+        return self._attached and _has(self._slot_name, id=self._id)
 
     def _require(self):
         if not self._attached:
@@ -190,7 +198,7 @@ class _LegoDeviceBase:
     def light_color(self, color, pattern=None, intensity=None):
         self._require()
         return _call(
-            self._slot_name, "light_color",
+            self._slot_name, "light_color", id=self._id,
             positional=[color],
             pattern=pattern, intensity=intensity, blocking=False,
         )
@@ -198,14 +206,14 @@ class _LegoDeviceBase:
     def beep(self, pattern=None, frequency=None, count=None):
         self._require()
         return _call(
-            self._slot_name, "beep",
+            self._slot_name, "beep", id=self._id,
             positional=[pattern if pattern is not None else SOUND_PATTERN_BEEP_SINGLE],
             frequency=frequency, count=count, blocking=False,
         )
 
     def stop_beep(self):
         self._require()
-        return _call(self._slot_name, "stop_beep", blocking=False)
+        return _call(self._slot_name, "stop_beep", id=self._id, blocking=False)
 
     # -- live data passthroughs ------------------------------------------
 
@@ -213,19 +221,19 @@ class _LegoDeviceBase:
     def info_device(self):
         if not self._attached:
             return None
-        return _get(self._slot_name, "info_device")
+        return _get(self._slot_name, "info_device", id=self._id)
 
     @property
     def scanned_card(self):
         if not self._attached:
             return None
-        return _get(self._slot_name, "scanned_card")
+        return _get(self._slot_name, "scanned_card", id=self._id)
 
     @property
     def button(self):
         if not self._attached:
             return None
-        return _get(self._slot_name, "button")
+        return _get(self._slot_name, "button", id=self._id)
 
 
 # ---------------------------------------------------------------------------
@@ -240,19 +248,19 @@ class SingleMotor(_LegoDeviceBase):
         """Live motor state snapshot: position, speed, motorState, etc."""
         if not self._attached:
             return None
-        return _get(self._slot_name, "motor")
+        return _get(self._slot_name, "motor", id=self._id)
 
     def motor_run(self, speed=None, direction=None):
         self._require()
         return _call(
-            self._slot_name, "motor_run",
+            self._slot_name, "motor_run", id=self._id,
             speed=speed, direction=direction, blocking=False,
         )
 
     def motor_run_for_degrees(self, degrees, speed=None, direction=None):
         self._require()
         return _call(
-            self._slot_name, "motor_run_for_degrees",
+            self._slot_name, "motor_run_for_degrees", id=self._id,
             positional=[degrees],
             speed=speed, direction=direction, blocking=False,
         )
@@ -260,7 +268,7 @@ class SingleMotor(_LegoDeviceBase):
     def motor_run_for_time(self, time_ms, speed=None, direction=None):
         self._require()
         return _call(
-            self._slot_name, "motor_run_for_time",
+            self._slot_name, "motor_run_for_time", id=self._id,
             positional=[time_ms],
             speed=speed, direction=direction, blocking=False,
         )
@@ -268,7 +276,7 @@ class SingleMotor(_LegoDeviceBase):
     def motor_run_to_absolute_position(self, position, speed=None, direction=None):
         self._require()
         return _call(
-            self._slot_name, "motor_run_to_absolute_position",
+            self._slot_name, "motor_run_to_absolute_position", id=self._id,
             positional=[position],
             speed=speed, direction=direction, blocking=False,
         )
@@ -276,26 +284,26 @@ class SingleMotor(_LegoDeviceBase):
     def motor_run_to_relative_position(self, position, speed=None):
         self._require()
         return _call(
-            self._slot_name, "motor_run_to_relative_position",
+            self._slot_name, "motor_run_to_relative_position", id=self._id,
             positional=[position],
             speed=speed, blocking=False,
         )
 
     def motor_stop(self):
         self._require()
-        return _call(self._slot_name, "motor_stop", blocking=False)
+        return _call(self._slot_name, "motor_stop", id=self._id, blocking=False)
 
     def motor_set_speed(self, speed):
         self._require()
         return _call(
-            self._slot_name, "motor_set_speed",
+            self._slot_name, "motor_set_speed", id=self._id,
             positional=[speed], blocking=False,
         )
 
     def motor_reset_relative_position(self, position=0):
         self._require()
         return _call(
-            self._slot_name, "motor_reset_relative_position",
+            self._slot_name, "motor_reset_relative_position", id=self._id,
             position=position, blocking=False,
         )
 
@@ -314,33 +322,33 @@ class DoubleMotor(_LegoDeviceBase):
         """List-like of two motor notifications: motor[0]=left, motor[1]=right."""
         if not self._attached:
             return None
-        return _get(self._slot_name, "motor")
+        return _get(self._slot_name, "motor", id=self._id)
 
     @property
     def imu_device(self):
         if not self._attached:
             return None
-        return _get(self._slot_name, "imu_device")
+        return _get(self._slot_name, "imu_device", id=self._id)
 
     @property
     def imu_gesture(self):
         if not self._attached:
             return None
-        return _get(self._slot_name, "imu_gesture")
+        return _get(self._slot_name, "imu_gesture", id=self._id)
 
     # --- individual motor commands (with motor= kwarg) ---
 
     def motor_run(self, speed=None, direction=None, motor=None):
         self._require()
         return _call(
-            self._slot_name, "motor_run",
+            self._slot_name, "motor_run", id=self._id,
             speed=speed, direction=direction, motor=motor, blocking=False,
         )
 
     def motor_run_for_degrees(self, degrees, speed=None, direction=None, motor=None):
         self._require()
         return _call(
-            self._slot_name, "motor_run_for_degrees",
+            self._slot_name, "motor_run_for_degrees", id=self._id,
             positional=[degrees],
             speed=speed, direction=direction, motor=motor, blocking=False,
         )
@@ -348,7 +356,7 @@ class DoubleMotor(_LegoDeviceBase):
     def motor_run_for_time(self, time_ms, speed=None, direction=None, motor=None):
         self._require()
         return _call(
-            self._slot_name, "motor_run_for_time",
+            self._slot_name, "motor_run_for_time", id=self._id,
             positional=[time_ms],
             speed=speed, direction=direction, motor=motor, blocking=False,
         )
@@ -356,7 +364,7 @@ class DoubleMotor(_LegoDeviceBase):
     def motor_stop(self, motor=None):
         self._require()
         return _call(
-            self._slot_name, "motor_stop",
+            self._slot_name, "motor_stop", id=self._id,
             motor=motor, blocking=False,
         )
 
@@ -365,14 +373,14 @@ class DoubleMotor(_LegoDeviceBase):
     def movement_move(self, direction=None, speed=None):
         self._require()
         return _call(
-            self._slot_name, "movement_move",
+            self._slot_name, "movement_move", id=self._id,
             direction=direction, speed=speed, blocking=False,
         )
 
     def movement_move_for_time(self, time_ms, direction=None, speed=None):
         self._require()
         return _call(
-            self._slot_name, "movement_move_for_time",
+            self._slot_name, "movement_move_for_time", id=self._id,
             positional=[time_ms],
             direction=direction, speed=speed, blocking=False,
         )
@@ -380,7 +388,7 @@ class DoubleMotor(_LegoDeviceBase):
     def movement_move_for_degrees(self, degrees, direction=None, speed=None):
         self._require()
         return _call(
-            self._slot_name, "movement_move_for_degrees",
+            self._slot_name, "movement_move_for_degrees", id=self._id,
             positional=[degrees],
             direction=direction, speed=speed, blocking=False,
         )
@@ -388,7 +396,7 @@ class DoubleMotor(_LegoDeviceBase):
     def movement_move_tank(self, speed_left, speed_right):
         self._require()
         return _call(
-            self._slot_name, "movement_move_tank",
+            self._slot_name, "movement_move_tank", id=self._id,
             positional=[speed_left, speed_right],
             blocking=False,
         )
@@ -396,19 +404,19 @@ class DoubleMotor(_LegoDeviceBase):
     def movement_turn_for_degrees(self, degrees, direction=None, speed=None):
         self._require()
         return _call(
-            self._slot_name, "movement_turn_for_degrees",
+            self._slot_name, "movement_turn_for_degrees", id=self._id,
             positional=[degrees],
             direction=direction, speed=speed, blocking=False,
         )
 
     def movement_stop(self):
         self._require()
-        return _call(self._slot_name, "movement_stop", blocking=False)
+        return _call(self._slot_name, "movement_stop", id=self._id, blocking=False)
 
     def movement_set_speed(self, speed):
         self._require()
         return _call(
-            self._slot_name, "movement_set_speed",
+            self._slot_name, "movement_set_speed", id=self._id,
             positional=[speed], blocking=False,
         )
 
@@ -425,7 +433,7 @@ class ColorSensor(_LegoDeviceBase):
         """Live sensor state: color, reflection, rawRed/Green/Blue, hue, etc."""
         if not self._attached:
             return None
-        return _get(self._slot_name, "sensor")
+        return _get(self._slot_name, "sensor", id=self._id)
 
 
 # ---------------------------------------------------------------------------
@@ -440,4 +448,4 @@ class Controller(_LegoDeviceBase):
         """Live lever state: leftPercent, rightPercent, leftAngle, rightAngle."""
         if not self._attached:
             return None
-        return _get(self._slot_name, "sensor")
+        return _get(self._slot_name, "sensor", id=self._id)

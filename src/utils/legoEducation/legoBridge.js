@@ -16,6 +16,8 @@
  * channel.
  */
 
+import { findDeviceInstance } from './legoDevices.js';
+
 const FLAG_BYTES = 4;              // single Int32 slot
 const DATA_BYTES = 128 * 1024;     // 128 KB is plenty for our JSON payloads
 const INTERRUPT_BYTES = 1;         // Pyodide interrupt signal byte
@@ -109,21 +111,21 @@ async function dispatchRpc(req) {
     throw new Error('Programmet blev stoppet.');
   }
 
-  const devices = (typeof window !== 'undefined' && window.LEGO_DEVICES) || {};
-  const inst = devices[req.slot];
+  const inst = findDeviceInstance(req.slot, req.id);
+  const idSuffix = req.id != null ? ` (id='${req.id}')` : '';
 
   if (req.kind === 'has') {
     return { ok: true, value: !!(inst && inst.connected) };
   }
 
   if (!inst) {
-    throw new Error(`LEGO device '${req.slot}' er ikke forbundet`);
+    throw new Error(`LEGO device '${req.slot}'${idSuffix} er ikke forbundet`);
   }
 
   if (req.kind === 'call') {
     const method = inst[req.method];
     if (typeof method !== 'function') {
-      throw new Error(`Metoden '${req.method}' findes ikke på '${req.slot}'`);
+      throw new Error(`Metoden '${req.method}' findes ikke på '${req.slot}'${idSuffix}`);
     }
     const args = [];
     if (Array.isArray(req.positional)) args.push(...req.positional);
