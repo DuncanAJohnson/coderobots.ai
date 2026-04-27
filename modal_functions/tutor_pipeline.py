@@ -53,33 +53,99 @@ image = (
 )
 
 
-SUMMARIZE_PROMPT_EN = (
-    "You are summarising a coding tutoring conversation between a Danish student "
-    "and an AI tutor. The conversation may mix Danish prose with code. Produce a "
-    "concise English summary that preserves: (a) what the student is building, "
-    "(b) decisions already made, (c) any code snippets verbatim inside fenced "
-    "blocks, (d) unresolved questions or errors. Keep it under 400 words."
-)
+SUMMARIZE_PROMPTS = {
+    "da": (
+        "Du opsummerer en programmerings-tutoring-samtale mellem en elev og en AI-laerer. "
+        "Samtalen kan blande prosa og kode. Lav et koncist resume paa dansk som bevarer: "
+        "(a) hvad eleven bygger, (b) beslutninger der allerede er truffet, "
+        "(c) eventuelle kodestumper ordret i kodeblokke, "
+        "(d) uloeste spoergsmaal eller fejl. Hold det under 400 ord."
+    ),
+    "en": (
+        "You are summarising a coding tutoring conversation between a student and an AI "
+        "tutor. The conversation may mix prose with code. Produce a concise English summary "
+        "that preserves: (a) what the student is building, (b) decisions already made, "
+        "(c) any code snippets verbatim inside fenced blocks, (d) unresolved questions or "
+        "errors. Keep it under 400 words."
+    ),
+}
 
-OUTLINE_HEADER_EN = (
-    "You are an expert robotics programming tutor. Your job is to outline a solution "
-    "to the student's request in English BEFORE any code is written. The next stage "
-    "will use this outline to write the actual response in Danish."
-)
-
-OUTLINE_FOOTER_EN = (
-    "Output format (English, not Danish):\n"
-    "1. Problem (one sentence): restate what the student wants.\n"
-    "2. Pseudocode plan: numbered steps describing the solution at a high level.\n"
-    "3. Clarifying questions (only if the request is genuinely ambiguous; otherwise skip).\n"
-    "\n"
-    "Do NOT write the final code yet. Keep the outline under 500 words."
-)
+_OUTLINE_TEMPLATES = {
+    "da": {
+        "header": (
+            "Du er en erfaren robotik-programmerings-laerer. Din opgave er at skitsere "
+            "en loesning paa elevens forespoergsel paa dansk INDEN der skrives kode. "
+            "Naeste fase bruger denne skitse til at skrive det endelige svar."
+        ),
+        "hw_level": "Hardware: {hw}\nElevens niveau: {level}",
+        "docs": "Relevant dokumentation:\n{docs}",
+        "footer": (
+            "Output-format (skriv paa dansk, brug danske overskrifter):\n"
+            "1. Problem (én saetning): genformuler hvad eleven oensker.\n"
+            "2. Pseudokode-plan: nummererede trin der beskriver loesningen paa hoejt niveau.\n"
+            "3. Afklarende spoergsmaal (kun hvis forespoergslen er oprigtigt tvetydig; "
+            "ellers spring over).\n"
+            "\n"
+            "Skriv IKKE den endelige kode endnu. Hold skitsen under 500 ord."
+        ),
+    },
+    "en": {
+        "header": (
+            "You are an expert robotics programming tutor. Your job is to outline a solution "
+            "to the student's request in English BEFORE any code is written. The next stage "
+            "will use this outline to write the final response."
+        ),
+        "hw_level": "Hardware target: {hw}\nStudent skill level: {level}",
+        "docs": "Relevant documentation:\n{docs}",
+        "footer": (
+            "Output format (English, with English headings):\n"
+            "1. Problem (one sentence): restate what the student wants.\n"
+            "2. Pseudocode plan: numbered steps describing the solution at a high level.\n"
+            "3. Clarifying questions (only if the request is genuinely ambiguous; "
+            "otherwise skip).\n"
+            "\n"
+            "Do NOT write the final code yet. Keep the outline under 500 words."
+        ),
+    },
+}
 
 FINAL_HEADER_DA = (
     "Du er en venlig dansk programmerings-laerer. Skriv ALLE svar paa dansk (Dansk). "
     "Skriv kommentarer i koden paa dansk. Fortael aldrig eleven hvad deres niveau hedder."
 )
+
+FINAL_HEADER_EN = (
+    "You are a friendly programming tutor. Write ALL replies in English. "
+    "Write code comments in English. Never tell the student what their level is called."
+)
+
+# Per-language section templates for the FinalAnswer system prompt. Intermediate
+# stages (summarize, doc_routing, outline) always run in English regardless of
+# the student's chosen output language.
+_FINAL_TEMPLATES = {
+    "da": {
+        "header": FINAL_HEADER_DA,
+        "hw_level": "Hardware: {hw}. Elevens niveau: {level}.",
+        "docs": "Relevant dokumentation:\n{docs}",
+        "outline": "Skitse (brug denne som plan for dit svar):\n{outline}",
+        "instruction": (
+            "Skriv svaret paa dansk. Inkluder en kodeblok formateret som ```{code_lang} "
+            "med danske kommentarer. Foelg skitsen og forklar kort omkring koden saa eleven "
+            "forstaar hvad der sker."
+        ),
+    },
+    "en": {
+        "header": FINAL_HEADER_EN,
+        "hw_level": "Hardware: {hw}. Student level: {level}.",
+        "docs": "Relevant documentation:\n{docs}",
+        "outline": "Outline (use this as your plan for the answer):\n{outline}",
+        "instruction": (
+            "Write the answer in English. Include a code block formatted as ```{code_lang} "
+            "with English comments. Follow the outline and briefly explain the code so the "
+            "student understands what is going on."
+        ),
+    },
+}
 
 
 def _join_sections(*parts: str) -> str:
@@ -87,15 +153,24 @@ def _join_sections(*parts: str) -> str:
     return "\n\n".join(p for p in parts if p)
 
 
-def _outline_system(hw: str, level: str, level_text: str, preamble: str, docs: str, examples: str) -> str:
+def _outline_system(
+    hw: str,
+    level: str,
+    level_text: str,
+    preamble: str,
+    docs: str,
+    examples: str,
+    lang: str,
+) -> str:
+    tpl = _OUTLINE_TEMPLATES.get(lang) or _OUTLINE_TEMPLATES["da"]
     return _join_sections(
-        OUTLINE_HEADER_EN,
-        f"Hardware target: {hw}\nStudent skill level: {level}",
+        tpl["header"],
+        tpl["hw_level"].format(hw=hw, level=level),
         level_text,
         preamble,
-        f"Relevant documentation:\n{docs}" if docs else "",
+        tpl["docs"].format(docs=docs) if docs else "",
         examples,
-        OUTLINE_FOOTER_EN,
+        tpl["footer"],
     )
 
 
@@ -108,17 +183,18 @@ def _final_system(
     examples: str,
     outline: str,
     code_lang: str,
+    lang: str,
 ) -> str:
+    tpl = _FINAL_TEMPLATES.get(lang) or _FINAL_TEMPLATES["da"]
     return _join_sections(
-        FINAL_HEADER_DA,
-        f"Hardware: {hw}. Elevens niveau: {level}.",
+        tpl["header"],
+        tpl["hw_level"].format(hw=hw, level=level),
         level_text,
         preamble,
-        f"Relevant dokumentation:\n{docs}" if docs else "",
+        tpl["docs"].format(docs=docs) if docs else "",
         examples,
-        f"Engelsk skitse (brug denne som plan, men skriv selv svaret paa dansk):\n{outline}" if outline else "",
-        f"Skriv svaret paa dansk. Inkluder en kodeblok formateret som ```{code_lang} med danske kommentarer. "
-        "Foelg skitsen og forklar kort omkring koden saa eleven forstaar hvad der sker.",
+        tpl["outline"].format(outline=outline) if outline else "",
+        tpl["instruction"].format(code_lang=code_lang),
     )
 
 
@@ -164,10 +240,16 @@ def _stages():
                 scratch.artifacts[self.name] = {"status": "skipped", "tokens": tokens}
                 return
 
+            lang = scratch.meta.get("lang", "da")
+            summarize_prompt = SUMMARIZE_PROMPTS.get(lang) or SUMMARIZE_PROMPTS["da"]
+
             async def summarize(msgs):
-                logger.info("SummarizeIfOver: invoking summary LLM call on %d msgs", len(msgs))
+                logger.info(
+                    "SummarizeIfOver: invoking summary LLM call on %d msgs (lang=%s)",
+                    len(msgs), lang,
+                )
                 return await call_gemma(
-                    [{"role": "system", "content": SUMMARIZE_PROMPT_EN}, *msgs],
+                    [{"role": "system", "content": summarize_prompt}, *msgs],
                     max_tokens=self.output_budget,
                 )
 
@@ -251,18 +333,20 @@ def _stages():
 
             hw = scratch.meta["hw_mode"]
             level = scratch.meta["level"]
+            lang = scratch.meta.get("lang", "da")
             selected = scratch.artifacts.get("doc_routing", [])
             system = _outline_system(
                 hw=hw,
                 level=level,
+                lang=lang,
                 level_text=LEVEL_PROMPTS.get(level, ""),
                 preamble=PREAMBLES.get(hw, ""),
                 docs=_docs_text(hw, selected),
                 examples=EXAMPLES.get(hw, ""),
             )
             logger.info(
-                "Outline build_messages[%s/%s]: system=%d chars, history=%d msgs, docs from %s",
-                hw, level, len(system), len(scratch.history), selected,
+                "Outline build_messages[%s/%s/%s]: system=%d chars, history=%d msgs, docs from %s",
+                hw, level, lang, len(system), len(scratch.history), selected,
             )
             return [
                 {"role": "system", "content": system},
@@ -284,6 +368,7 @@ def _stages():
 
             hw = scratch.meta["hw_mode"]
             level = scratch.meta["level"]
+            lang = scratch.meta.get("lang", "da")
             selected = scratch.artifacts.get("doc_routing", [])
             outline = scratch.artifacts.get("outline", "")
             code_lang = "cpp" if hw == "esp32" else "python"
@@ -296,10 +381,11 @@ def _stages():
                 examples=EXAMPLES.get(hw, ""),
                 outline=outline,
                 code_lang=code_lang,
+                lang=lang,
             )
             logger.info(
-                "FinalAnswer build_messages[%s/%s]: system=%d chars, history=%d msgs, outline=%d chars, lang=%s",
-                hw, level, len(system), len(scratch.history), len(outline), code_lang,
+                "FinalAnswer build_messages[%s/%s/%s]: system=%d chars, history=%d msgs, outline=%d chars, code_lang=%s",
+                hw, level, lang, len(system), len(scratch.history), len(outline), code_lang,
             )
             return [
                 {"role": "system", "content": system},
@@ -323,12 +409,13 @@ async def stream_tutor_pipeline(
     level: str,
     code: str | None = None,
     console: str | None = None,
+    lang: str = "da",
 ):
     from pipeline import Linear, Scratch
 
     logger.info(
-        "stream_tutor_pipeline: hw_mode=%s level=%s history=%d msgs user_msg=%r code=%s console=%s",
-        hw_mode, level, len(history), user_msg[:120],
+        "stream_tutor_pipeline: hw_mode=%s level=%s lang=%s history=%d msgs user_msg=%r code=%s console=%s",
+        hw_mode, level, lang, len(history), user_msg[:120],
         f"{len(code)} chars" if code else "none",
         f"{len(console)} chars" if console else "none",
     )
@@ -343,6 +430,7 @@ async def stream_tutor_pipeline(
             "level": level,
             "code": code,
             "console": console,
+            "lang": lang,
         },
     )
     pipeline = Linear(
@@ -373,7 +461,8 @@ async def tutor_endpoint(request: dict):
         "hw_mode": "spike" | "microbit" | "lego" | "esp32",
         "level": "beginner" | "intermediate" | "experienced",
         "code": "...",       // optional
-        "console": "..."     // optional
+        "console": "...",    // optional
+        "lang": "da" | "en"  // optional, default "da" — sets FinalAnswer output language
     }
     """
     from fastapi.responses import StreamingResponse
@@ -405,6 +494,7 @@ async def tutor_endpoint(request: dict):
             level=request.get("level", "intermediate"),
             code=request.get("code"),
             console=request.get("console"),
+            lang=request.get("lang", "da"),
         ),
         media_type="text/event-stream",
         headers={

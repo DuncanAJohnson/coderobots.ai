@@ -29,7 +29,7 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
   const [consoleModalOpen, setConsoleModalOpen] = useState(false);
   const [currentConsoleContent, setCurrentConsoleContent] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { isMicrobit, isLegoEducation, isEsp32 } = useHardware();
 
   useImperativeHandle(ref, () => ({
@@ -160,6 +160,7 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
       user_msg: userText || 'Please analyze the provided context.',
       hw_mode: hwMode,
       level: codingLevel,
+      lang,
     };
     if (finalContext.code && finalContext.code.trim()) {
       payload.code = finalContext.code;
@@ -280,14 +281,14 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
   const renderThinkingTrace = (thinking, streaming) => {
     if (!thinking || thinking.length === 0) return null;
     const labels = {
-      summarize: 'Opsummerer samtale',
-      doc_routing: 'Vælger relevant dokumentation',
-      outline: 'Skitserer løsning',
+      summarize: t('thinkingSummarize'),
+      doc_routing: t('thinkingDocRouting'),
+      outline: t('thinkingOutline'),
     };
     return (
       <details className="chat-thinking" open={streaming}>
         <summary>
-          {streaming ? 'Tænker…' : 'Sådan tænkte jeg'} ({thinking.length} trin)
+          {streaming ? t('thinkingInProgress') : t('thinkingDone')} ({thinking.length} {t('thinkingSteps')})
         </summary>
         <ul className="chat-thinking-steps">
           {thinking.map((step, idx) => {
@@ -296,12 +297,14 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
             let detail = null;
             if (step.stage === 'summarize') {
               detail = p.summarized
-                ? `Samtalen blev opsummeret (${p.before_tokens} → ${p.after_tokens} tokens).`
-                : 'Samtalen var kort nok — ingen opsummering nødvendig.';
+                ? t('thinkingSummarized')
+                    .replace('{before}', p.before_tokens)
+                    .replace('{after}', p.after_tokens)
+                : t('thinkingNotSummarized');
             } else if (step.stage === 'doc_routing' && Array.isArray(p.bundles)) {
               detail = p.bundles.length
-                ? `Dokumentation: ${p.bundles.join(', ')}`
-                : 'Ingen specifik dokumentation valgt.';
+                ? t('thinkingDocsLabel').replace('{bundles}', p.bundles.join(', '))
+                : t('thinkingDocsNone');
             } else if (step.stage === 'outline' && p.outline) {
               detail = p.outline;
             }

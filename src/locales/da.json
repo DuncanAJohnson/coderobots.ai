@@ -25,6 +25,17 @@
   "userLabel": "Bruger",
   "botLabel": "AI-bot",
 
+  "thinkingInProgress": "Tænker…",
+  "thinkingDone": "Sådan tænkte jeg",
+  "thinkingSteps": "trin",
+  "thinkingSummarize": "Opsummerer samtale",
+  "thinkingDocRouting": "Vælger relevant dokumentation",
+  "thinkingOutline": "Skitserer løsning",
+  "thinkingSummarized": "Samtalen blev opsummeret ({before} → {after} tokens).",
+  "thinkingNotSummarized": "Samtalen var kort nok — ingen opsummering nødvendig.",
+  "thinkingDocsLabel": "Dokumentation: {bundles}",
+  "thinkingDocsNone": "Ingen specifik dokumentation valgt.",
+
   "statusLabel": "Status: ",
   "disconnected": "Afbrudt",
   "replMode": "REPL-tilstand",

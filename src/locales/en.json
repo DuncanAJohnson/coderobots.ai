@@ -25,6 +25,17 @@
   "userLabel": "User",
   "botLabel": "AI Bot",
 
+  "thinkingInProgress": "Thinking…",
+  "thinkingDone": "How I thought about it",
+  "thinkingSteps": "steps",
+  "thinkingSummarize": "Summarising conversation",
+  "thinkingDocRouting": "Selecting relevant documentation",
+  "thinkingOutline": "Outlining a solution",
+  "thinkingSummarized": "Conversation was summarised ({before} → {after} tokens).",
+  "thinkingNotSummarized": "Conversation was short enough — no summarisation needed.",
+  "thinkingDocsLabel": "Documentation: {bundles}",
+  "thinkingDocsNone": "No specific documentation selected.",
+
   "statusLabel": "Status: ",
   "disconnected": "Disconnected",
   "replMode": "REPL Mode",
