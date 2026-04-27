@@ -7,17 +7,7 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { streamChatCompletion } from '../utils/aiStream';
-import {
-  LEVEL_INSTRUCTION_PREFIX,
-  beginnerPrompt,
-  intermediatePrompt,
-  experiencedPrompt,
-} from '../prompts/codingLevels';
-import { spikePriming } from '../prompts/spike_priming';
-import { microbitPriming } from '../prompts/microbit_priming';
-import { legoEducationPriming } from '../prompts/legoEducation_priming';
-import { esp32Priming } from '../prompts/esp32_priming';
+import { streamTutorCompletion } from '../utils/aiStream';
 import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -110,17 +100,11 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
     }
   };
 
-  const getLevelPrompt = (level) => {
-    switch (level) {
-      case 'beginner':
-        return beginnerPrompt;
-      case 'intermediate':
-        return intermediatePrompt;
-      case 'experienced':
-        return experiencedPrompt;
-      default:
-        return beginnerPrompt;
-    }
+  const getHwMode = () => {
+    if (isLegoEducation) return 'lego';
+    if (isMicrobit) return 'microbit';
+    if (isEsp32) return 'esp32';
+    return 'spike';
   };
 
   const handleClearHistory = () => {
@@ -131,8 +115,8 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
   };
 
   const handleSendMessage = async () => {
-    let text = inputText.trim();
-    if (!text && !attachedContext.includeCode && !attachedContext.includeConsole) {
+    const userText = inputText.trim();
+    if (!userText && !attachedContext.includeCode && !attachedContext.includeConsole) {
       return;
     }
 
@@ -145,71 +129,44 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
       finalContext.console = await getConsoleContent();
     }
 
-    // Build display message with wrapped code and console
+    const hwMode = getHwMode();
+    const codeFenceLang = hwMode === 'esp32' ? 'cpp' : 'python';
+
+    // Build display message with wrapped code and console (UI-only — server gets the
+    // raw code/console fields and does its own wrapping inside the system prompt).
+    let displayText = userText;
     if (finalContext.code) {
-      text += '\n```python\n' + finalContext.code + '\n```';
+      displayText += '\n```' + codeFenceLang + '\n' + finalContext.code + '\n```';
     }
     if (finalContext.console) {
-      text += '\n````\n' + finalContext.console + '\n````';
+      displayText += '\n````\n' + finalContext.console + '\n````';
     }
 
-    // Add user message to UI
-    if (text.trim()) {
-      setMessages(prev => [...prev, { role: 'user', content: text }]);
+    if (displayText.trim()) {
+      setMessages(prev => [...prev, { role: 'user', content: displayText }]);
     }
 
     setInputText('');
     setAttachedContext({ includeCode: false, includeConsole: false });
 
-    // Build conversation for AI
-    const conversation = [];
-    
-    // Add system priming
-    const priming = isLegoEducation
-      ? legoEducationPriming
-      : isMicrobit
-      ? microbitPriming
-      : isEsp32
-      ? esp32Priming
-      : spikePriming;
-    conversation.push({
-      role: 'system',
-      content: priming,
-    });
+    // Server-side pipeline payload: history is the prior turns only.
+    const history = messages.map(msg => ({
+      role: msg.role === 'user' ? 'user' : 'assistant',
+      content: msg.content,
+    }));
 
-    // Add coding level instructions
-    const levelInstructions = getLevelPrompt(codingLevel);
-    if (levelInstructions) {
-      conversation.push({
-        role: 'system',
-        content: `${LEVEL_INSTRUCTION_PREFIX}\n\n${levelInstructions}`,
-      });
-    }
-
-    // Add conversation history
-    messages.forEach(msg => {
-      conversation.push({
-        role: msg.role === 'user' ? 'user' : 'assistant',
-        content: msg.content,
-      });
-    });
-
-    // Build context string
-    let contextStr = '';
+    const payload = {
+      history,
+      user_msg: userText || 'Please analyze the provided context.',
+      hw_mode: hwMode,
+      level: codingLevel,
+    };
     if (finalContext.code && finalContext.code.trim()) {
-      contextStr += `The user has provided the following code for context:\n--- START OF CODE ---\n${finalContext.code}\n--- END OF CODE ---\n\n`;
+      payload.code = finalContext.code;
     }
     if (finalContext.console && finalContext.console.trim()) {
-      contextStr += `The user has provided the following console output for context:\n--- START OF CONSOLE OUTPUT ---\n${finalContext.console}\n--- END OF CONSOLE OUTPUT ---\n\n`;
+      payload.console = finalContext.console;
     }
-
-    const userPrompt = text || 'Please analyze the provided context.';
-    const fullPrompt = `${contextStr}User question: ${userPrompt}`;
-
-    conversation.push({
-      role: 'user',
-      content: fullPrompt,
-    });
 
     // Stream response
     setIsStreaming(true);
@@ -217,40 +174,38 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
 
     try {
       let fullResponse = '';
-      let isFirstChunk = true;
+      const thinking = [];
 
-      for await (const chunk of streamChatCompletion(conversation)) {
-        fullResponse += chunk;
-        streamingMessageRef.current = fullResponse;
-        
-        if (isFirstChunk) {
-          // Add bot message only when first chunk arrives
-          isFirstChunk = false;
-          setMessages(prev => [...prev, { role: 'bot', content: fullResponse, streaming: true }]);
-        } else {
-          // Update last message
-          setMessages(prev => {
-            const newMessages = [...prev];
-            newMessages[newMessages.length - 1] = {
-              role: 'bot',
-              content: fullResponse,
-              streaming: true,
-            };
-            return newMessages;
-          });
+      // Insert a placeholder bot message immediately so the thinking trace is
+      // visible while progress events arrive (before the first content token).
+      // We then keep updating the last message in place.
+      setMessages(prev => [
+        ...prev,
+        { role: 'bot', content: '', thinking: [], streaming: true },
+      ]);
+
+      const updateLast = (patch) => {
+        setMessages(prev => {
+          if (prev.length === 0) return prev;
+          const next = [...prev];
+          next[next.length - 1] = { ...next[next.length - 1], ...patch };
+          return next;
+        });
+      };
+
+      for await (const event of streamTutorCompletion(payload)) {
+        if (event.type === 'progress') {
+          thinking.push({ stage: event.stage, payload: event.payload || {} });
+          updateLast({ thinking: [...thinking] });
+        } else if (event.type === 'content') {
+          fullResponse += event.content;
+          streamingMessageRef.current = fullResponse;
+          updateLast({ content: fullResponse, thinking: [...thinking], streaming: true });
         }
       }
 
       // Finalize message
-      setMessages(prev => {
-        const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = {
-          role: 'bot',
-          content: fullResponse,
-          streaming: false,
-        };
-        return newMessages;
-      });
+      updateLast({ content: fullResponse, thinking: [...thinking], streaming: false });
 
     } catch (error) {
       console.error('Streaming error:', error);
@@ -258,6 +213,7 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
         const newMessages = [...prev];
         if (newMessages.length > 0 && newMessages[newMessages.length - 1].streaming) {
           newMessages[newMessages.length - 1] = {
+            ...newMessages[newMessages.length - 1],
             role: 'bot',
             content: `Error: ${error.message}`,
             streaming: false,
@@ -321,6 +277,48 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
     closeConsoleModal();
   };
 
+  const renderThinkingTrace = (thinking, streaming) => {
+    if (!thinking || thinking.length === 0) return null;
+    const labels = {
+      summarize: 'Opsummerer samtale',
+      doc_routing: 'Vælger relevant dokumentation',
+      outline: 'Skitserer løsning',
+    };
+    return (
+      <details className="chat-thinking" open={streaming}>
+        <summary>
+          {streaming ? 'Tænker…' : 'Sådan tænkte jeg'} ({thinking.length} trin)
+        </summary>
+        <ul className="chat-thinking-steps">
+          {thinking.map((step, idx) => {
+            const label = labels[step.stage] || step.stage;
+            const p = step.payload || {};
+            let detail = null;
+            if (step.stage === 'summarize') {
+              detail = p.summarized
+                ? `Samtalen blev opsummeret (${p.before_tokens} → ${p.after_tokens} tokens).`
+                : 'Samtalen var kort nok — ingen opsummering nødvendig.';
+            } else if (step.stage === 'doc_routing' && Array.isArray(p.bundles)) {
+              detail = p.bundles.length
+                ? `Dokumentation: ${p.bundles.join(', ')}`
+                : 'Ingen specifik dokumentation valgt.';
+            } else if (step.stage === 'outline' && p.outline) {
+              detail = p.outline;
+            }
+            return (
+              <li key={idx}>
+                <strong>{label}</strong>
+                {detail && (
+                  <div className="chat-thinking-detail">{detail}</div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </details>
+    );
+  };
+
   const renderMessage = (message, index) => {
     const isUser = message.role === 'user';
     const label = isUser ? t('userLabel') : message.role === 'system' ? 'System' : t('botLabel');
@@ -328,12 +326,13 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
     const align = isUser ? 'align-right' : 'align-left';
 
     // First split by console blocks (4 backticks)
-    const consoleSegments = message.content.split(/````([\s\S]*?)````/g);
+    const consoleSegments = (message.content || '').split(/````([\s\S]*?)````/g);
 
     return (
       <div key={index} className={`chat-msg-wrap ${align}`}>
         <div className="chat-label">{label}</div>
         <div className="chat-bubble" style={{ backgroundColor: color }}>
+          {!isUser && renderThinkingTrace(message.thinking, message.streaming)}
           {consoleSegments.map((consoleSeg, consoleIdx) => {
             if (consoleIdx % 2 === 1) {
               // This is a console block
