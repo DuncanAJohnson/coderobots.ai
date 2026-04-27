@@ -205,9 +205,11 @@ def _stages():
             self.hw_mode = hw_mode
 
         async def run(self, scratch) -> None:
-            from prompts import BUNDLES
+            from prompts import BUNDLE_DESCRIPTIONS, BUNDLES, DEFAULT_BUNDLES
 
             bundles = BUNDLES.get(self.hw_mode, {})
+            descriptions = BUNDLE_DESCRIPTIONS.get(self.hw_mode, {})
+            defaults = [n for n in DEFAULT_BUNDLES.get(self.hw_mode, []) if n in bundles]
             user_msg_preview = scratch.meta["user_msg"][:120]
             logger.info(
                 "ClassifyDocs[%s]: %d candidate bundles=%s; user_msg=%r",
@@ -220,14 +222,20 @@ def _stages():
                     self.hw_mode, scratch.artifacts[self.name],
                 )
                 return
-            router = DocRouter(bundles)
+            router = DocRouter(bundles, descriptions=descriptions)
             selected = await router.select(scratch.meta["user_msg"])
             if not selected:
                 logger.warning(
-                    "ClassifyDocs[%s]: router returned empty, falling back to all bundles",
-                    self.hw_mode,
+                    "ClassifyDocs[%s]: router returned empty, falling back to defaults=%s",
+                    self.hw_mode, defaults,
                 )
-                selected = list(bundles.keys())
+                selected = defaults
+            else:
+                # Always merge in the hardware's default (e.g. lego 'shared' rules)
+                # so the model never loses universal coding rules / constants.
+                for d in defaults:
+                    if d not in selected:
+                        selected.append(d)
             scratch.artifacts[self.name] = selected
             logger.info("ClassifyDocs[%s]: selected=%s", self.hw_mode, selected)
 

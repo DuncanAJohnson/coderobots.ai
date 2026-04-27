@@ -183,6 +183,16 @@ Serial er USB-forbindelsen tilbage til browserens terminal.
 
 EXAMPLES = ""  # ESP32 examples are embedded inside each bundle's code blocks.
 
+BUNDLE_DESCRIPTIONS: dict[str, str] = {
+    "io": "Three buttons (UP/DOWN/SELECT) on INPUT_PULLUP and the knob potentiometer (analogRead, 12-bit ADC).",
+    "accelerometer": "ADXL345 accelerometer over the shared I2C bus (Wire.begin(SDA=6, SCL=7)).",
+    "screen": "SSD1306 128x64 monochrome OLED over the shared I2C bus — clearDisplay, drawing primitives, text, display().",
+    "reference": "Generic Arduino reference: digital/analog I/O, timing (delay, millis), Serial output, and important coding rules.",
+}
+
+# 'reference' carries the universal Arduino patterns + coding rules — safe fallback.
+DEFAULT_BUNDLES: list[str] = ["reference"]
+
 BUNDLES: dict[str, str] = {
     "io": _IO,
     "accelerometer": _ACCELEROMETER,

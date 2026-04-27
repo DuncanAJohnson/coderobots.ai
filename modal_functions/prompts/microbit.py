@@ -198,3 +198,14 @@ BUNDLES: dict[str, str] = {
     "protocols": _PROTOCOLS,
     "timing": _TIMING,
 }
+
+BUNDLE_DESCRIPTIONS: dict[str, str] = {
+    "display_audio": "5x5 LED display (Image, scroll, set_pixel), music module, speaker, microphone.",
+    "sensors": "Buttons (button_a/button_b), accelerometer + gestures, temperature, compass.",
+    "pins_io": "pin0..pin20 — digital, analog (ADC), PWM (analog write), touch, servo control.",
+    "wireless": "radio module (send/receive between micro:bits) and neopixel WS2812 strip control.",
+    "protocols": "I2C and SPI buses for talking to external chips.",
+    "timing": "sleep(ms), running_time(), utime ticks for non-blocking timing.",
+}
+
+DEFAULT_BUNDLES: list[str] = []

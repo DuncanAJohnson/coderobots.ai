@@ -205,3 +205,13 @@ BUNDLES: dict[str, str] = {
     "hub_io": _HUB_IO,
     "runloop": _RUNLOOP,
 }
+
+BUNDLE_DESCRIPTIONS: dict[str, str] = {
+    "motors": "Single-motor 'motor' module — motor.run, run_for_time, run_to_absolute/relative_position, stop, absolute_position.",
+    "motor_pair": "'motor_pair' module — synchronised drivebase-style movement: move with steering, move_tank with explicit per-motor velocities.",
+    "sensors": "External sensor modules — distance_sensor, force_sensor, color_sensor (rgbi).",
+    "hub_io": "'hub' submodules — port (A-F), motion_sensor (IMU), sound, button, light_matrix, color_matrix, color constants.",
+    "runloop": "'runloop' module — runloop.run() entrypoint and runloop.sleep_ms() awaitable timing; car-driving notes.",
+}
+
+DEFAULT_BUNDLES: list[str] = []

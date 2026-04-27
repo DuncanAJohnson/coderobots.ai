@@ -15,27 +15,45 @@ logger = logging.getLogger(__name__)
 class DocRouter:
     """Selects which doc bundle(s) apply to a query.
 
-    Bundles are a name -> doc-text map. The router asks Gemma to emit a JSON
+    Bundles are a name -> doc-text map. Descriptions (optional) are a parallel
+    name -> one-line summary map shown to the router so it can pick selectively
+    instead of just reading bundle keys. The router asks Gemma to emit a JSON
     array of bundle names; unknown names and parse failures fall back to [].
     """
 
-    def __init__(self, bundles: dict[str, str]):
+    def __init__(self, bundles: dict[str, str], descriptions: dict[str, str] | None = None):
         self.bundles = bundles
+        self.descriptions = descriptions or {}
 
     async def select(self, query: str) -> list[str]:
         bundle_names = list(self.bundles.keys())
-        prompt = (
-            "You are a router. Given a user query, return ONLY a JSON array of "
-            "the bundle names that are relevant to it. "
-            f"Valid bundle names: {json.dumps(bundle_names)}. "
-            "Return [] if none apply.\n\n"
-            f"User query: {query}\n\n"
-            "JSON array:"
+        catalog_lines = [
+            f"  - {n}: {self.descriptions.get(n, '(no description)')}" for n in bundle_names
+        ]
+        example_name = bundle_names[0] if bundle_names else "example"
+        # Split into system+user. Gemma 3 12B via SkoleGPT silently emits EOS as
+        # its first token when this is sent as a single user message; the
+        # split + a small non-zero temperature unsticks generation.
+        system_prompt = (
+            "You are a documentation router. Pick the bundle(s) whose description "
+            "matches the user's query. Be selective: choose the smallest set that "
+            "actually covers what they asked. Do NOT include every bundle.\n\n"
+            "Output format: a single JSON array of bundle names and nothing else. "
+            f'Examples of valid output: ["{example_name}"]   or   '
+            f'["{example_name}", "shared"]   or   [].\n\n'
+            "Available bundles:\n" + "\n".join(catalog_lines) + "\n\n"
+            f"Valid bundle names (use these exact strings): {json.dumps(bundle_names)}."
+        )
+        user_prompt = (
+            f"User query: {query}\n\nRespond with ONLY the JSON array."
         )
         response = await call_gemma(
-            [{"role": "user", "content": prompt}],
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
             max_tokens=200,
-            temperature=0.0,
+            temperature=0.1,
         )
         cleaned = response.strip()
         if cleaned.startswith("```"):

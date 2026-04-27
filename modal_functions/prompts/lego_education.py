@@ -210,3 +210,15 @@ BUNDLES: dict[str, str] = {
     "controller": _CONTROLLER,
     "shared": _SHARED,
 }
+
+BUNDLE_DESCRIPTIONS: dict[str, str] = {
+    "single_motor": "le.SingleMotor — a standalone single motor (run, run_for_degrees, run_for_time, stop) and live position/speed data.",
+    "double_motor": "le.DoubleMotor — a dual-motor + IMU device; coordinated movement_* drive commands, individual motor= control, and IMU yaw/pitch/roll/accel/gyro data.",
+    "color_sensor": "le.ColorSensor — color, reflection, raw RGB, and HSV readings.",
+    "controller": "le.Controller — a two-handle controller exposing leftPercent/rightPercent and leftAngle/rightAngle.",
+    "shared": "Cross-device helpers and rules: light_color/beep, notification callbacks, color/motor/movement/light/sound/IMU constants, and important coding rules.",
+}
+
+# Always-include fallback when the router returns nothing — the rules + constants
+# bundle is universally relevant.
+DEFAULT_BUNDLES: list[str] = ["shared"]
