@@ -219,24 +219,8 @@ const ControlPanel = ({
   const { t } = useLanguage();
   const [cardPickerKind, setCardPickerKind] = useState(null);
 
-  const connectedLabel = isMicrobit
-    ? t('microbitConnected')
-    : isEsp32
-    ? t('esp32Connected')
-    : isLegoEducation
-    ? t('legoEducationConnected')
-    : t('replMode');
-
   return (
     <div className={`control-panel right-panel ${mode}-mode`}>
-      <div className="mode-status">
-        {t('statusLabel')}<span className="mode-indicator">
-          {mode === 'disconnected' && t('disconnected')}
-          {mode === 'repl' && connectedLabel}
-          {mode === 'program-slot' && t('programSlotMode')}
-        </span>
-      </div>
-
       <div className="button-group">
         {!isLegoEducation && (
           <button onClick={onConnect} className="button">

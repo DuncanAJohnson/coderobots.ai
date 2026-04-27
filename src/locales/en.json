@@ -1,5 +1,8 @@
 {
   "appTitle": "Code Robots with SkoleGPT",
+  "appTitlePrefix": "Code",
+  "appTitleRobots": "Robots",
+  "appTitleSuffix": "with SkoleGPT",
   "about": "ABOUT",
   "aboutTitle": "About this application",
   "debug": "DEBUG",
@@ -96,7 +99,7 @@
   "spikePrime": "SPIKE Prime",
   "microbit": "micro:bit",
   "esp32": "XIAO ESP32-C3",
-  "legoEducation": "LEGO Education",
+  "legoEducation": "LEGO Education CS&AI",
   "legoSingleMotor": "Single Motor",
   "legoDoubleMotor": "Double Motor",
   "legoColorSensor": "Color Sensor",
