@@ -7,13 +7,35 @@
  * devices of the same type. The "id" is a user-assigned string ("1", "2",
  * "left", "duncan", …) that students reference from Python via le.X(id=…).
  *
- * Display names are persisted in localStorage keyed by the LEGO hardware
- * unique id (the 8-byte device UUID retrieved via device_uuid()), so that
- * the same physical device gets the same id every time it's reconnected.
+ * Persisted entries (localStorage) are keyed by the LEGO hardware unique id
+ * (the 8-byte device UUID retrieved via device_uuid()) and remember the
+ * student-facing name plus the connection-card emoji used last time.
  *
  * Also lazy-loads /lego-education-ble.js once so that `window.legoeducation`
  * becomes available to the rest of the app.
  */
+
+import { KIND_SEARCH_NAME, KIND_PRODUCT_ID, LEGO_COMPANY_ID } from './legoCards.js';
+
+// Build an `exclusionFilters` clause that hides every kind except `kind` from
+// the OS Bluetooth picker. Works by matching the 16-bit product_id at offset
+// 0 of LEGO's manufacturer-data payload, big-endian (verified against
+// real-device captures: SingleMotor advertises `02 00 …`, ColorSensor
+// `02 02 …`, etc.). This mirrors how LEGO's own web client narrows the
+// chooser by hardware type.
+function buildTypeExclusionFilters(kind) {
+  const expectedId = KIND_PRODUCT_ID[kind];
+  if (expectedId == null) return [];
+  return Object.values(KIND_PRODUCT_ID)
+    .filter((pid) => pid !== expectedId)
+    .map((pid) => ({
+      manufacturerData: [{
+        companyIdentifier: LEGO_COMPANY_ID,
+        dataPrefix: new Uint8Array([(pid >> 8) & 0xFF, pid & 0xFF]),
+        mask: new Uint8Array([0xFF, 0xFF]),
+      }],
+    }));
+}
 
 const SLOT_CLASSES = {
   singlemotor: 'SingleMotor',
@@ -21,6 +43,8 @@ const SLOT_CLASSES = {
   colorsensor: 'ColorSensor',
   controller: 'Controller',
 };
+
+const SERVICE_UUID = '0000fd02-0000-1000-8000-00805f9b34fb';
 
 export const LEGO_SLOT_NAMES = Object.keys(SLOT_CLASSES);
 
@@ -108,10 +132,11 @@ function writeStoredNames(map) {
   }
 }
 
-function saveStoredName(hardwareId, kind, name) {
+function saveStoredEntry(hardwareId, fields) {
   if (!hardwareId) return;
   const all = loadStoredNames();
-  all[hardwareId] = { kind, name };
+  const prev = all[hardwareId] || {};
+  all[hardwareId] = { ...prev, ...fields };
   writeStoredNames(all);
 }
 
@@ -161,16 +186,34 @@ function nextDefaultName(kind) {
 // ---------------------------------------------------------------------------
 
 /**
- * Connect a LEGO device of the given kind via Web Bluetooth.
- * MUST be called from a user-gesture handler (click).
+ * Connect a LEGO device of the given kind via Web Bluetooth, optionally
+ * narrowed by connection-card color. MUST be called from a user-gesture
+ * handler (click).
+ *
+ * Flow:
+ *   1. Open the OS Bluetooth picker, filtered by service UUID and (when a
+ *      card was chosen) by an emoji `namePrefix`.
+ *   2. After the user picks, if a card was chosen, validate that the
+ *      device's advertised name ends with the expected type string
+ *      (`Single Motor`, `Double Motor`, …). Reject mismatches.
+ *
+ * Passing `cardEmoji = null` skips both the prefix filter and the type
+ * check — the user explicitly opted out of card-based filtering.
  *
  * @param {'singlemotor'|'doublemotor'|'colorsensor'|'controller'} kind
- * @returns {Promise<{ok: boolean, error?: string, name?: string, hardwareId?: string, info?: any}>}
+ * @param {string|null} cardEmoji - the emoji from the chosen card, or null
+ * @returns {Promise<{ok: boolean, error?: string, errorKey?: string, errorParams?: object, name?: string, hardwareId?: string, info?: any}>}
  */
-export async function connectDevice(kind) {
+export async function connectDevice(kind, cardEmoji) {
   ensureSlots();
   const className = SLOT_CLASSES[kind];
   if (!className) return { ok: false, error: `Unknown device kind: ${kind}` };
+
+  const expectedType = KIND_SEARCH_NAME[kind];
+  const filters = cardEmoji
+    ? [{ services: [SERVICE_UUID], namePrefix: cardEmoji + ' ' }]
+    : [{ services: [SERVICE_UUID] }];
+  const exclusionFilters = buildTypeExclusionFilters(kind);
 
   let instance = null;
   try {
@@ -179,11 +222,26 @@ export async function connectDevice(kind) {
     if (!DeviceClass) throw new Error(`legoeducation.${className} not found`);
 
     instance = new DeviceClass();
-    const info = await instance.connect();
+    const info = await instance.connect({
+      filters,
+      optionalServices: [SERVICE_UUID],
+      exclusionFilters,
+    });
+
+    if (cardEmoji && expectedType) {
+      const advertisedName = instance.device?.name || '';
+      if (!advertisedName.endsWith(expectedType)) {
+        try { await instance.disconnect(); } catch { /* ignore */ }
+        return {
+          ok: false,
+          errorKey: 'legoWrongTypeError',
+          errorParams: { actual: advertisedName || '?' },
+        };
+      }
+    }
 
     const hardwareId = await fetchHardwareId(instance);
 
-    // Decide on the user-facing name: persisted-by-hardware-id, or next free.
     let name;
     if (hardwareId) {
       const stored = loadStoredNames();
@@ -194,11 +252,16 @@ export async function connectDevice(kind) {
     }
     if (!name) {
       name = nextDefaultName(kind);
-      if (hardwareId) saveStoredName(hardwareId, kind, name);
     }
 
-    // If we already have a connected instance under this name (same physical
-    // device reconnect race), disconnect the old one first.
+    if (hardwareId) {
+      saveStoredEntry(hardwareId, {
+        kind,
+        name,
+        ...(cardEmoji ? { cardEmoji } : {}),
+      });
+    }
+
     const existing = window.LEGO_DEVICES[kind].get(name);
     if (existing && existing !== instance) {
       try { await existing.disconnect(); } catch { /* ignore */ }
@@ -206,6 +269,7 @@ export async function connectDevice(kind) {
 
     instance._coderobotsName = name;
     instance._coderobotsHardwareId = hardwareId;
+    if (cardEmoji) instance._coderobotsCardEmoji = cardEmoji;
     instance._onDisconnect = () => {
       const cur = window.LEGO_DEVICES[kind].get(name);
       if (cur === instance) {
@@ -279,7 +343,7 @@ export function renameDevice(kind, oldName, newName) {
     }
   };
   if (inst._coderobotsHardwareId) {
-    saveStoredName(inst._coderobotsHardwareId, kind, trimmed);
+    saveStoredEntry(inst._coderobotsHardwareId, { kind, name: trimmed });
   }
 
   notify();

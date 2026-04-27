@@ -126,7 +126,7 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
     return unsub;
   }, [isLegoEducation, onConnectionChange]);
 
-  const handleLegoConnect = (kind) => legoConnectDevice(kind);
+  const handleLegoConnect = (kind, cardEmoji) => legoConnectDevice(kind, cardEmoji);
   const handleLegoRename = (kind, oldName, newName) => legoRenameDevice(kind, oldName, newName);
   const handleLegoDisconnect = (kind, name) => legoDisconnectDevice(kind, name);
 

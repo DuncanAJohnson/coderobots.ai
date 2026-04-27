@@ -386,10 +386,26 @@ class LegoDevice {
   _log(...args) { if (this._debug) console.log('[LegoEdu]', ...args); }
 
   async connect(options = {}) {
-    const { notification_delay = DEFAULT_NOTIFICATION_DELAY } = options;
+    const {
+      notification_delay = DEFAULT_NOTIFICATION_DELAY,
+      filters,
+      optionalServices,
+      exclusionFilters,
+      device,
+    } = options;
     if (!navigator.bluetooth) throw new Error('Web Bluetooth API is not available. Use Chrome/Edge on a supported platform.');
-    this._log('Requesting Bluetooth device...');
-    this.device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }], optionalServices: [SERVICE_UUID] });
+    if (device) {
+      this._log('Reusing pre-resolved Bluetooth device...');
+      this.device = device;
+    } else {
+      this._log('Requesting Bluetooth device...');
+      const requestArgs = {
+        filters: filters || [{ services: [SERVICE_UUID] }],
+        optionalServices: optionalServices || [SERVICE_UUID],
+      };
+      if (exclusionFilters && exclusionFilters.length) requestArgs.exclusionFilters = exclusionFilters;
+      this.device = await navigator.bluetooth.requestDevice(requestArgs);
+    }
     this._log(`Selected device: ${this.device.name} (${this.device.id})`);
     this.device.addEventListener('gattserverdisconnected', () => {
       this._log('Device disconnected'); this.connected = false; this._rejectAllPending('Device disconnected');

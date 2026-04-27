@@ -1,0 +1,192 @@
+.lego-card-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 9999;
+  animation: lego-card-picker-fade-in 0.15s ease;
+}
+
+.lego-card-picker-content {
+  position: fixed;
+  left: 4%;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 42vw;
+  max-width: 640px;
+  min-width: 420px;
+  max-height: 86vh;
+  overflow-y: auto;
+  background: white;
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+  padding: 32px 36px 28px;
+  animation: lego-card-picker-slide-in 0.22s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.lego-card-picker-title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: #1f2123;
+}
+
+.lego-card-picker-subtitle {
+  margin: 0;
+  color: #57606a;
+  font-size: 0.95rem;
+}
+
+.lego-card-picker-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.lego-card-picker-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px 8px 14px;
+  background: #f6f7f9;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 0.08s ease, border-color 0.12s ease, background 0.12s ease;
+  font: inherit;
+  color: inherit;
+}
+
+.lego-card-picker-card:hover {
+  background: #eef1f5;
+  border-color: #c7d2fe;
+  transform: translateY(-1px);
+}
+
+.lego-card-picker-card:active {
+  transform: translateY(0);
+}
+
+.lego-card-picker-card:focus-visible {
+  outline: none;
+  border-color: #6366f1;
+}
+
+.lego-card-picker-card[disabled] {
+  cursor: not-allowed;
+}
+
+.lego-card-picker-emoji {
+  font-size: 2.6rem;
+  line-height: 1;
+}
+
+.lego-card-picker-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #1f2937;
+  text-align: center;
+}
+
+.lego-card-picker-busy-overlay {
+  position: absolute;
+  inset: -8px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(2px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border-radius: 14px;
+  z-index: 1;
+  animation: lego-card-picker-fade-in 0.12s ease;
+}
+
+.lego-card-picker-spinner {
+  width: 56px;
+  height: 56px;
+  border: 5px solid #e5e7eb;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: lego-card-picker-spin 0.8s linear infinite;
+}
+
+.lego-card-picker-busy-label {
+  font-size: 0.95rem;
+  color: #4338ca;
+  font-weight: 500;
+}
+
+.lego-card-picker-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.lego-card-picker-skip,
+.lego-card-picker-close {
+  background: transparent;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: #1f2937;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.lego-card-picker-skip:hover:not([disabled]),
+.lego-card-picker-close:hover:not([disabled]) {
+  background: #f6f7f9;
+}
+
+.lego-card-picker-skip[disabled],
+.lego-card-picker-close[disabled] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.lego-card-picker-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+}
+
+@keyframes lego-card-picker-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes lego-card-picker-slide-in {
+  from { transform: translate(-12px, -50%); opacity: 0; }
+  to   { transform: translate(0, -50%);     opacity: 1; }
+}
+
+@keyframes lego-card-picker-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+  .lego-card-picker-content {
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90vw;
+    min-width: 0;
+  }
+  @keyframes lego-card-picker-slide-in {
+    from { transform: translate(-50%, calc(-50% + 12px)); opacity: 0; }
+    to   { transform: translate(-50%, -50%);              opacity: 1; }
+  }
+}

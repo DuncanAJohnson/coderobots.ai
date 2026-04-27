@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useLanguage } from '../contexts/LanguageContext';
+import LegoCardPickerModal from './LegoCardPickerModal';
 import './ControlPanel.css';
 
 const KIND_LETTER = {
@@ -19,7 +20,7 @@ const KIND_LABEL_KEY = {
 
 const KIND_ORDER = ['singlemotor', 'doublemotor', 'colorsensor', 'controller'];
 
-const LegoDeviceIcon = ({ kind, letter, devices, label, onRename, onDisconnect, onAdd, t }) => {
+const LegoDeviceIcon = ({ kind, letter, devices, label, onRename, onDisconnect, onAddRequest, t }) => {
   const wrapperRef = useRef(null);
   const popoverRef = useRef(null);
   const closeTimerRef = useRef(null);
@@ -28,7 +29,6 @@ const LegoDeviceIcon = ({ kind, letter, devices, label, onRename, onDisconnect, 
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
-  const [adding, setAdding] = useState(false);
 
   // Position the portal popover above the icon, anchored via fixed coords.
   useLayoutEffect(() => {
@@ -89,18 +89,10 @@ const LegoDeviceIcon = ({ kind, letter, devices, label, onRename, onDisconnect, 
   };
   const cancelEdit = () => { setEditing(null); setDraft(''); setError(''); };
 
-  const handleAdd = async () => {
-    if (adding) return;
-    setAdding(true);
+  const handleAdd = () => {
     setError('');
-    try {
-      const result = await onAdd(kind);
-      if (result?.ok === false && result.error) {
-        setError(result.error);
-      }
-    } finally {
-      setAdding(false);
-    }
+    setOpen(false);
+    onAddRequest(kind);
   };
 
   const count = devices.length;
@@ -141,10 +133,9 @@ const LegoDeviceIcon = ({ kind, letter, devices, label, onRename, onDisconnect, 
               type="button"
               className="lego-icon-popover-add"
               onClick={handleAdd}
-              disabled={adding}
               title={t('legoAddDevice')}
             >
-              {adding ? '…' : '+'}
+              +
             </button>
           </div>
           {devices.length === 0 ? (
@@ -226,6 +217,7 @@ const ControlPanel = ({
   const isLegoEducation = hardware === 'lego-education';
   const isEsp32 = hardware === 'esp32';
   const { t } = useLanguage();
+  const [cardPickerKind, setCardPickerKind] = useState(null);
 
   const connectedLabel = isMicrobit
     ? t('microbitConnected')
@@ -260,7 +252,7 @@ const ControlPanel = ({
                 letter={KIND_LETTER[kind]}
                 label={t(KIND_LABEL_KEY[kind])}
                 devices={legoConnectionState?.[kind] || []}
-                onAdd={onConnectDevice}
+                onAddRequest={setCardPickerKind}
                 onRename={onRenameDevice}
                 onDisconnect={onDisconnectDevice}
                 t={t}
@@ -336,6 +328,14 @@ const ControlPanel = ({
           </>
         )}
       </div>
+
+      <LegoCardPickerModal
+        visible={cardPickerKind != null}
+        kind={cardPickerKind}
+        kindLabel={cardPickerKind ? t(KIND_LABEL_KEY[cardPickerKind]) : ''}
+        onConnect={onConnectDevice}
+        onClose={() => setCardPickerKind(null)}
+      />
     </div>
   );
 };
