@@ -20,7 +20,7 @@ const KIND_LABEL_KEY = {
 
 const KIND_ORDER = ['singlemotor', 'doublemotor', 'colorsensor', 'controller'];
 
-const LegoDeviceIcon = ({ kind, letter, devices, label, onRename, onDisconnect, onAddRequest, t }) => {
+const LegoDeviceIcon = ({ kind, letter, devices, label, onRename, onDisconnect, t }) => {
   const wrapperRef = useRef(null);
   const popoverRef = useRef(null);
   const closeTimerRef = useRef(null);
@@ -89,12 +89,6 @@ const LegoDeviceIcon = ({ kind, letter, devices, label, onRename, onDisconnect, 
   };
   const cancelEdit = () => { setEditing(null); setDraft(''); setError(''); };
 
-  const handleAdd = () => {
-    setError('');
-    setOpen(false);
-    onAddRequest(kind);
-  };
-
   const count = devices.length;
 
   return (
@@ -129,14 +123,6 @@ const LegoDeviceIcon = ({ kind, letter, devices, label, onRename, onDisconnect, 
         >
           <div className="lego-icon-popover-header">
             <div className="lego-icon-popover-title">{label}</div>
-            <button
-              type="button"
-              className="lego-icon-popover-add"
-              onClick={handleAdd}
-              title={t('legoAddDevice')}
-            >
-              +
-            </button>
           </div>
           {devices.length === 0 ? (
             <div className="lego-icon-popover-empty">{t('legoNoDevicesOfType')}</div>
@@ -217,7 +203,7 @@ const ControlPanel = ({
   const isLegoEducation = hardware === 'lego-education';
   const isEsp32 = hardware === 'esp32';
   const { t } = useLanguage();
-  const [cardPickerKind, setCardPickerKind] = useState(null);
+  const [cardPickerOpen, setCardPickerOpen] = useState(false);
 
   return (
     <div className={`control-panel right-panel ${mode}-mode`}>
@@ -228,21 +214,25 @@ const ControlPanel = ({
           </button>
         )}
         {isLegoEducation && (
-          <div className="lego-icon-row">
-            {KIND_ORDER.map((kind) => (
-              <LegoDeviceIcon
-                key={kind}
-                kind={kind}
-                letter={KIND_LETTER[kind]}
-                label={t(KIND_LABEL_KEY[kind])}
-                devices={legoConnectionState?.[kind] || []}
-                onAddRequest={setCardPickerKind}
-                onRename={onRenameDevice}
-                onDisconnect={onDisconnectDevice}
-                t={t}
-              />
-            ))}
-          </div>
+          <>
+            <button onClick={() => setCardPickerOpen(true)} className="button">
+              {t('legoConnectHardware')}
+            </button>
+            <div className="lego-icon-row">
+              {KIND_ORDER.map((kind) => (
+                <LegoDeviceIcon
+                  key={kind}
+                  kind={kind}
+                  letter={KIND_LETTER[kind]}
+                  label={t(KIND_LABEL_KEY[kind])}
+                  devices={legoConnectionState?.[kind] || []}
+                  onRename={onRenameDevice}
+                  onDisconnect={onDisconnectDevice}
+                  t={t}
+                />
+              ))}
+            </div>
+          </>
         )}
         {!isMicrobit && !isLegoEducation && !isEsp32 && (
           <button onClick={onEnterREPL} className="button program-slot-only">
@@ -314,11 +304,9 @@ const ControlPanel = ({
       </div>
 
       <LegoCardPickerModal
-        visible={cardPickerKind != null}
-        kind={cardPickerKind}
-        kindLabel={cardPickerKind ? t(KIND_LABEL_KEY[cardPickerKind]) : ''}
+        visible={cardPickerOpen}
         onConnect={onConnectDevice}
-        onClose={() => setCardPickerKind(null)}
+        onClose={() => setCardPickerOpen(false)}
       />
     </div>
   );
