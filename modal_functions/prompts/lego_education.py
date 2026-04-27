@@ -47,13 +47,11 @@ import time
 device = le.SingleMotor()  # eller DoubleMotor / ColorSensor / Controller
 device.connect()
 
-if not device.connected:
+if device.connected:
+    # elev-kode her
+    device.disconnect()
+else:
     print('Fejl: Kunne ikke forbinde.')
-    exit(1)
-
-# elev-kode her
-device.disconnect()
-exit(0)
 ```
 """
 
@@ -113,17 +111,15 @@ _COLOR_SENSOR = """\
 sensor = le.ColorSensor()  # tilfoej id='navn' for at vaelge en specifik sensor
 sensor.connect()
 
-if not sensor.connected:
+if sensor.connected:
+    farve = sensor.sensor.color
+    if farve == le.LEGO_COLOR_RED:
+        print('Ser roed!')
+    elif farve == le.LEGO_COLOR_BLUE:
+        print('Ser blaa!')
+    sensor.disconnect()
+else:
     print('Fejl: Kunne ikke forbinde til farvesensoren.')
-    exit(1)
-
-farve = sensor.sensor.color
-if farve == le.LEGO_COLOR_RED:
-    print('Ser roed!')
-elif farve == le.LEGO_COLOR_BLUE:
-    print('Ser blaa!')
-
-sensor.disconnect()
 ```
 
 Live data (sensor.sensor):
@@ -194,11 +190,12 @@ Device Face (IMU): le.DEVICE_FACE_LEFT m.fl.
    enheden. Hvis flere af samme type er forbundet, skal Python-objektet oprettes
    med id='navn' (f.eks. `le.SingleMotor(id='venstre')`), hvor navnet matcher
    det id, eleven har givet enheden i hover-popup'en ved "Forbind hardware"-knappen.
-3. Tjek altid 'enhed.connected' efter .connect() og giv en fejlbesked hvis det fejler
-   (exit(1)).
+3. Tjek altid 'enhed.connected' efter .connect() og giv en fejlbesked hvis det fejler.
+   Brug en if/else-struktur — kald IKKE exit() (det kaster en fejl i Pyodide).
 4. 'time' modulet fungerer: import time; time.sleep(1) er ok til korte ventetider.
 5. Importer altid 'import legoeducation as le'. Aldrig direkte BLE eller js-modul.
-6. Afslut programmet rent: kald .disconnect() paa alle enheder og afslut med exit(0).
+6. Afslut programmet rent: kald .disconnect() paa alle enheder foer programmet slutter.
+   Brug ALDRIG exit() — programmet afsluttes naturligt naar koden loeber ud.
 """
 
 EXAMPLES = ""  # Examples are baked into each bundle's code blocks above.
