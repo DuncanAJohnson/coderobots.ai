@@ -178,7 +178,7 @@ const MSG = {
   IMU_RESET_YAW_AXIS_COMMAND:192, IMU_RESET_YAW_AXIS_RESULT:193,
 };
 
-const NOTIF = { INFO_DEVICE:0, IMU_DEVICE:1, CARD:3, BUTTON_STATE:4, MOTOR:10, COLOR_SENSOR:12, CONTROLLER:13, IMU_GESTURE:16 };
+const NOTIF = { INFO_DEVICE:0, IMU_DEVICE:1, CARD:3, BUTTON_STATE:4, MOTOR:10, COLOR_SENSOR:12, CONTROLLER:15, IMU_GESTURE:16 };
 
 // ============================================================
 //  RPC Serialization Helpers
@@ -277,7 +277,7 @@ function deserializeMotorResult(p) { return { motorBitMask: p[0], status: p[1] }
 //  Notification Deserializers
 // ============================================================
 
-const NOTIF_SIZE = { [NOTIF.INFO_DEVICE]:1, [NOTIF.IMU_DEVICE]:20, [NOTIF.CARD]:3, [NOTIF.BUTTON_STATE]:1, [NOTIF.MOTOR]:12, [NOTIF.COLOR_SENSOR]:16, [NOTIF.CONTROLLER]:6, [NOTIF.IMU_GESTURE]:1 };
+const NOTIF_SIZE = { [NOTIF.INFO_DEVICE]:1, [NOTIF.IMU_DEVICE]:20, [NOTIF.CARD]:3, [NOTIF.BUTTON_STATE]:1, [NOTIF.MOTOR]:12, [NOTIF.COLOR_SENSOR]:12, [NOTIF.CONTROLLER]:6, [NOTIF.IMU_GESTURE]:1 };
 
 function _dInfoDevice(dv,o) { let v; [v,o]=readField(dv,o,'u8'); const bl=v; return {type:'InfoDeviceNotification',batteryLevel:bl,UsbPowerState:USB_POWER_STATE_USB_NOT_CONNECTED}; }
 function _dImuDevice(dv,o) { let v; [v,o]=readField(dv,o,'u8'); const ori=v; [v,o]=readField(dv,o,'u8'); const yf=v;
@@ -291,11 +291,11 @@ function _dMotor(dv,o) { let v; [v,o]=readField(dv,o,'u8'); const mbm=v; [v,o]=r
   [v,o]=readField(dv,o,'u16'); const ap=v; [v,o]=readField(dv,o,'i16'); const pw=v; [v,o]=readField(dv,o,'i8'); const sp=v;
   [v,o]=readField(dv,o,'i32'); const pos=v; [v,o]=readField(dv,o,'i8'); const g=v;
   return {type:'MotorNotification',motorBitMask:mbm,motorState:ms,absolutePosition:ap,power:pw,speed:sp,position:pos,gesture:g}; }
-function _dColorSensor(dv,o) { let v; [v,o]=readField(dv,o,'i8'); const c=v; [v,o]=readField(dv,o,'u8'); const ref=v;
+function _dColorSensor(dv,o) { let v; [v,o]=readField(dv,o,'u8'); const c=v; [v,o]=readField(dv,o,'u8'); const ref=v;
   [v,o]=readField(dv,o,'u16'); const rr=v; [v,o]=readField(dv,o,'u16'); const rg=v; [v,o]=readField(dv,o,'u16'); const rb=v;
-  [v,o]=readField(dv,o,'u16'); const rw=v; [v,o]=readField(dv,o,'u16'); const h=v;
-  [v,o]=readField(dv,o,'u16'); const s=v; [v,o]=readField(dv,o,'u16'); const val=v;
-  return {type:'ColorSensorNotification',color:c,reflection:ref,rawRed:rr,rawGreen:rg,rawBlue:rb,rawWhite:rw,hue:h,saturation:s,value:val}; }
+  [v,o]=readField(dv,o,'u16'); const h=v;
+  [v,o]=readField(dv,o,'u8'); const s=v; [v,o]=readField(dv,o,'u8'); const val=v;
+  return {type:'ColorSensorNotification',color:c,reflection:ref,rawRed:rr,rawGreen:rg,rawBlue:rb,hue:h,saturation:s,value:val}; }
 function _dController(dv,o) { let v; [v,o]=readField(dv,o,'i8'); const lp=v; [v,o]=readField(dv,o,'i8'); const rp=v;
   [v,o]=readField(dv,o,'i16'); const la=v; [v,o]=readField(dv,o,'i16'); const ra=v;
   return {type:'ControllerNotification',leftPercent:lp,rightPercent:rp,leftAngle:la,rightAngle:ra}; }
@@ -725,7 +725,7 @@ class Controller extends LegoDevice {
 
 class ColorSensor extends LegoDevice {
   constructor() { super(); this.search_name='Color Sensor'; this.product_id=PRODUCT_GROUP_DEVICE_COLOR_SENSOR;
-    this.sensor = {type:'ColorSensorNotification',color:NaN,reflection:NaN,rawRed:NaN,rawGreen:NaN,rawBlue:NaN,rawWhite:NaN,hue:NaN,saturation:NaN,value:NaN}; }
+    this.sensor = {type:'ColorSensorNotification',color:NaN,reflection:NaN,rawRed:NaN,rawGreen:NaN,rawBlue:NaN,hue:NaN,saturation:NaN,value:NaN}; }
   _updateLiveState(item) { super._updateLiveState(item); if (item.type === 'ColorSensorNotification') this.sensor = item; }
 }
 
