@@ -2,10 +2,40 @@
  * LEGO Education device registry.
  *
  * Manages window.LEGO_DEVICES — the shared slot table that both the JS
- * connect buttons and the in-browser Python wrapper (legoeducation.py) read
- * from. Also lazy-loads /lego-education-ble.js once so that `window.legoeducation`
+ * connect UI and the in-browser Python wrapper (legoeducation.py) read
+ * from. Each kind holds a Map<string id, instance> so we can have multiple
+ * devices of the same type. The "id" is a user-assigned string ("1", "2",
+ * "left", "duncan", …) that students reference from Python via le.X(id=…).
+ *
+ * Persisted entries (localStorage) are keyed by the LEGO hardware unique id
+ * (the 8-byte device UUID retrieved via device_uuid()) and remember the
+ * student-facing name plus the connection-card emoji used last time.
+ *
+ * Also lazy-loads /lego-education-ble.js once so that `window.legoeducation`
  * becomes available to the rest of the app.
  */
+
+import { KIND_SEARCH_NAME, KIND_PRODUCT_ID, LEGO_COMPANY_ID } from './legoCards.js';
+
+// Build an `exclusionFilters` clause that hides every kind except `kind` from
+// the OS Bluetooth picker. Works by matching the 16-bit product_id at offset
+// 0 of LEGO's manufacturer-data payload, big-endian (verified against
+// real-device captures: SingleMotor advertises `02 00 …`, ColorSensor
+// `02 02 …`, etc.). This mirrors how LEGO's own web client narrows the
+// chooser by hardware type.
+function buildTypeExclusionFilters(kind) {
+  const expectedId = KIND_PRODUCT_ID[kind];
+  if (expectedId == null) return [];
+  return Object.values(KIND_PRODUCT_ID)
+    .filter((pid) => pid !== expectedId)
+    .map((pid) => ({
+      manufacturerData: [{
+        companyIdentifier: LEGO_COMPANY_ID,
+        dataPrefix: new Uint8Array([(pid >> 8) & 0xFF, pid & 0xFF]),
+        mask: new Uint8Array([0xFF, 0xFF]),
+      }],
+    }));
+}
 
 const SLOT_CLASSES = {
   singlemotor: 'SingleMotor',
@@ -14,7 +44,11 @@ const SLOT_CLASSES = {
   controller: 'Controller',
 };
 
+const SERVICE_UUID = '0000fd02-0000-1000-8000-00805f9b34fb';
+
 export const LEGO_SLOT_NAMES = Object.keys(SLOT_CLASSES);
+
+const STORAGE_KEY = 'coderobots_lego_device_names';
 
 let bleScriptPromise = null;
 const listeners = new Set();
@@ -22,10 +56,10 @@ const listeners = new Set();
 function ensureSlots() {
   if (!window.LEGO_DEVICES) {
     window.LEGO_DEVICES = {
-      singlemotor: null,
-      doublemotor: null,
-      colorsensor: null,
-      controller: null,
+      singlemotor: new Map(),
+      doublemotor: new Map(),
+      colorsensor: new Map(),
+      controller: new Map(),
     };
   }
 }
@@ -66,7 +100,6 @@ function loadBleLibrary() {
 
 /**
  * Begin loading the BLE library immediately (call when entering LEGO mode).
- * Safe to call multiple times.
  */
 export function preloadLegoLibrary() {
   ensureSlots();
@@ -75,83 +108,276 @@ export function preloadLegoLibrary() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// localStorage persistence — { hardwareId: { kind, name } }
+// ---------------------------------------------------------------------------
+
+function loadStoredNames() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === 'object') ? parsed : {};
+  } catch (e) {
+    console.warn('[legoDevices] loadStoredNames failed:', e);
+    return {};
+  }
+}
+
+function writeStoredNames(map) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+  } catch (e) {
+    console.warn('[legoDevices] writeStoredNames failed:', e);
+  }
+}
+
+function saveStoredEntry(hardwareId, fields) {
+  if (!hardwareId) return;
+  const all = loadStoredNames();
+  const prev = all[hardwareId] || {};
+  all[hardwareId] = { ...prev, ...fields };
+  writeStoredNames(all);
+}
+
+// ---------------------------------------------------------------------------
+// Hardware id helpers
+// ---------------------------------------------------------------------------
+
+function formatHardwareId(uuidBytes) {
+  if (!uuidBytes || !uuidBytes.length) return '';
+  const hex = Array.from(uuidBytes, (b) => b.toString(16).padStart(2, '0').toUpperCase()).join('');
+  // Group into 4-char chunks separated by spaces, e.g. "335F 2537 004B 1200".
+  return hex.match(/.{1,4}/g).join(' ');
+}
+
+async function fetchHardwareId(instance) {
+  try {
+    const r = await instance.device_uuid();
+    return formatHardwareId(r?.uuid);
+  } catch (e) {
+    console.warn('[legoDevices] device_uuid failed:', e);
+    return '';
+  }
+}
+
 /**
- * Connect one of the four LEGO devices via Web Bluetooth.
- * MUST be called synchronously from a user-gesture handler (click).
+ * Pick a default user id for a freshly-connected device of `kind` whose
+ * hardware id has no stored name. We use sequential numeric strings ("1",
+ * "2", …) and skip any number already in use either by a currently-connected
+ * device of this kind OR by a remembered (persisted) device of this kind.
+ */
+function nextDefaultName(kind) {
+  ensureSlots();
+  const used = new Set(window.LEGO_DEVICES[kind].keys());
+  const stored = loadStoredNames();
+  for (const entry of Object.values(stored)) {
+    if (entry?.kind === kind) used.add(entry.name);
+  }
+  for (let n = 1; n < 1000; n++) {
+    const candidate = String(n);
+    if (!used.has(candidate)) return candidate;
+  }
+  return `id_${Date.now()}`;
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Connect a LEGO device of the given kind via Web Bluetooth, optionally
+ * narrowed by connection-card color. MUST be called from a user-gesture
+ * handler (click).
+ *
+ * Flow:
+ *   1. Open the OS Bluetooth picker, filtered by service UUID and (when a
+ *      card was chosen) by an emoji `namePrefix`.
+ *   2. After the user picks, if a card was chosen, validate that the
+ *      device's advertised name ends with the expected type string
+ *      (`Single Motor`, `Double Motor`, …). Reject mismatches.
+ *
+ * Passing `cardEmoji = null` skips both the prefix filter and the type
+ * check — the user explicitly opted out of card-based filtering.
  *
  * @param {'singlemotor'|'doublemotor'|'colorsensor'|'controller'} kind
- * @returns {Promise<{ok: boolean, error?: string, info?: any}>}
+ * @param {string|null} cardEmoji - the emoji from the chosen card, or null
+ * @returns {Promise<{ok: boolean, error?: string, errorKey?: string, errorParams?: object, name?: string, hardwareId?: string, info?: any}>}
  */
-export async function connectDevice(kind) {
+export async function connectDevice(kind, cardEmoji) {
   ensureSlots();
   const className = SLOT_CLASSES[kind];
   if (!className) return { ok: false, error: `Unknown device kind: ${kind}` };
 
+  const expectedType = KIND_SEARCH_NAME[kind];
+  const filters = cardEmoji
+    ? [{ services: [SERVICE_UUID], namePrefix: cardEmoji + ' ' }]
+    : [{ services: [SERVICE_UUID] }];
+  const exclusionFilters = buildTypeExclusionFilters(kind);
+
+  let instance = null;
   try {
     const le = await loadBleLibrary();
     const DeviceClass = le[className];
     if (!DeviceClass) throw new Error(`legoeducation.${className} not found`);
 
-    // If the slot already holds a connected instance, bail out as success.
-    const existing = window.LEGO_DEVICES[kind];
-    if (existing && existing.connected) {
-      return { ok: true, info: null };
+    instance = new DeviceClass();
+    const info = await instance.connect({
+      filters,
+      optionalServices: [SERVICE_UUID],
+      exclusionFilters,
+    });
+
+    if (cardEmoji && expectedType) {
+      const advertisedName = instance.device?.name || '';
+      if (!advertisedName.endsWith(expectedType)) {
+        try { await instance.disconnect(); } catch { /* ignore */ }
+        return {
+          ok: false,
+          errorKey: 'legoWrongTypeError',
+          errorParams: { actual: advertisedName || '?' },
+        };
+      }
     }
 
-    const instance = new DeviceClass();
+    const hardwareId = await fetchHardwareId(instance);
+
+    let name;
+    if (hardwareId) {
+      const stored = loadStoredNames();
+      const entry = stored[hardwareId];
+      if (entry && entry.kind === kind && entry.name) {
+        name = entry.name;
+      }
+    }
+    if (!name) {
+      name = nextDefaultName(kind);
+    }
+
+    if (hardwareId) {
+      saveStoredEntry(hardwareId, {
+        kind,
+        name,
+        ...(cardEmoji ? { cardEmoji } : {}),
+      });
+    }
+
+    const existing = window.LEGO_DEVICES[kind].get(name);
+    if (existing && existing !== instance) {
+      try { await existing.disconnect(); } catch { /* ignore */ }
+    }
+
+    instance._coderobotsName = name;
+    instance._coderobotsHardwareId = hardwareId;
+    if (cardEmoji) instance._coderobotsCardEmoji = cardEmoji;
     instance._onDisconnect = () => {
-      if (window.LEGO_DEVICES[kind] === instance) {
-        window.LEGO_DEVICES[kind] = null;
+      const cur = window.LEGO_DEVICES[kind].get(name);
+      if (cur === instance) {
+        window.LEGO_DEVICES[kind].delete(name);
         notify();
       }
     };
-    const info = await instance.connect();
-    window.LEGO_DEVICES[kind] = instance;
+
+    window.LEGO_DEVICES[kind].set(name, instance);
     notify();
-    return { ok: true, info };
+    return { ok: true, info, name, hardwareId };
   } catch (err) {
     console.error(`[legoDevices] connect ${kind} failed:`, err);
+    if (instance) {
+      try { await instance.disconnect(); } catch { /* ignore */ }
+    }
     return { ok: false, error: err?.message || String(err) };
   }
 }
 
 /**
- * Disconnect one device, closing its BT connection.
+ * Disconnect a single named device.
  */
-export async function disconnectDevice(kind) {
+export async function disconnectDevice(kind, name) {
   ensureSlots();
-  const inst = window.LEGO_DEVICES[kind];
+  const map = window.LEGO_DEVICES[kind];
+  if (!map) return;
+  const inst = map.get(name);
   if (!inst) return;
   try { await inst.disconnect(); } catch (e) { console.warn('disconnect failed', e); }
-  window.LEGO_DEVICES[kind] = null;
+  map.delete(name);
   notify();
 }
 
 /**
- * Disconnect all four slots (used when the user switches away from LEGO mode).
+ * Rename a connected device. Updates the in-memory Map key and persists the
+ * new name against the device's hardware id so future reconnects use it.
+ *
+ * @returns {{ok: true} | {ok: false, error: string}}
+ */
+export function renameDevice(kind, oldName, newName) {
+  ensureSlots();
+  const trimmed = (newName ?? '').trim();
+  if (!trimmed) return { ok: false, error: 'Name cannot be empty' };
+  if (trimmed.includes(':')) return { ok: false, error: "Name cannot contain ':'" };
+  if (trimmed === oldName) return { ok: true };
+
+  const map = window.LEGO_DEVICES[kind];
+  if (!map) return { ok: false, error: `Unknown kind: ${kind}` };
+  const inst = map.get(oldName);
+  if (!inst) return { ok: false, error: `No device with id '${oldName}'` };
+  if (map.has(trimmed)) return { ok: false, error: 'in-use' };
+
+  // Rebuild the map preserving insertion order (so "first-of-kind" semantics
+  // stay stable across renames).
+  const rebuilt = new Map();
+  for (const [k, v] of map.entries()) {
+    if (k === oldName) rebuilt.set(trimmed, inst);
+    else rebuilt.set(k, v);
+  }
+  window.LEGO_DEVICES[kind] = rebuilt;
+
+  inst._coderobotsName = trimmed;
+
+  // Update both the _onDisconnect closure and the persisted name.
+  inst._onDisconnect = () => {
+    const cur = window.LEGO_DEVICES[kind].get(trimmed);
+    if (cur === inst) {
+      window.LEGO_DEVICES[kind].delete(trimmed);
+      notify();
+    }
+  };
+  if (inst._coderobotsHardwareId) {
+    saveStoredEntry(inst._coderobotsHardwareId, { kind, name: trimmed });
+  }
+
+  notify();
+  return { ok: true };
+}
+
+/**
+ * Disconnect every device across every kind (used when leaving LEGO mode).
  */
 export async function disconnectAll() {
   ensureSlots();
+  const tasks = [];
   for (const kind of LEGO_SLOT_NAMES) {
-    const inst = window.LEGO_DEVICES[kind];
-    if (!inst) continue;
-    try { await inst.disconnect(); } catch (e) { console.warn('disconnectAll', kind, e); }
-    window.LEGO_DEVICES[kind] = null;
+    const map = window.LEGO_DEVICES[kind];
+    for (const inst of map.values()) {
+      tasks.push(inst.disconnect().catch((e) => console.warn('disconnectAll', kind, e)));
+    }
+    map.clear();
   }
+  await Promise.all(tasks);
   notify();
 }
 
 /**
- * Best-effort motor/movement halt across every connected device.
- * Called by the "Stop" button so a runaway script can be halted.
+ * Best-effort halt for every connected motor/movement device.
  */
 export async function stopAllMotion() {
   ensureSlots();
   const tasks = [];
-  const sm = window.LEGO_DEVICES.singlemotor;
-  if (sm?.connected) tasks.push(sm.motor_stop({ blocking: false }).catch(() => {}));
-  const dm = window.LEGO_DEVICES.doublemotor;
-  if (dm?.connected) {
+  for (const sm of window.LEGO_DEVICES.singlemotor.values()) {
+    if (sm?.connected) tasks.push(sm.motor_stop({ blocking: false }).catch(() => {}));
+  }
+  for (const dm of window.LEGO_DEVICES.doublemotor.values()) {
+    if (!dm?.connected) continue;
     tasks.push(dm.movement_stop({ blocking: false }).catch(() => {}));
     tasks.push(dm.motor_stop({ motor: 2, blocking: false }).catch(() => {}));
   }
@@ -159,14 +385,23 @@ export async function stopAllMotion() {
 }
 
 /**
- * Snapshot of current connection state.
+ * Snapshot of current connection state, suitable for rendering UI.
+ *
+ *   { singlemotor: [{ name, hardwareId, connected }, ...], ... }
  */
 export function getConnectionState() {
   ensureSlots();
   const state = {};
   for (const kind of LEGO_SLOT_NAMES) {
-    const inst = window.LEGO_DEVICES[kind];
-    state[kind] = !!(inst && inst.connected);
+    const list = [];
+    for (const [name, inst] of window.LEGO_DEVICES[kind].entries()) {
+      list.push({
+        name,
+        hardwareId: inst?._coderobotsHardwareId || '',
+        connected: !!(inst && inst.connected),
+      });
+    }
+    state[kind] = list;
   }
   return state;
 }
@@ -177,4 +412,17 @@ export function getConnectionState() {
 export function subscribe(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);
+}
+
+/**
+ * Lookup helper used by the RPC bridge. With no `id`, returns the first
+ * inserted device of this kind (backwards compatible with single-device
+ * student code: `motor = le.SingleMotor()`).
+ */
+export function findDeviceInstance(kind, id) {
+  ensureSlots();
+  const map = window.LEGO_DEVICES[kind];
+  if (!map || map.size === 0) return null;
+  if (id == null) return map.values().next().value || null;
+  return map.get(id) || null;
 }

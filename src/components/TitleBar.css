@@ -32,6 +32,35 @@
   margin-right: auto;
 }
 
+.topbar-title-swap {
+  display: inline-grid;
+  cursor: default;
+  vertical-align: baseline;
+}
+
+.topbar-title-swap-layer {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: center;
+  transition: opacity 0.15s ease;
+}
+
+.topbar-title-swap-layer--hw {
+  opacity: 0;
+  color: #ffd166;
+  font-family: 'Courier New', 'Menlo', monospace;
+  font-style: italic;
+  letter-spacing: 0;
+}
+
+.topbar-title-swap--hw .topbar-title-swap-layer--robots {
+  opacity: 0;
+}
+
+.topbar-title-swap--hw .topbar-title-swap-layer--hw {
+  opacity: 1;
+}
+
 .topbar-actions {
   display: flex;
   gap: 10px;

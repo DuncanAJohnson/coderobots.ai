@@ -19,10 +19,17 @@ import { compileSketch, Esp32CompileError } from '../utils/esp32/esp32Compile.js
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import FlashProgressModal from './FlashProgressModal.jsx';
-import LegoConnectPanel from './LegoConnectPanel.jsx';
 import { createLegoTerminal } from '../utils/legoEducation/legoTerminal.js';
 import { ensurePyodide, runPython, isPyodideReady, interruptPython, freezeBridge, terminatePyodide } from '../utils/legoEducation/pyodideRunner.js';
-import { disconnectAll as legoDisconnectAll, stopAllMotion as legoStopAllMotion } from '../utils/legoEducation/legoDevices.js';
+import {
+  disconnectAll as legoDisconnectAll,
+  stopAllMotion as legoStopAllMotion,
+  getConnectionState as legoGetConnectionState,
+  subscribe as legoSubscribe,
+  connectDevice as legoConnectDevice,
+  disconnectDevice as legoDisconnectDevice,
+  renameDevice as legoRenameDevice,
+} from '../utils/legoEducation/legoDevices.js';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useHardware } from '../contexts/HardwareContext';
 import './SPIKEEditor.css';
@@ -43,6 +50,7 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
   const [flashProgress, setFlashProgress] = useState(null); // null = indeterminate, 0-100 = determinate
   const [flashMessage, setFlashMessage] = useState('');
   const [needsFirmware, setNeedsFirmware] = useState(false);
+  const [legoConnectionState, setLegoConnectionState] = useState(legoGetConnectionState);
   const connectedRef = useRef(false);
 
   const editorRef = useRef(null);
@@ -104,6 +112,23 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
 
     return () => clearTimeout(timeoutId);
   }, [code]);
+
+  // Track LEGO device connection state and propagate "any connected" up to App.
+  // Only active in LEGO mode — in serial modes the board itself owns the
+  // connected flag.
+  useEffect(() => {
+    if (!isLegoEducation) return;
+    const unsub = legoSubscribe((next) => {
+      setLegoConnectionState(next);
+      const anyConnected = Object.values(next).some((arr) => arr.some((d) => d.connected));
+      onConnectionChange?.(anyConnected);
+    });
+    return unsub;
+  }, [isLegoEducation, onConnectionChange]);
+
+  const handleLegoConnect = (kind, cardEmoji) => legoConnectDevice(kind, cardEmoji);
+  const handleLegoRename = (kind, oldName, newName) => legoRenameDevice(kind, oldName, newName);
+  const handleLegoDisconnect = (kind, name) => legoDisconnectDevice(kind, name);
 
   // Initialize board on mount (skip for LEGO Education — Pyodide instead, and
   // skip for ESP32 — Arduino C via esptool-js, not a MicroPython REPL)
@@ -354,8 +379,7 @@ const SPIKEEditor = forwardRef(({ initialCode, onConnectionChange }, ref) => {
   };
 
   const handleConnect = async () => {
-    // In LEGO mode the per-device connect buttons live in <LegoConnectPanel>,
-    // so the generic Connect button in ControlPanel is a no-op.
+    // LEGO mode uses the "Connect Hardware" button + modal, not this handler.
     if (isLegoEducation) return;
 
     if (isEsp32) {
@@ -780,7 +804,6 @@ os.chdir('/flash')
         <div className="resizer" ref={resizerRef}></div>
 
         <div className="child bottom-child">
-          {isLegoEducation && <LegoConnectPanel />}
           <ControlPanel
             connected={connected}
             mode={mode}
@@ -797,6 +820,10 @@ os.chdir('/flash')
             hardware={hardware}
             onSaveToMainPy={handleSaveToMainPy}
             isRunning={isRunning}
+            legoConnectionState={legoConnectionState}
+            onConnectDevice={handleLegoConnect}
+            onRenameDevice={handleLegoRename}
+            onDisconnectDevice={handleLegoDisconnect}
           />
           {needsFirmware && flashPhase === null && (
             <div className="flash-prompt">

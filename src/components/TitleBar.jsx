@@ -7,12 +7,25 @@ import { useState } from 'react';
 import AboutModal from './AboutModal';
 import HardwarePickerModal from './HardwarePickerModal';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useHardware } from '../contexts/HardwareContext';
 import './TitleBar.css';
+
+const HW_LABEL_KEY = {
+  microbit: 'microbit',
+  spike: 'spikePrime',
+  esp32: 'esp32',
+  'lego-education': 'legoEducation',
+};
 
 const TitleBar = ({ onShowDebug, onClearChat }) => {
   const [showAbout, setShowAbout] = useState(false);
   const [showHardwarePicker, setShowHardwarePicker] = useState(false);
+  const [hardwareHovered, setHardwareHovered] = useState(false);
   const { lang, switchLang, t } = useLanguage();
+  const { hardware } = useHardware();
+
+  const hardwareLabel = hardware && HW_LABEL_KEY[hardware] ? t(HW_LABEL_KEY[hardware]) : null;
+  const showHardware = hardwareLabel && !hardwareHovered;
 
   const handleHardwarePickerClose = () => {
     setShowHardwarePicker(false);
@@ -22,7 +35,24 @@ const TitleBar = ({ onShowDebug, onClearChat }) => {
   return (
     <>
       <div className="topbar">
-        <div className="topbar-title">{t('appTitle')}</div>
+        <div className="topbar-title">
+          {t('appTitlePrefix')}{' '}
+          <span
+            className={`topbar-title-swap${showHardware ? ' topbar-title-swap--hw' : ''}`}
+            onMouseEnter={() => setHardwareHovered(true)}
+            onMouseLeave={() => setHardwareHovered(false)}
+          >
+            <span className="topbar-title-swap-layer topbar-title-swap-layer--robots" aria-hidden={showHardware}>
+              {t('appTitleRobots')}
+            </span>
+            {hardwareLabel && (
+              <span className="topbar-title-swap-layer topbar-title-swap-layer--hw" aria-hidden={!showHardware}>
+                {hardwareLabel}
+              </span>
+            )}
+          </span>{' '}
+          {t('appTitleSuffix')}
+        </div>
         <div className="topbar-actions">
           <button
             className="topbar-button"
