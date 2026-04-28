@@ -79,6 +79,7 @@ PREWARM_CMD = (
 image = (
     modal.Image.debian_slim()
     .apt_install("curl", "ca-certificates", "git", "python3")
+    .pip_install("fastapi[standard]")
     .run_commands(
         ARDUINO_CLI_INSTALL,
         "arduino-cli config init",
