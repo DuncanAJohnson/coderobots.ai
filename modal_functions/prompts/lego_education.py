@@ -2,7 +2,7 @@
 
 Sourced from src/prompts/legoEducation_priming.js. Content is in Danish (matching
 the JS source). Bundle split: single_motor, double_motor, color_sensor, controller,
-shared (common BLE callbacks/constants/rules).
+shared (common constants/rules).
 """
 
 PREAMBLE = """\
