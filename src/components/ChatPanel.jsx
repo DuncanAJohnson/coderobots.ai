@@ -7,7 +7,7 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { streamTutorCompletion } from '../utils/aiStream';
+import { streamChat, CHAT_BACKEND } from '../utils/aiStream';
 import CodeModal from './CodeModal';
 import ConsoleModal from './ConsoleModal';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -22,6 +22,7 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [codingLevel, setCodingLevel] = useState('beginner');
+  const [chatModel, setChatModel] = useState('gpt-5-nano');
   const [isStreaming, setIsStreaming] = useState(false);
   const [attachedContext, setAttachedContext] = useState({ includeCode: false, includeConsole: false });
   const [codeModalOpen, setCodeModalOpen] = useState(false);
@@ -59,6 +60,9 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
         if (settings.codingLevel) {
           setCodingLevel(settings.codingLevel);
         }
+        if (settings.chatModel) {
+          setChatModel(settings.chatModel);
+        }
       }
     } catch (error) {
       console.warn('Failed to load chat history from localStorage:', error);
@@ -77,15 +81,15 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
     }
   }, [messages, isLoaded]);
 
-  // Save settings when coding level changes (only after initial load)
+  // Save settings when coding level or model changes (only after initial load)
   useEffect(() => {
     if (!isLoaded) return;
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ codingLevel }));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ codingLevel, chatModel }));
     } catch (error) {
       console.warn('Failed to save settings to localStorage:', error);
     }
-  }, [codingLevel, isLoaded]);
+  }, [codingLevel, chatModel, isLoaded]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -162,6 +166,9 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
       level: codingLevel,
       lang,
     };
+    if (CHAT_BACKEND === 'openai') {
+      payload.model = chatModel;
+    }
     if (finalContext.code && finalContext.code.trim()) {
       payload.code = finalContext.code;
     }
@@ -194,7 +201,7 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
         });
       };
 
-      for await (const event of streamTutorCompletion(payload)) {
+      for await (const event of streamChat(payload)) {
         if (event.type === 'progress') {
           thinking.push({ stage: event.stage, payload: event.payload || {} });
           updateLast({ thinking: [...thinking] });
@@ -406,6 +413,21 @@ const ChatPanel = forwardRef(({ onReplaceCode, getCodeContent, getConsoleContent
           <option value="intermediate">{t('intermediate')}</option>
           <option value="experienced">{t('experienced')}</option>
         </select>
+        {CHAT_BACKEND === 'openai' && (
+          <>
+            <label htmlFor="chat-model-selector">{t('chatModel')}</label>
+            <select
+              id="chat-model-selector"
+              className="chat-level-selector"
+              value={chatModel}
+              onChange={(e) => setChatModel(e.target.value)}
+            >
+              <option value="gpt-5-nano">gpt-5-nano · {t('modelStreaming')}</option>
+              <option value="gpt-5-mini">gpt-5-mini · {t('modelNoStreaming')}</option>
+              <option value="gpt-5">gpt-5 · {t('modelNoStreaming')}</option>
+            </select>
+          </>
+        )}
         <button
           className="clear-history-btn"
           onClick={handleClearHistory}

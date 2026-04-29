@@ -2,15 +2,19 @@
  * LLM API Streaming Utility
  * Connects to Modal serverless function and handles SSE streaming.
  *
- * Two streaming functions are exposed:
+ * Streaming functions exposed:
  * - streamChatCompletion: raw chat passthrough to chat_endpoint (legacy / sim repo).
- * - streamTutorCompletion: server-side tutor pipeline at tutor_endpoint.
+ * - streamTutorCompletion: SkoleGPT tutor pipeline at tutor_endpoint.
+ * - streamOpenAICompletion: direct OpenAI call at openai_endpoint (no pipeline stages).
+ * - streamChat: dispatcher that picks tutor vs openai based on VITE_CHAT_BACKEND.
  */
 
 const RAW_CHAT_ENDPOINT_URL = import.meta.env.VITE_MODAL_ENDPOINT_URL;
 const TUTOR_ENDPOINT_URL =
   import.meta.env.VITE_MODAL_TUTOR_ENDPOINT_URL ||
   import.meta.env.VITE_MODAL_ENDPOINT_URL;
+const OPENAI_ENDPOINT_URL = import.meta.env.VITE_MODAL_OPENAI_ENDPOINT_URL;
+export const CHAT_BACKEND = import.meta.env.VITE_CHAT_BACKEND === 'openai' ? 'openai' : 'skolegpt';
 
 /**
  * Generic SSE response reader. Yields raw event objects with the original
@@ -121,5 +125,54 @@ export async function* streamTutorCompletion(payload) {
   } catch (error) {
     console.error('Error in streamTutorCompletion:', error);
     throw error;
+  }
+}
+
+/**
+ * Stream the direct OpenAI chat endpoint (no multi-stage pipeline).
+ * Same SSE shape as streamTutorCompletion. Caller passes `model`
+ * ('gpt-5-nano' | 'gpt-5-mini' | 'gpt-5'); only nano streams server-side,
+ * the others arrive as a single content event.
+ *
+ * @param {Object} payload
+ * @param {Array<{role: string, content: string}>} payload.history
+ * @param {string} payload.user_msg
+ * @param {string} payload.hw_mode
+ * @param {string} payload.level
+ * @param {string} payload.model
+ * @param {string} [payload.code]
+ * @param {string} [payload.console]
+ * @param {string} [payload.lang]
+ * @returns {AsyncGenerator<{type:'content',content:string}>}
+ */
+export async function* streamOpenAICompletion(payload) {
+  if (!OPENAI_ENDPOINT_URL) {
+    throw new Error('VITE_MODAL_OPENAI_ENDPOINT_URL is not configured in .env.local');
+  }
+
+  try {
+    const response = await fetch(OPENAI_ENDPOINT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    yield* readSseEvents(response);
+  } catch (error) {
+    console.error('Error in streamOpenAICompletion:', error);
+    throw error;
+  }
+}
+
+/**
+ * Backend-aware dispatcher. Picks streamOpenAICompletion when
+ * VITE_CHAT_BACKEND === 'openai', otherwise streamTutorCompletion.
+ * Callers (ChatPanel) don't need to know which backend is active.
+ */
+export async function* streamChat(payload) {
+  if (CHAT_BACKEND === 'openai') {
+    yield* streamOpenAICompletion(payload);
+  } else {
+    yield* streamTutorCompletion(payload);
   }
 }
