@@ -5,8 +5,9 @@
 
 import './ModalBase.css';
 import './SessionModal.css';
+import { getPlatform } from '../platforms';
 
-const SessionModal = ({ visible, sessions, onSelect, cancellable = false, onCancel }) => {
+const SessionModal = ({ visible, sessions, onSelect, onCreateNew, cancellable = false, onCancel }) => {
   if (!visible) return null;
 
   const handleOverlayClick = (e) => {
@@ -56,9 +57,16 @@ const SessionModal = ({ visible, sessions, onSelect, cancellable = false, onCanc
                 onClick={() => handleSessionSelect(session.id)}
               >
                 <div className="session-modal-button-content">
-                  <span className="session-name">
-                    {session.name || 'Unnamed Session'}
-                  </span>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', minWidth: 0 }}>
+                    <span className="session-name">
+                      {session.name || 'Unnamed Session'}
+                    </span>
+                    {getPlatform(session.hardware_platform) && (
+                      <span className="platform-badge" title="Hardware platform">
+                        {getPlatform(session.hardware_platform).label}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <span className="session-updated">
                       {formatLastUpdated(session.last_updated || session.start_time)}
@@ -75,7 +83,7 @@ const SessionModal = ({ visible, sessions, onSelect, cancellable = false, onCanc
         <div className="session-modal-new-section">
           <button
             className="session-modal-button session-modal-new-button"
-            onClick={() => handleSessionSelect('new')}
+            onClick={() => onCreateNew?.()}
           >
             Start New Session
           </button>

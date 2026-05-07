@@ -18,13 +18,14 @@ import {
   updateCodeContent as updateCodeContentService,
   updateSessionCode as updateSessionCodeService,
   createCodeSnapshot,
+  setSessionHardwarePlatform,
 } from '../services/sessionManager';
 import {
   getConversationHistory,
   getLatestCode,
   updateSessionOnLoad,
 } from '../services/dataLogger';
-import { buildLilyBotPriming } from '../prompts/spike_priming';
+import { getPlatform, PLATFORMS } from '../platforms';
 import { getCurrentUserHardwareConfig, getHardwareCatalog, toPromptHardwareConfig } from '../services/hardwareConfig';
 
 const SessionContext = createContext();
@@ -39,7 +40,7 @@ export const SessionProvider = ({ children }) => {
   const [currentCodeContent, setCurrentCodeContent] = useState('# Start your project here!\n');
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [firmwareVersion, setFirmwareVersion] = useState('3');
+  const [pendingPlatformSession, setPendingPlatformSession] = useState(null);
   const [hardwarePromptConfig, setHardwarePromptConfig] = useState(null);
   const loadHardwarePromptConfig = useCallback(async () => {
     try {
@@ -114,9 +115,10 @@ export const SessionProvider = ({ children }) => {
   }, []);
 
   /**
-   * Switch to a specific session or create a new one
+   * Switch to an existing session. New sessions must be created via
+   * createSessionWithPlatform (which requires the user to pick a platform).
    */
-  const setActiveSessionById = useCallback(async (sessionId, newFirmwareVersion = '3') => {
+  const setActiveSessionById = useCallback(async (sessionId) => {
     setLoading(true);
     try {
       // Save current code before switching sessions
@@ -125,48 +127,33 @@ export const SessionProvider = ({ children }) => {
         console.log(`✅ Saved current code before switching sessions`);
       }
 
-      let session;
+      // Load existing session
+      const allSessions = await getUserSessions();
+      const session = allSessions.find((s) => s.id === sessionId);
 
-      if (sessionId === 'new') {
-        // Create new session with firmware version
-        session = await createNewSession(newFirmwareVersion);
-        if (!session) {
-          console.error('Failed to create new session');
-          return false;
-        }
+      if (!session) {
+        console.error(`Session ${sessionId} not found`);
+        return false;
+      }
 
-        // Clear conversation history for new session
-        setConversationHistory([]);
+      // Legacy row: force the user to pick a platform before activating.
+      if (!session.hardware_platform) {
+        setPendingPlatformSession({ id: session.id, name: session.name || '' });
+        return 'pending-platform';
+      }
+
+      // Update session timestamps
+      await updateSessionOnLoad(sessionId);
+
+      // Load conversation history
+      if (session.current_conversation_id) {
+        const history = await getConversationHistory(session.current_conversation_id);
+        setConversationHistory(history);
         setCurrentConversationId(session.current_conversation_id);
-        
-        // Reload sessions list to include new one
-        await loadSessions();
-      } else {
-        // Load existing session
-        const allSessions = await getUserSessions();
-        session = allSessions.find((s) => s.id === sessionId);
-
-        if (!session) {
-          console.error(`Session ${sessionId} not found`);
-          return false;
-        }
-
-        // Update session timestamps
-        await updateSessionOnLoad(sessionId);
-
-        // Load conversation history
-        if (session.current_conversation_id) {
-          const history = await getConversationHistory(session.current_conversation_id);
-          setConversationHistory(history);
-          setCurrentConversationId(session.current_conversation_id);
-        }
       }
 
       setActiveSession(session);
-      
-      // Set firmware version from session
-      setFirmwareVersion(session.firmware_version || '3');
-      
+
       // Load all conversations for this session
       await loadConversations(session.id);
       
@@ -199,14 +186,88 @@ export const SessionProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [loadSessions, loadConversations, currentCodeId, currentCodeContent, activeSession, loadCodeRecords]);
+  }, [loadConversations, currentCodeId, currentCodeContent, activeSession, loadCodeRecords]);
+
+  /**
+   * Create a new session with a required hardware platform and optional name.
+   */
+  const createSessionWithPlatform = useCallback(async ({ name, platformId }) => {
+    if (!platformId || !getPlatform(platformId)) {
+      console.error('createSessionWithPlatform requires a valid platformId');
+      return false;
+    }
+    setLoading(true);
+    try {
+      if (currentCodeId && currentCodeContent && activeSession) {
+        await updateCodeContentService(currentCodeId, currentCodeContent);
+      }
+
+      const session = await createNewSession({ hardwarePlatform: platformId, name: name || null });
+      if (!session) {
+        console.error('Failed to create new session');
+        return false;
+      }
+
+      setConversationHistory([]);
+      setCurrentConversationId(session.current_conversation_id);
+      setActiveSession(session);
+
+      await loadSessions();
+      await loadConversations(session.id);
+      const sessionCodeRecords = await loadCodeRecords(session.id);
+
+      if (session.current_code_id) {
+        const latestCode = await getLatestCode(session.id);
+        if (latestCode !== null) {
+          setCurrentCodeId(session.current_code_id);
+          setCurrentCodeContent(latestCode);
+        } else if (sessionCodeRecords.length > 0) {
+          setCurrentCodeId(sessionCodeRecords[0].id);
+          setCurrentCodeContent(sessionCodeRecords[0].content || '# Start your project here!\n');
+        }
+      } else if (sessionCodeRecords.length > 0) {
+        setCurrentCodeId(sessionCodeRecords[0].id);
+        setCurrentCodeContent(sessionCodeRecords[0].content || '# Start your project here!\n');
+      }
+
+      console.log(`✅ Created new ${platformId} session: ${session.id}`);
+      return true;
+    } catch (error) {
+      console.error('Error creating session with platform:', error);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [activeSession, currentCodeId, currentCodeContent, loadSessions, loadConversations, loadCodeRecords]);
+
+  /**
+   * Back-fill the hardware platform on a legacy session, then activate it.
+   */
+  const assignPlatformToSession = useCallback(async (sessionId, platformId) => {
+    if (!sessionId || !platformId || !getPlatform(platformId)) {
+      console.error('assignPlatformToSession requires sessionId and valid platformId');
+      return false;
+    }
+    const updated = await setSessionHardwarePlatform(sessionId, platformId);
+    if (!updated) return false;
+    setPendingPlatformSession(null);
+    await loadSessions();
+    return await setActiveSessionById(sessionId);
+  }, [loadSessions]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const clearPendingPlatformSession = useCallback(() => {
+    setPendingPlatformSession(null);
+  }, []);
+
+  const activePlatform = getPlatform(activeSession?.hardware_platform) || null;
 
   /**
    * Get the initial system priming message for building conversation
    */
   const getSystemPriming = useCallback(() => {
-    return buildLilyBotPriming(hardwarePromptConfig);
-  }, [hardwarePromptConfig]);
+    if (!activePlatform) return '';
+    return activePlatform.buildPriming(hardwarePromptConfig);
+  }, [activePlatform, hardwarePromptConfig]);
 
   /**
    * Clear conversation history (for UI)
@@ -500,7 +561,12 @@ export const SessionProvider = ({ children }) => {
     currentCodeContent,
     sessions,
     loading,
-    firmwareVersion,
+    activePlatform,
+    availablePlatforms: PLATFORMS,
+    pendingPlatformSession,
+    clearPendingPlatformSession,
+    createSessionWithPlatform,
+    assignPlatformToSession,
     loadSessions,
     setActiveSessionById,
     getSystemPriming,

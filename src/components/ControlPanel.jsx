@@ -1,6 +1,7 @@
 const ControlPanel = ({
   connected,
   connectedBoard = null,
+  platformConnectionType = null,
   isConnecting = false,
   onConnectMicrobit,
   onConnectPico,
@@ -24,20 +25,24 @@ const ControlPanel = ({
           </button>
         ) : (
           <>
-            <button
-              onClick={onConnectMicrobit}
-              className="button connect-button"
-              disabled={isConnecting}
-            >
-              {isConnecting ? 'Connecting...' : 'Connect micro:bit'}
-            </button>
-            <button
-              onClick={onConnectPico}
-              className="button connect-button"
-              disabled={isConnecting}
-            >
-              {isConnecting ? 'Connecting...' : 'Connect Pico'}
-            </button>
+            {platformConnectionType === 'microbit' && (
+              <button
+                onClick={onConnectMicrobit}
+                className="button connect-button"
+                disabled={isConnecting}
+              >
+                {isConnecting ? 'Connecting...' : 'Connect micro:bit'}
+              </button>
+            )}
+            {platformConnectionType === 'pico' && (
+              <button
+                onClick={onConnectPico}
+                className="button connect-button"
+                disabled={isConnecting}
+              >
+                {isConnecting ? 'Connecting...' : 'Connect Pico'}
+              </button>
+            )}
           </>
         )}
         <button onClick={onClear} className="button clear-console-button" disabled={isConnecting}>

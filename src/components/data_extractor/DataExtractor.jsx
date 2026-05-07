@@ -34,7 +34,7 @@ const SESSION_COLUMNS = [
   { key: 'current_console_id', label: 'Current Console ID', default: false },
   { key: 'current_conversation_id', label: 'Current Conversation ID', default: false },
   { key: 'name', label: 'Name', default: true },
-  { key: 'firmware_version', label: 'Firmware Version', default: true },
+  { key: 'hardware_platform', label: 'Hardware Platform', default: true },
 ];
 
 const CONSOLE_COLUMNS = [
