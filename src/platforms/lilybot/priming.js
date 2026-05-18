@@ -157,16 +157,12 @@ while True: #run indefinitely
 The Lily∞Bot uses basic LEDs. Anodes are connected to GPIO's 26, 27, and 28. Here is code for turning on/off LEDs in a simple sequence:
 \`\`\`python
 # Lily∞Bot: Cycle red, blue, and green LEDs in sequence
-# LED pin mappings:
-# Red  -> GP26
-# Blue -> GP27
-# Green-> GP28
 from machine import Pin
 from time import sleep
-# Define LED pins as outputs
-red_led   = Pin(26, Pin.OUT)
-blue_led  = Pin(27, Pin.OUT)
-green_led = Pin(28, Pin.OUT)
+# Define LED pins as outputs where <LED_PIN_1>, <LED_PIN_2>, and <LED_PIN_3> represent the GPIOs for the three LEDs
+red_led   = Pin(<LED_PIN_1>, Pin.OUT)
+blue_led  = Pin(<LED_PIN_2>, Pin.OUT)
+green_led = Pin(<LED_PIN_3, Pin.OUT)
 def all_off():   # Helper function to turn all LEDs off
     red_led.value(0)
     blue_led.value(0)
@@ -200,7 +196,7 @@ from time import sleep_ms
 BUZZER_PIN = 22      # GP22 corresponds to GPIO 22 (buzzer +)
 NOTE_DURATION = 400   # duration of each note in ms (you can change this)
 # Helper function: play a single note on the buzzer
-buzzer = PWM(Pin(BUZZER_PIN))
+buzzer = PWM(Pin(<BUZZER_PIN>))
 buzzer.freq(100)          # initial frequency; will be changed for each note
 buzzer.duty_u16(0)      # start with no sound
 def play_note(freq, duration_ms):
