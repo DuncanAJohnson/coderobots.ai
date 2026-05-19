@@ -568,7 +568,12 @@ export default function Board({
         showEval = !hidden;
         evaluating = hidden ? 2 : 1;
         try {
+          if (!raw) {
+            await writer.write(CONTROL_C);
+            await sleep(30);
+          }
           await writer.write(raw ? CONTROL_A : CONTROL_E);
+          await sleep(50);
           await exec(dedent(code), writer, raw);
           await writer.write(raw ? CONTROL_B : CONTROL_D);
           if (hidden) await forIt(15000, 'paste mode completion');
