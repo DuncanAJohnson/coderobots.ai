@@ -33,6 +33,7 @@ export const getUserSessions = async () => {
     const { data, error } = await supabase
       .from(TABLES.SESSIONS)
       .select('*')
+      .eq('user_id', user.id)
       .order('start_time', { ascending: false });
 
     if (error) {
