@@ -18,6 +18,7 @@ export const TABLES = {
   CODE_SNAPSHOTS: 'code_snapshots',
   CONSOLE: 'console',
   INTERACTIONS: 'interactions',
+  USER_PROFILES: 'user_profiles',
 };
 
 // ============================================================================
@@ -290,6 +291,30 @@ export const interactionInsertSchema = z.object({
   user_id: fields.userId,
   session_id: fields.id,
   button_name: z.string().min(1),
+});
+
+// ============================================================================
+// USER PROFILES TABLE
+// ============================================================================
+
+/**
+ * Full user_profiles record from database
+ */
+export const userProfileSchema = z.object({
+  user_id: fields.userId,
+  email: z.string().email().optional().nullable(),
+  students: z.string().optional().nullable(),
+  created_at: fields.timestamp,
+  updated_at: fields.timestamp,
+});
+
+/**
+ * Data for upserting a user_profiles row
+ */
+export const userProfileUpsertSchema = z.object({
+  user_id: fields.userId,
+  email: z.string().email().optional().nullable(),
+  students: z.string().optional().nullable(),
 });
 
 // ============================================================================

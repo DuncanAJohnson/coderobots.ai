@@ -8,12 +8,18 @@ import SessionModal from './components/SessionModal';
 import NewSessionModal from './components/NewSessionModal';
 import TitleBar from './components/TitleBar';
 import HardwareConfigModal from './components/HardwareConfigModal';
+import StudentGroupModal from './components/StudentGroupModal';
 import DebugManager, { debugLog } from './components/DebugManager';
 import DataExtractor from './components/data_extractor/DataExtractor';
 import AdminUsageDashboard from './components/admin_usage/AdminUsageDashboard';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SessionProvider, useSession } from './contexts/SessionContext';
 import { logConsole } from './services/dataLogger';
+import {
+  getUserProfile,
+  saveUserProfile,
+  profileNeedsStudentGroup,
+} from './services/userProfile';
 
 function AppContent() {
   const { user, loading: authLoading } = useAuth();
@@ -39,6 +45,9 @@ function AppContent() {
   const [showDebugModal, setShowDebugModal] = useState(false);
   const [showHardwareConfigModal, setShowHardwareConfigModal] = useState(false);
   const [sessionsInitialized, setSessionsInitialized] = useState(false);
+  const [profileChecked, setProfileChecked] = useState(false);
+  const [needsStudentGroup, setNeedsStudentGroup] = useState(false);
+  const [savingStudentGroup, setSavingStudentGroup] = useState(false);
   const [newSessionModalState, setNewSessionModalState] = useState({
     visible: false,
     mode: 'create',
@@ -58,9 +67,42 @@ function AppContent() {
     }
   }, [user, authLoading]);
 
+  // Reset profile state on sign-out so the next sign-in re-checks.
+  useEffect(() => {
+    if (!user) {
+      setProfileChecked(false);
+      setNeedsStudentGroup(false);
+    }
+  }, [user]);
+
+  // Check whether the user has recorded their student group yet.
+  useEffect(() => {
+    if (user && !authLoading && !profileChecked) {
+      getUserProfile().then((profile) => {
+        setNeedsStudentGroup(profileNeedsStudentGroup(profile));
+        setProfileChecked(true);
+      });
+    }
+  }, [user, authLoading, profileChecked]);
+
+  const handleStudentGroupSubmit = async (studentsText) => {
+    setSavingStudentGroup(true);
+    const saved = await saveUserProfile({ students: studentsText });
+    setSavingStudentGroup(false);
+    if (saved) {
+      setNeedsStudentGroup(false);
+    }
+  };
+
   // Load sessions and show session modal when authenticated (only once)
   useEffect(() => {
-    if (user && !authLoading && !sessionsInitialized) {
+    if (
+      user &&
+      !authLoading &&
+      profileChecked &&
+      !needsStudentGroup &&
+      !sessionsInitialized
+    ) {
       loadSessions().then((userSessions) => {
         if (userSessions && userSessions.length > 0) {
           // Show session modal (non-cancellable on first load)
@@ -73,7 +115,14 @@ function AppContent() {
         setSessionsInitialized(true);
       });
     }
-  }, [user, authLoading, sessionsInitialized, loadSessions]);
+  }, [
+    user,
+    authLoading,
+    profileChecked,
+    needsStudentGroup,
+    sessionsInitialized,
+    loadSessions,
+  ]);
 
   // When SessionContext flags a legacy session that needs a platform, open the modal in assign mode.
   useEffect(() => {
@@ -305,6 +354,11 @@ function AppContent() {
       <HardwareConfigModal
         visible={showHardwareConfigModal}
         onClose={() => setShowHardwareConfigModal(false)}
+      />
+      <StudentGroupModal
+        visible={profileChecked && needsStudentGroup}
+        onSubmit={handleStudentGroupSubmit}
+        saving={savingStudentGroup}
       />
     </>
   );
