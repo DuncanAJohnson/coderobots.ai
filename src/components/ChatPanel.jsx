@@ -76,6 +76,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
   const chatBodyRef = useRef(null);
   const streamingMessageRef = useRef(null);
+  const stickToBottomRef = useRef(true);
   const currentConversationIdRef = useRef(currentConversationId);
 
   useEffect(() => {
@@ -100,10 +101,20 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     }
   }, [conversationHistory]);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom when messages change, but only if the user is already near the bottom
   useEffect(() => {
-    scrollToBottom();
+    if (stickToBottomRef.current) {
+      scrollToBottom();
+    }
   }, [messages]);
+
+  // Track whether the user is scrolled near the bottom so we know whether to auto-scroll
+  const handleChatScroll = () => {
+    const el = chatBodyRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < 50;
+  };
 
   // Check console content availability
   useEffect(() => {
@@ -274,7 +285,8 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       text += '\n````\n' + finalContext.console + '\n````';
     }
 
-    // Add user message to UI
+    // Add user message to UI — always scroll to bottom on send
+    stickToBottomRef.current = true;
     if (text.trim()) {
       setMessages(prev => [...prev, { role: 'user', content: text }]);
     }
@@ -618,7 +630,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         />
       )}
 
-      <div className="chat-body" ref={chatBodyRef}>
+      <div className="chat-body" ref={chatBodyRef} onScroll={handleChatScroll}>
         <div className="chat-disclaimer">
           All activity is stored and may be reviewed by course staff.
         </div>
