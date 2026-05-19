@@ -62,6 +62,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const [dailyUsagePercentage, setDailyUsagePercentage] = useState(0);
   const [dailyUsageLoading, setDailyUsageLoading] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingConversationId, setStreamingConversationId] = useState(null);
   const [attachedContext, setAttachedContext] = useState({ includeCode: false, includeConsole: false });
   const [codeModalOpen, setCodeModalOpen] = useState(false);
   const [currentCodeSnippet, setCurrentCodeSnippet] = useState({ code: '', lang: '' });
@@ -75,6 +76,11 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
   const chatBodyRef = useRef(null);
   const streamingMessageRef = useRef(null);
+  const currentConversationIdRef = useRef(currentConversationId);
+
+  useEffect(() => {
+    currentConversationIdRef.current = currentConversationId;
+  }, [currentConversationId]);
 
   // Load conversation history from session
   useEffect(() => {
@@ -342,6 +348,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
     // Stream response
     setIsStreaming(true);
+    setStreamingConversationId(conversationId);
     streamingMessageRef.current = '';
     let isFirstChunk = true;
 
@@ -357,7 +364,12 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         if (event.type === 'content') {
           fullResponse += event.content;
           streamingMessageRef.current = fullResponse;
-          
+
+          // Skip UI updates if the user has switched to a different conversation tab
+          if (currentConversationIdRef.current !== conversationId) {
+            continue;
+          }
+
           if (isFirstChunk) {
             // Add bot message only when first chunk arrives
             isFirstChunk = false;
@@ -384,16 +396,18 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         }
       }
 
-      // Finalize message
-      setMessages(prev => {
-        const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = {
-          role: 'bot',
-          content: fullResponse,
-          streaming: false,
-        };
-        return newMessages;
-      });
+      // Finalize message (only if user is still on the originating tab)
+      if (currentConversationIdRef.current === conversationId) {
+        setMessages(prev => {
+          const newMessages = [...prev];
+          newMessages[newMessages.length - 1] = {
+            role: 'bot',
+            content: fullResponse,
+            streaming: false,
+          };
+          return newMessages;
+        });
+      }
 
       // Log assistant message first to get the message ID
       const loggedMessage = await logMessage({
@@ -422,7 +436,8 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         setBudgetErrorVisible(true);
       } else {
         // For other errors, show error message only if we started streaming
-        if (!isFirstChunk) {
+        // and the user is still on the originating tab
+        if (!isFirstChunk && currentConversationIdRef.current === conversationId) {
           // We added a bot message, update it with the error
           setMessages(prev => {
             const newMessages = [...prev];
@@ -438,6 +453,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       }
     } finally {
       setIsStreaming(false);
+      setStreamingConversationId(null);
       streamingMessageRef.current = null;
       await refreshDailyUsage();
     }
@@ -607,7 +623,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
           All activity is stored and may be reviewed by course staff.
         </div>
         {messages.map((msg, idx) => renderMessage(msg, idx))}
-        {isStreaming && (
+        {isStreaming && streamingConversationId === currentConversationId && (
           <div className="chat-spinner" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div className="loader"></div>
             {!selectedModelStreaming && (
