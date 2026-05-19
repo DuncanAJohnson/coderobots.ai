@@ -1,4 +1,4 @@
-The Lily∞Bot uses basic LEDs. Anodes are connected to GPIO's 26, 27, and 28. Here is code for turning on/off LEDs in a simple sequence:
+The Lily∞Bot uses basic LEDs. Here is code for turning on/off LEDs in a simple sequence:
 ```python
 # Lily∞Bot: Cycle red, blue, and green LEDs in sequence
 from machine import Pin

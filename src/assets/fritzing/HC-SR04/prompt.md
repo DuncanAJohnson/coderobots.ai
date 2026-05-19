@@ -1,4 +1,4 @@
-The Lily∞Bot uses a Ultrasonic Distance Sensor - 5V (HC-SR04) for sonar sensing. The VCC and GND are provided by the Raspberry Pi Pico W and the Ultrasonic’s TRIG pin is connected to Pico W pin 17 and the Ultrasonic’s ECHO pin is connected to Pico W pin 16. Here is code for obstacle avoidance detection using the sonar sensor:
+The Lily∞Bot uses a Ultrasonic Distance Sensor - 5V (HC-SR04) for sonar sensing. The VCC and GND are provided by the Raspberry Pi Pico W. Here is code for obstacle avoidance detection using the sonar sensor:
 ```python
 #This code will drive the LilyBot forward
 #then turn when obstacle is detected with sonar
