@@ -66,9 +66,10 @@ export function normalizeHardwareConfig(config) {
   };
 }
 
-// Eagerly load all .fzp and .svg files under src/assets/fritzing/<folder>/
+// Eagerly load all .fzp, .svg, and prompt.md files under src/assets/fritzing/<folder>/
 const fzpAssets = import.meta.glob('../assets/fritzing/*/*.fzp', { as: 'raw', eager: true });
 const svgAssets = import.meta.glob('../assets/fritzing/*/*.svg', { as: 'raw', eager: true });
+const promptAssets = import.meta.glob('../assets/fritzing/*/prompt.md', { as: 'raw', eager: true });
 
 function buildFritzingRegistry() {
   const registry = {};
@@ -79,6 +80,10 @@ function buildFritzingRegistry() {
   for (const [path, content] of Object.entries(svgAssets)) {
     const folder = path.split('/').at(-2);
     registry[folder] = { ...(registry[folder] || {}), svg_raw: content };
+  }
+  for (const [path, content] of Object.entries(promptAssets)) {
+    const folder = path.split('/').at(-2);
+    registry[folder] = { ...(registry[folder] || {}), prompt_md: content };
   }
   return registry;
 }
@@ -101,6 +106,7 @@ function resolvePartFromCatalog(id) {
     kind: entry.kind || 'component',
     fzp_raw: files?.fzp_raw || '',
     svg_raw: files?.svg_raw || '',
+    prompt_md: files?.prompt_md || '',
     pins: [],
   };
 }
@@ -278,9 +284,26 @@ export function toPromptHardwareConfig(config, catalog) {
     return `${mpuPinName} -> ${componentLabel}`;
   });
 
+  const seenComponentIds = new Set();
+  const componentPrompts = [];
+  componentInstances.forEach((instance) => {
+    if (seenComponentIds.has(instance.componentId)) return;
+    const def = (catalog.components || []).find((item) => item.id === instance.componentId);
+    const prompt = def?.prompt_md || '';
+    if (!prompt) return;
+    seenComponentIds.add(instance.componentId);
+    componentPrompts.push({
+      componentId: instance.componentId,
+      name: def?.name || instance.componentId,
+      prompt,
+    });
+  });
+
   return {
     selectedMpuName: mpu.name,
+    mpuPrompt: mpu.prompt_md || '',
     components: componentInstances,
+    componentPrompts,
     mappingLines,
   };
 }
