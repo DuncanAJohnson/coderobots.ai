@@ -29,8 +29,8 @@ const fields = {
   id: z.number().int().positive(),
   idOptional: z.number().int().positive().optional().nullable(),
   userId: z.uuid(),
-  timestamp: z.string().datetime(),
-  timestampOptional: z.string().datetime().optional().nullable(),
+  timestamp: z.string().datetime({ offset: true }),
+  timestampOptional: z.string().datetime({ offset: true }).optional().nullable(),
   content: z.string().optional().nullable().default(''),
   saveSource: z.string().min(1),
   name: z.string().optional().nullable(),
@@ -48,7 +48,7 @@ export const sessionSchema = z.object({
   user_id: fields.userId.optional().nullable(),
   start_time: fields.timestamp,
   last_updated: fields.timestamp,
-  loaded_timestamps: z.array(z.string().datetime()).optional().nullable(),
+  loaded_timestamps: z.array(z.string().datetime({ offset: true })).optional().nullable(),
   current_code_id: fields.idOptional,
   current_console_id: fields.idOptional,
   current_conversation_id: fields.idOptional,
@@ -74,7 +74,7 @@ export const sessionUpdateSchema = z.object({
   current_console_id: fields.idOptional,
   current_conversation_id: fields.idOptional,
   last_updated: fields.timestamp.optional(),
-  loaded_timestamps: z.array(z.string().datetime()).optional(),
+  loaded_timestamps: z.array(z.string().datetime({ offset: true })).optional(),
 }).partial();
 
 // ============================================================================
