@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import TableExporter from './TableExporter';
+import { exportAllTablesAsZip } from '../../services/dataExport';
 import './DataExtractor.css';
 
 const MESSAGE_COLUMNS = [
@@ -73,6 +74,15 @@ const CONVERSATION_COLUMNS = [
   { key: 'name', label: 'Name', default: true },
 ];
 
+const ALL_TABLES = [
+  { tableName: 'Messages', columns: MESSAGE_COLUMNS },
+  { tableName: 'Sessions', columns: SESSION_COLUMNS },
+  { tableName: 'Console', columns: CONSOLE_COLUMNS },
+  { tableName: 'Code Snapshots', columns: CODE_SNAPSHOT_COLUMNS },
+  { tableName: 'Interactions', columns: INTERACTION_COLUMNS },
+  { tableName: 'Conversations', columns: CONVERSATION_COLUMNS },
+];
+
 function DataExtractor() {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -81,6 +91,10 @@ function DataExtractor() {
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [emailsInput, setEmailsInput] = useState('');
+
+  const [exportingAll, setExportingAll] = useState(false);
+  const [exportAllError, setExportAllError] = useState(null);
+  const [exportAllResult, setExportAllResult] = useState(null);
 
   // Redirect non-admins
   useEffect(() => {
@@ -105,6 +119,27 @@ function DataExtractor() {
     .split(/[,\n]/)
     .map(email => email.trim())
     .filter(email => email.length > 0);
+
+  const handleExportAll = async () => {
+    setExportingAll(true);
+    setExportAllError(null);
+    setExportAllResult(null);
+
+    try {
+      const summary = await exportAllTablesAsZip({
+        tables: ALL_TABLES,
+        startTime,
+        endTime,
+        emails: parsedEmails,
+        zipFileName: `data_export_${new Date().toISOString().split('T')[0]}.zip`,
+      });
+      setExportAllResult(summary);
+    } catch (err) {
+      setExportAllError(`Export failed: ${err.message}`);
+    } finally {
+      setExportingAll(false);
+    }
+  };
 
   return (
     <div className="admin-page">
@@ -202,6 +237,40 @@ function DataExtractor() {
               {' • '}
               {!startTime && !endTime ? 'All time' : `${startTime || 'Beginning'} to ${endTime || 'Now'}`}
             </div>
+
+            <div className="admin-export-all-row">
+              <button
+                type="button"
+                onClick={handleExportAll}
+                disabled={exportingAll}
+                className="admin-export-all-btn"
+              >
+                {exportingAll ? (
+                  <span className="table-exporter-export-content">
+                    <svg className="spinner" width="16" height="16" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
+                      <path fill="currentColor" opacity="0.75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Exporting all tables...
+                  </span>
+                ) : (
+                  'Export Everything (.zip)'
+                )}
+              </button>
+            </div>
+
+            {exportAllError && (
+              <div className="admin-error-banner">
+                {exportAllError}
+              </div>
+            )}
+
+            {exportAllResult && (
+              <div className="admin-success-banner">
+                Exported {exportAllResult.length} tables:{' '}
+                {exportAllResult.map(r => `${r.tableName} (${r.rowCount})`).join(', ')}
+              </div>
+            )}
           </div>
 
           <div className="admin-exporters-scroll">

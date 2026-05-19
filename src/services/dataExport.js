@@ -1,3 +1,4 @@
+import JSZip from 'jszip';
 import { supabase } from './supabase';
 
 const PAGE_SIZE = 1000;
@@ -118,4 +119,47 @@ export function downloadCsvFile(csvText, fileName) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function exportAllTablesAsZip({
+  tables,
+  startTime,
+  endTime,
+  emails,
+  zipFileName,
+}) {
+  const zip = new JSZip();
+  const summary = [];
+
+  for (const { tableName, columns } of tables) {
+    const table = normalizeTableName(tableName);
+    const columnKeys = columns.map((c) => c.key);
+    const rows = await fetchAllRowsForExport({
+      table,
+      columns: columnKeys,
+      startTime,
+      endTime,
+      emails,
+    });
+
+    const csvText = convertRowsToCsv(rows, columnKeys);
+    zip.file(`${normalizeTableName(tableName)}.csv`, csvText);
+    summary.push({ tableName, rowCount: rows.length });
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  downloadBlob(blob, zipFileName);
+
+  return summary;
 }
