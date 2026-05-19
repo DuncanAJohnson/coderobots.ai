@@ -51,6 +51,9 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
   const isLocalChangeRef = useRef(false);
+  // Prevents concurrent run/stop handlers from overlapping their paste calls,
+  // which otherwise corrupts the REPL paste-mode handshake and hangs.
+  const operationInFlightRef = useRef(false);
 
   const logInteractionSafe = async (action) => {
     if (!sessionId) return;
@@ -375,7 +378,9 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     await board.connect(replContainerRef.current, true, { boardType: 'pico' });
     await board.interrupt(150);
     if (activePlatform?.stopCode) {
-      await board.eval(activePlatform.stopCode, { hidden: true });
+      // paste, not eval — eval strips the trailing newline that closes the
+      // for-block, so the stop loop never actually runs and pins stay high.
+      await board.paste(activePlatform.stopCode, { hidden: true });
     }
     setConnectedBoard('pico');
   };
@@ -413,52 +418,66 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     }
   };
 
-  const handleRun = async () => {
+  // Interrupt the running program and run the platform's stop code. No guard —
+  // callers that hold `operationInFlightRef` reuse this without re-entering it.
+  const stopRunningCode = async () => {
     const board = boardRef.current;
     if (!board || !connected) return;
 
-    const codeToRun = editorRef.current?.getCode() || currentCodeContent;
-    
-    // Create snapshot before running
-    await createSnapshot('run_device');
-    
-    // Log interaction and code before running
-    await logInteractionSafe('run_device');
-    
-    // Stop any running code first
-    if (isRunning) {
-      await handleCtrlC();
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
+    setIsRunning(false);
+    await board.interrupt();
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-    setIsRunning(true);
+    if (activePlatform?.stopCode) {
+      try {
+        await board.paste(activePlatform.stopCode, { hidden: true });
+      } catch (error) {
+        console.error('Failed to run platform stop code:', error);
+      }
+    }
+  };
+
+  const handleRun = async () => {
+    const board = boardRef.current;
+    if (!board || !connected) return;
+    if (operationInFlightRef.current) return;
+    operationInFlightRef.current = true;
+
     try {
-      await board.paste(codeToRun, { hidden: false });
-      board.terminal?.focus();
-    } catch (error) {
-      console.error('Run failed:', error);
-      setIsRunning(false);
+      const codeToRun = editorRef.current?.getCode() || currentCodeContent;
+
+      await createSnapshot('run_device');
+      await logInteractionSafe('run_device');
+
+      if (isRunning) {
+        await stopRunningCode();
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      setIsRunning(true);
+      try {
+        await board.paste(codeToRun, { hidden: false });
+        board.terminal?.focus();
+      } catch (error) {
+        console.error('Run failed:', error);
+        setIsRunning(false);
+      }
+    } finally {
+      operationInFlightRef.current = false;
     }
   };
 
   const handleCtrlC = async () => {
     const board = boardRef.current;
     if (!board || !connected) return;
+    if (operationInFlightRef.current) return;
+    operationInFlightRef.current = true;
 
-    await logInteractionSafe('send_ctrl_c');
-
-    setIsRunning(false);
-    await board.interrupt();
-    
-    // Give a moment for buffer to update
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    if (activePlatform?.stopCode) {
-      try {
-        await board.eval(activePlatform.stopCode, { hidden: true });
-      } catch (error) {
-        console.error('Failed to run platform stop code:', error);
-      }
+    try {
+      await logInteractionSafe('send_ctrl_c');
+      await stopRunningCode();
+    } finally {
+      operationInFlightRef.current = false;
     }
   };
 
