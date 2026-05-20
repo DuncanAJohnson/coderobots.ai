@@ -359,7 +359,11 @@ const HardwareConfigModal = ({ visible, onClose }) => {
         <div className="hardware-config-header">
           <div className="hardware-config-header-text">
             <h2><b>Hardware Configuration</b></h2>
-            <p>Select an MPU and map its pins to external components.</p>
+            <p>
+              {catalog.mpus.length > 1
+                ? 'Select an MPU and map its pins to external components.'
+                : 'Map MPU pins to external components.'}
+            </p>
           </div>
           <div className="hardware-config-header-actions">
             <button
@@ -381,16 +385,18 @@ const HardwareConfigModal = ({ visible, onClose }) => {
         {!loading && config && (
           <>
             <div className="hardware-config-toolbar">
-              <label>
-                MPU
-                <select value={config.selectedMpuId || ''} onChange={(e) => handleMpuChange(e.target.value)}>
-                  {catalog.mpus.map((mpu) => (
-                    <option key={mpu.id} value={mpu.id}>
-                      {mpu.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {catalog.mpus.length > 1 && (
+                <label>
+                  MPU
+                  <select value={config.selectedMpuId || ''} onChange={(e) => handleMpuChange(e.target.value)}>
+                    {catalog.mpus.map((mpu) => (
+                      <option key={mpu.id} value={mpu.id}>
+                        {mpu.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
               <label>
                 Template
