@@ -69,8 +69,7 @@ def get_provider(provider_name: str):
         modal.Secret.from_name("openai-api-key"),
         modal.Secret.from_name("anthropic-secret"),
         modal.Secret.from_name("gemini-secret"),
-        modal.Secret.from_name("supabase-en1-credentials"),
-        modal.Secret.from_name("supabase-showcase-credentials"),
+        modal.Secret.from_name("supabase-credentials"),
     ],
     timeout=300,  # 5 minute timeout
 )
@@ -78,42 +77,28 @@ async def stream_chat_completion_with_budget(
     messages: list[dict],
     user_id: str,
     auth_token: str,
-    environment: str = "EN1",
     model: str = "gpt-5-nano",
     max_tokens: int = 64000,
 ) -> AsyncIterator[str]:
     """
     Stream AI responses with budget tracking and enforcement.
-    
+
     Args:
         messages: List of message dicts with 'role' and 'content'
         user_id: Supabase user ID
         auth_token: Supabase auth token for verification
-        environment: Supabase environment to use ('EN1' or 'SHOWCASE')
         model: Model name (e.g., 'gpt-5-nano', 'skolegpt-v3')
         max_tokens: Maximum tokens to generate
-    
+
     Yields:
         JSON-formatted chunks for SSE streaming
     """
     from supabase import create_client
-    
-    # Configure Supabase based on environment parameter
-    if environment == "EN1":
-        supabase_url = os.environ["SUPABASE_EN1_URL"]
-        supabase_key = os.environ["SUPABASE_EN1_SERVICE_ROLE_KEY"]
-    elif environment == "SHOWCASE":
-        supabase_url = os.environ["SUPABASE_SHOWCASE_URL"]
-        supabase_key = os.environ["SUPABASE_SHOWCASE_SERVICE_ROLE_KEY"]
-    else:
-        error_data = json.dumps({
-            "type": "error",
-            "error": f"Unsupported environment: {environment}"
-        })
-        yield f"data: {error_data}\n\n"
-        return
-    
-    supabase_client = create_client(supabase_url, supabase_key)
+
+    supabase_client = create_client(
+        os.environ["SUPABASE_URL"],
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+    )
     
     usage_data = None
     
@@ -207,8 +192,7 @@ async def stream_chat_completion_with_budget(
         modal.Secret.from_name("openai-api-key"),
         modal.Secret.from_name("anthropic-secret"),
         modal.Secret.from_name("gemini-secret"),
-        modal.Secret.from_name("supabase-en1-credentials"),
-        modal.Secret.from_name("supabase-showcase-credentials"),
+        modal.Secret.from_name("supabase-credentials"),
         modal.Secret.from_name("skolegpt-credentials"),
     ],
 )
@@ -216,40 +200,37 @@ async def stream_chat_completion_with_budget(
 async def chat_endpoint_with_budget(request: dict):
     """
     HTTP endpoint for chat requests with budget tracking.
-    
+
     Expected payload:
     {
         "messages": [{"role": "system|user|assistant", "content": "..."}],
         "user_id": "uuid",
         "auth_token": "jwt_token",
-        "environment": "EN1",
         "model": "gpt-5-nano",
         "max_tokens": 64000
     }
     """
     from fastapi.responses import StreamingResponse
-    
+
     # Extract parameters
     messages = request.get("messages", [])
     user_id = request.get("user_id")
     auth_token = request.get("auth_token")
-    environment = request.get("environment", "EN1")
     model = request.get("model", "gpt-5-nano")
     max_tokens = request.get("max_tokens", 64000)
-    
+
     if not messages:
         return {"error": "No messages provided"}, 400
-    
+
     if not user_id or not auth_token:
         return {"error": "Missing authentication"}, 401
-    
+
     # Return streaming response
     return StreamingResponse(
         stream_chat_completion_with_budget.remote_gen(
             messages=messages,
             user_id=user_id,
             auth_token=auth_token,
-            environment=environment,
             model=model,
             max_tokens=max_tokens,
         ),

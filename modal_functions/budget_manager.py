@@ -140,7 +140,7 @@ async def check_budget(supabase_client, user_id: str, access_level: str, model: 
         daily_spend = await get_daily_spend(supabase_client, user_id)
         if daily_spend >= STANDARD_DAILY_BUDGET:
             raise ValueError("User has exceeded their budget")
-    elif access_level == 'camps' or access_level == 'en1':
+    elif access_level == 'camps':
         model_config = await get_model_config(supabase_client, model, provider)
         if not model_config["unlimited"]:
             daily_spend = await get_daily_spend(supabase_client, user_id)

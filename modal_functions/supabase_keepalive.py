@@ -18,7 +18,7 @@ image = modal.Image.debian_slim().pip_install("supabase")
 @app.function(
     image=image,
     schedule=modal.Cron("0 0 * * *", timezone="UTC"),
-    secrets=[modal.Secret.from_name("supabase-showcase-credentials")],
+    secrets=[modal.Secret.from_name("supabase-credentials")],
     timeout=60,
 )
 def ping_supabase_keepalive() -> dict:
@@ -29,8 +29,8 @@ def ping_supabase_keepalive() -> dict:
     from supabase import create_client
 
     supabase_client = create_client(
-        os.environ["SUPABASE_SHOWCASE_URL"],
-        os.environ["SUPABASE_SHOWCASE_SERVICE_ROLE_KEY"],
+        os.environ["SUPABASE_URL"],
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
     )
 
     heartbeat_key = f"system.supabase_keepalive.{uuid.uuid4()}"

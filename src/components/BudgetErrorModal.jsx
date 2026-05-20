@@ -14,7 +14,7 @@ const BudgetErrorModal = ({ visible, onClose, accessLevel, premiumModels = [], n
 
   if (!visible) return null;
 
-  const isCamps = accessLevel === 'en1';
+  const isCamps = accessLevel === 'camps' || accessLevel === 'en1';
 
   return (
     <div className="modal-overlay" onClick={onClose}>

@@ -1,1 +1,1 @@
-# EN1 AI Editor
+# Purdue PITCH Editor

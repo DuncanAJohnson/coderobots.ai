@@ -5,15 +5,12 @@
 
 import { createContext, useContext, useState, useEffect } from 'react';
 import {
-  signInWithGoogle,
   signInWithPassword,
   signUpWithPassword,
   signOut,
   getSession,
   onAuthStateChange,
-  isEmailAuthorized,
   isAdmin as checkIsAdmin,
-  isShowcaseMode,
   ensureAccessLevel,
 } from '../services/auth';
 
@@ -30,22 +27,12 @@ export const AuthProvider = ({ children }) => {
     // Check active session on mount
     getSession().then(async (session) => {
       if (session?.user) {
-          const email = session.user.email;
-        
-        // Validate email authorization
-        if (isEmailAuthorized(email)) {
-          // Ensure access level is set (especially for OAuth users)
-          await ensureAccessLevel(session.user);
-          
-          setSession(session);
-          setUser(session.user);
-          setIsAdmin(checkIsAdmin(session.user));
-          setAuthError(null);
-        } else {
-          // Unauthorized email - sign out
-          setAuthError(`Access denied. Please sign in with a @tufts.edu, @purdue.edu email or whitelisted account.`);
-          signOut();
-        }
+        await ensureAccessLevel(session.user);
+
+        setSession(session);
+        setUser(session.user);
+        setIsAdmin(checkIsAdmin(session.user));
+        setAuthError(null);
       }
       setLoading(false);
     });
@@ -55,24 +42,12 @@ export const AuthProvider = ({ children }) => {
       console.log('Auth state change:', event, session?.user?.email);
 
       if (session?.user) {
-          const email = session.user.email;
-        
-        // Validate on every auth change
-        if (isEmailAuthorized(email)) {
-          // Ensure access level is set (especially for OAuth users)
-          await ensureAccessLevel(session.user);
-          
-          setSession(session);
-          setUser(session.user);
-          setIsAdmin(checkIsAdmin(session.user));
-          setAuthError(null);
-        } else {
-          setAuthError(`Access denied. Please sign in with a @tufts.edu, @purdue.edu email or whitelisted account.`);
-          await signOut();
-          setSession(null);
-          setUser(null);
-          setIsAdmin(false);
-        }
+        await ensureAccessLevel(session.user);
+
+        setSession(session);
+        setUser(session.user);
+        setIsAdmin(checkIsAdmin(session.user));
+        setAuthError(null);
       } else {
         setSession(null);
         setUser(null);
@@ -100,16 +75,6 @@ export const AuthProvider = ({ children }) => {
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, []);
-
-  const handleSignIn = async () => {
-    try {
-      setAuthError(null);
-      await signInWithGoogle();
-    } catch (error) {
-      setAuthError(error.message);
-      console.error('Sign in error:', error);
-    }
-  };
 
   const handlePasswordSignIn = async (email, password) => {
     try {
@@ -151,11 +116,9 @@ export const AuthProvider = ({ children }) => {
     loading,
     isAdmin,
     authError,
-    signIn: handleSignIn,
     signInWithPassword: handlePasswordSignIn,
     signUpWithPassword: handlePasswordSignUp,
     signOut: handleSignOut,
-    isShowcaseMode: isShowcaseMode(),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -168,4 +131,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
