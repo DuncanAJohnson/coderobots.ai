@@ -71,6 +71,36 @@ const fritzingCatalog = [
     name: "TB6612FNG Motor Driver",
     kind: "component",
     folder: 'TB6612FNG',
+  },
+  {
+    id: "sg90",
+    name: "SG90 Servo",
+    kind: "component",
+    folder: 'SG90',
+  },
+  {
+    id: "dht11",
+    name: "DHT11 Temp & Humidity",
+    kind: "component",
+    folder: 'DHT11TempHumidity',
+  },
+  {
+    id: "lm393",
+    name: "LM393 IR Sensor",
+    kind: "component",
+    folder: 'LM393',
+  },
+  {
+    id: "ky037",
+    name: "KY-037 Microphone Sound Sensor",
+    kind: "component",
+    folder: 'KY037',
+  },
+  {
+    id: "photoresistor",
+    name: "Photoresistor",
+    kind: "component",
+    folder: 'Photoresistor',
   }
 ];
 
