@@ -1,8 +1,10 @@
 """
-Modal cron job that writes a heartbeat row to Supabase to prevent idle pausing.
+Modal cron job that inserts and deletes a heartbeat row in Supabase
+to generate clear database activity and prevent idle pausing.
 """
 
 import os
+import uuid
 from datetime import datetime, timezone
 
 import modal
@@ -15,13 +17,14 @@ image = modal.Image.debian_slim().pip_install("supabase")
 
 @app.function(
     image=image,
-    schedule=modal.Cron("0 */24 * * *", timezone="UTC"),
+    schedule=modal.Cron("0 0 * * *", timezone="UTC"),
     secrets=[modal.Secret.from_name("supabase-showcase-credentials")],
     timeout=60,
 )
 def ping_supabase_keepalive() -> dict:
     """
-    Upsert a heartbeat row in app_config so the database receives regular writes.
+    Insert a heartbeat row, then delete it, so the database receives
+    explicit write and delete operations on every run.
     """
     from supabase import create_client
 
@@ -30,32 +33,43 @@ def ping_supabase_keepalive() -> dict:
         os.environ["SUPABASE_SHOWCASE_SERVICE_ROLE_KEY"],
     )
 
-    heartbeat_key = "system.supabase_keepalive"
+    heartbeat_key = f"system.supabase_keepalive.{uuid.uuid4()}"
     heartbeat_value = {
         "source": "modal-cron",
         "status": "ok",
         "purpose": "prevent_free_tier_pause",
-        "last_ping_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    response = (
+    # Insert
+    insert_response = (
         supabase_client.table("app_config")
-        .upsert(
-            {
-                "key": heartbeat_key,
-                "value": heartbeat_value,
-            },
-            on_conflict="key",
-        )
+        .insert({"key": heartbeat_key, "value": heartbeat_value})
         .execute()
     )
+    print(f"Insert response: {insert_response}")
+    inserted_rows = len(insert_response.data) if insert_response.data else 0
 
-    print(response)
+    # Delete
+    delete_response = (
+        supabase_client.table("app_config")
+        .delete()
+        .eq("key", heartbeat_key)
+        .execute()
+    )
+    print(f"Delete response: {delete_response}")
+    deleted_rows = len(delete_response.data) if delete_response.data else 0
 
-    print(f"Keepalive write completed for key: {heartbeat_key}")
+    print(f"Keepalive cycle completed for key: {heartbeat_key}")
     return {
         "success": True,
         "key": heartbeat_key,
-        "value": heartbeat_value,
-        "rows_returned": len(response.data) if response.data else 0,
+        "inserted_rows": inserted_rows,
+        "deleted_rows": deleted_rows,
     }
+
+
+@app.local_entrypoint()
+def main():
+    result = ping_supabase_keepalive.remote()
+    print(result)
