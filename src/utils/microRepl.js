@@ -236,6 +236,20 @@ export default function Board({
     return result;
   };
 
+  // Paste-mode eval that returns stdout as raw text. Does NOT gate on the
+  // `evaluating` flag — callers must manage that themselves. Used both by the
+  // public `readPrint` method and internally by `upload`'s verify step (which
+  // is already inside an evaluating=2 critical section).
+  const readPrintInternal = async (code) => {
+    await writer.write(CONTROL_C);
+    await sleep(30);
+    await writer.write(CONTROL_E);
+    await sleep(50);
+    await exec(dedent(code), writer);
+    await writer.write(CONTROL_D);
+    return await forIt(15000, 'readPrint result');
+  };
+
   const cleanupPartialConnection = async () => {
     const sp = port;
     const t = terminal;
@@ -628,6 +642,75 @@ export default function Board({
     },
 
     /**
+     * Type a single-line statement at the friendly REPL and wait for the next
+     * `>>> ` prompt before returning. The supplied code MUST be a single
+     * complete statement (no multi-line blocks). The device naturally
+     * throttles us because the REPL echoes every character before accepting
+     * the next, so this is the safe path for shipping arbitrary content to
+     * platforms with small USB-CDC buffers (e.g. micro:bit) where paste-mode
+     * blocks overflow.
+     * @param {string} code one complete Python statement (no embedded newlines)
+     * @returns {Promise<void>}
+     */
+    runStatement: async (code) => {
+      if (port && !evaluating) {
+        evaluating = 2;
+        showEval = false;
+        try {
+          accumulator = '';
+          // Chunk into ~32-byte writes with a small sleep between chunks so the
+          // micro:bit USB-CDC RX buffer (~64 bytes) doesn't overflow. Without
+          // this throttle, long lines lose chars in the middle and the device
+          // ends up in `... ` continuation mode that breaks subsequent
+          // statements.
+          const CHUNK = 32;
+          for (let i = 0; i < code.length; i += CHUNK) {
+            await writer.write(code.slice(i, i + CHUNK));
+            if (code.length - i > CHUNK) await sleep(5);
+          }
+          await writer.write('\r');
+          // forIt returns the last meaningful line before the `>>> ` prompt —
+          // for a Python traceback that's the error line ("ImportError: ..."),
+          // which lets us surface device-side errors instead of silently
+          // marching past them (showEval=false hides them from the terminal).
+          const lastLine = (await forIt(10000, 'statement completion')) || '';
+          if (/^[A-Z]\w*Error\b/.test(lastLine.trim())) {
+            throw new Error(`Device error: ${lastLine.trim()}`);
+          }
+        }
+        finally {
+          evaluating = 0;
+          showEval = false;
+        }
+      }
+      else onerror(reason('runStatement', evaluating));
+    },
+
+    /**
+     * Paste-evaluate `code` and return the last meaningful line of stdout as a
+     * raw string. Unlike `eval`, this does NOT use `json.dumps`, so it works on
+     * platforms (e.g. micro:bit) where the `json` module is unavailable. The
+     * supplied code MUST end with a single `print(<value>)` statement; the
+     * caller is responsible for parsing the returned text.
+     * @param {string} code Python code to evaluate
+     * @returns {Promise<string>} the captured printed line
+     */
+    readPrint: async (code) => {
+      if (port && !evaluating) {
+        showEval = false;
+        evaluating = 2;
+        try {
+          return await readPrintInternal(code);
+        }
+        finally {
+          evaluating = 0;
+          showEval = false;
+        }
+      }
+      else onerror(reason('readPrint', evaluating));
+    },
+
+    /**
      * Upload a file to the board showing some progress while doing that.
      * @param {string} path the name of the file to upload.
      * @param {string | File | Blob} content the file content as string or blob or as file.
@@ -686,10 +769,13 @@ export default function Board({
           terminal.write(`\x1b[M... decoding ${path} `);
           await forIt(30000, 'upload completion');
           terminal.write(`\x1b[M... verifying ${path} `);
-          const result = view.length === await board.eval(`
+          // Use raw print() rather than json.dumps() so verification works on
+          // platforms where the json module is unavailable (e.g. micro:bit).
+          const sizeText = await readPrintInternal(`
             import os
-            os.stat(${stringify(path)})[6]
+            print(os.stat(${stringify(path)})[6])
           `);
+          const result = view.length === parseInt(sizeText, 10);
           const message = result ? 'uploaded' : '\x1b[1mfailed\x1b[22m to upload';
           terminal.write(`\x1b[M... ${message} ${path} ${ENTER}>>> `);
           terminal.focus();

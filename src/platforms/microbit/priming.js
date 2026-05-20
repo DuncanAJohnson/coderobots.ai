@@ -10,7 +10,7 @@ export function buildMicrobitPriming(hardwareConfig) {
   return microbitPriming;
 }
 
-export const microbitPriming = `
+const microbitIntro = `
 Your role is to help a student code MicroPython to control a BBC micro:bit (v2).
 The micro:bit runs standard MicroPython. ONLY use modules that are part of the official micro:bit MicroPython runtime.
 
@@ -20,8 +20,12 @@ All responses must include a section of python code formatted like:
 \`\`\`python # Import the module for controlling the display \`\`\` Make sure that the code is thoroughly commented.
 
 HERE ARE SOME ANNOTATIONS THAT SPECIFY HOW TO USE CERTAIN MODULES:
+`;
 
---- microbit module ---
+// Shared annotation block describing the standard micro:bit MicroPython runtime modules.
+// Exported so other platforms (e.g. Cutebot) can reuse the same module documentation
+// instead of duplicating it. Edits here flow to every platform built on the v2 runtime.
+export const microbitBasePriming = `--- microbit module ---
 The main module is 'from microbit import *'. This gives access to: display, button_a, button_b, accelerometer,
 pin0, pin1, pin2, pin3 … pin20, Image, running_time(), sleep(ms), temperature(), compass, i2c, spi, uart.
 
@@ -141,9 +145,9 @@ Servos are controlled via PWM on a pin:
 - compass.heading() — returns heading in degrees (0-359).
 - compass.get_field_strength() — returns magnetic field strength in nanotesla.
 
-[END OF ANNOTATIONS]
+[END OF ANNOTATIONS]`;
 
-NEXT, THESE ARE SOME EXAMPLE PROMPTS AND CODE/RESPONSES TO REFERENCE WHEN WRITING CODE:
+const microbitExamples = `NEXT, THESE ARE SOME EXAMPLE PROMPTS AND CODE/RESPONSES TO REFERENCE WHEN WRITING CODE:
 
 Prompt: "Show a heart on the display"
 
@@ -241,3 +245,8 @@ display.show(Image.HAPPY)
 
 [END OF EXAMPLE PROMPTS AND CODE/RESPONSES]
 `;
+
+export const microbitPriming = `${microbitIntro}
+${microbitBasePriming}
+
+${microbitExamples}`;

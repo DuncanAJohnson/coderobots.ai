@@ -6,6 +6,7 @@ import {
   findAuthorizedMicrobitSerialPort,
   waitForMicrobitSerialPort,
 } from '../utils/microbitInstall.js';
+import { applyPostConnectFiles } from '../utils/postConnectFiles.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import CodeTabs from './CodeTabs.jsx';
@@ -20,6 +21,7 @@ const FIFO_SIZE = 10000;
 const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const [connected, setConnected] = useState(false);
   const [connectedBoard, setConnectedBoard] = useState(null);
+  const [connectedPlatformId, setConnectedPlatformId] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [statusBanner, setStatusBanner] = useState({
     type: 'info',
@@ -117,23 +119,37 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   }, [currentCodeContent]);
 
   // Disconnect the currently attached device when switching to a session whose
-  // platform uses a different connection type (e.g. LilyBot/Pico → micro:bit).
+  // platform uses a different connection type (e.g. LilyBot/Pico → micro:bit),
+  // OR whose connection type matches but whose postConnectFiles requirements
+  // differ (e.g. plain micro:bit → Cutebot — we need to install the driver).
   useEffect(() => {
     if (!connected || !connectedBoard) return;
     const nextType = activePlatform?.connectionType;
-    if (nextType && nextType !== connectedBoard) {
-      const board = boardRef.current;
-      if (board) {
-        setStatusBanner({
-          type: 'info',
-          message: 'Disconnecting previous device — session platform changed.',
-        });
-        board.disconnect().catch((error) => {
-          console.error('Failed to auto-disconnect after platform switch:', error);
-        });
-      }
-    }
-  }, [activePlatform, connected, connectedBoard]);
+    const nextId = activePlatform?.id || null;
+    if (!nextType) return;
+
+    const typeMismatch = nextType !== connectedBoard;
+    const platformMismatch =
+      !typeMismatch &&
+      connectedPlatformId &&
+      nextId &&
+      nextId !== connectedPlatformId;
+
+    if (!typeMismatch && !platformMismatch) return;
+
+    const board = boardRef.current;
+    if (!board) return;
+
+    setStatusBanner({
+      type: 'info',
+      message: typeMismatch
+        ? 'Disconnecting previous device — session platform changed.'
+        : `Disconnecting — switching to ${activePlatform.label} session. Click Connect to install driver.`,
+    });
+    board.disconnect().catch((error) => {
+      console.error('Failed to auto-disconnect after platform switch:', error);
+    });
+  }, [activePlatform, connected, connectedBoard, connectedPlatformId]);
 
   // Handle code changes in the editor (local state only, no database save)
   const handleCodeChange = (newCode) => {
@@ -162,6 +178,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
           setIsConnecting(false);
           setConnected(false);
           setConnectedBoard(null);
+          setConnectedPlatformId(null);
           setConnectPhase('idle');
           setMode('disconnected');
           setBuffer('');
@@ -397,13 +414,35 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
         await connectMicrobit(board);
         // Interrupt any running program after successful micro:bit connect.
         await board.interrupt(150);
+        // Stop any platform-specific hardware (e.g. Cutebot motors). No-op for
+        // plain micro:bit since its stopCode is empty.
+        if (activePlatform?.stopCode) {
+          try {
+            await board.paste(activePlatform.stopCode, { hidden: true });
+          } catch (error) {
+            console.error('Failed to run platform stop code on connect:', error);
+          }
+        }
+        // Install any platform-required files (e.g. cutebot.py). Skips the
+        // upload when the file already exists with the expected size.
+        try {
+          await applyPostConnectFiles(board, activePlatform);
+        } catch (error) {
+          console.error('Post-connect file install failed:', error);
+          setStatusBanner({
+            type: 'error',
+            message: `Failed to install ${error?.label || 'driver'} on micro:bit — try reconnecting.`,
+          });
+        }
       } else {
         await connectPico(board);
       }
+      setConnectedPlatformId(activePlatform?.id || null);
     } catch (error) {
       console.error('Connection failed:', error);
       setConnected(false);
       setConnectedBoard(null);
+      setConnectedPlatformId(null);
       setMode('disconnected');
       setIsRunning(false);
       const message = getConnectionErrorMessage(error);
