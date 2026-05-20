@@ -74,6 +74,14 @@ const CONVERSATION_COLUMNS = [
   { key: 'name', label: 'Name', default: true },
 ];
 
+const USER_PROFILE_COLUMNS = [
+  { key: 'user_id', label: 'User ID', default: true },
+  { key: 'email', label: 'Email', default: true },
+  { key: 'students', label: 'Students', default: true },
+  { key: 'created_at', label: 'Created At', default: false },
+  { key: 'updated_at', label: 'Updated At', default: false },
+];
+
 const ALL_TABLES = [
   { tableName: 'Messages', columns: MESSAGE_COLUMNS },
   { tableName: 'Sessions', columns: SESSION_COLUMNS },
@@ -81,6 +89,7 @@ const ALL_TABLES = [
   { tableName: 'Code Snapshots', columns: CODE_SNAPSHOT_COLUMNS },
   { tableName: 'Interactions', columns: INTERACTION_COLUMNS },
   { tableName: 'Conversations', columns: CONVERSATION_COLUMNS },
+  { tableName: 'User Profiles', columns: USER_PROFILE_COLUMNS },
 ];
 
 function DataExtractor() {
@@ -317,6 +326,14 @@ function DataExtractor() {
             <TableExporter
               tableName="Conversations"
               columns={CONVERSATION_COLUMNS}
+              startTime={startTime}
+              endTime={endTime}
+              emails={parsedEmails}
+            />
+
+            <TableExporter
+              tableName="User Profiles"
+              columns={USER_PROFILE_COLUMNS}
               startTime={startTime}
               endTime={endTime}
               emails={parsedEmails}

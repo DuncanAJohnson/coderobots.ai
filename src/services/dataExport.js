@@ -5,6 +5,7 @@ const PAGE_SIZE = 1000;
 const TIME_COLUMN_BY_TABLE = {
   sessions: 'start_time',
   conversations: 'start_time',
+  user_profiles: 'created_at',
 };
 
 function getTimeColumn(table) {
