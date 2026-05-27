@@ -3,15 +3,30 @@ Budget Manager - Model-agnostic budget tracking and usage logging.
 Handles budget checks, usage logging, and cost calculation for OpenAI models.
 """
 
-import os
 from datetime import datetime, timezone, timedelta
 import pytz
 from typing import Optional, Dict, Any
 
 
-# Budget configuration (in USD per day)
-CAMPS_DAILY_BUDGET = float(os.environ.get("CAMPS_DAILY_BUDGET", "0.50"))
-STANDARD_DAILY_BUDGET = float(os.environ.get("STANDARD_DAILY_BUDGET", "0.125"))
+async def get_daily_budget(supabase_client, access_level: str) -> float:
+    """Fetch the daily budget max for an access level from app_config."""
+    if access_level == 'camps':
+        key = 'CAMPS_DAILY_BUDGET'
+    elif access_level == 'standard':
+        key = 'STANDARD_DAILY_BUDGET'
+    else:
+        raise ValueError("Invalid access level")
+
+    result = supabase_client.table('app_config') \
+        .select('value') \
+        .eq('key', key) \
+        .limit(1) \
+        .execute()
+
+    if not result.data:
+        raise ValueError(f"Missing app_config entry: {key}")
+
+    return float(result.data[0]['value'])
 
 
 def get_day_boundaries_et():
@@ -138,13 +153,15 @@ async def check_budget(supabase_client, user_id: str, access_level: str, model: 
     
     if access_level == 'standard':
         daily_spend = await get_daily_spend(supabase_client, user_id)
-        if daily_spend >= STANDARD_DAILY_BUDGET:
+        budget = await get_daily_budget(supabase_client, 'standard')
+        if daily_spend >= budget:
             raise ValueError("User has exceeded their budget")
     elif access_level == 'camps':
         model_config = await get_model_config(supabase_client, model, provider)
         if not model_config["unlimited"]:
             daily_spend = await get_daily_spend(supabase_client, user_id)
-            if daily_spend >= CAMPS_DAILY_BUDGET:
+            budget = await get_daily_budget(supabase_client, 'camps')
+            if daily_spend >= budget:
                 raise ValueError("User has exceeded their budget")
     else:
         raise ValueError("Invalid access level")
