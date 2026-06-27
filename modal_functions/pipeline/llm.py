@@ -48,7 +48,7 @@ async def stream_gemma(
     payload: dict = {
         "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
         "stream": True,
-        "model": "skolegpt-v3",
+        "model": "google/gemma-4-26B-A4B-it",
         "temperature": temperature,
         "presence_penalty": 0,
         "frequency_penalty": 0,
