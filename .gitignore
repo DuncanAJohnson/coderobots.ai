@@ -27,3 +27,4 @@ camp_users.csv
 # Cache
 __pycache__/
 *.pyc
+research_data
