@@ -454,6 +454,19 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     setConnectedBoard('pico');
   };
 
+  const connectEsp32 = async (board) => {
+    setStatusBanner({
+      type: 'info',
+      message: 'Waiting for ESP32 serial device selection...'
+    });
+    await board.connect(replContainerRef.current, true, { boardType: 'esp32' });
+    await board.interrupt(150);
+    if (activePlatform?.stopCode) {
+      await board.paste(activePlatform.stopCode, { hidden: true });
+    }
+    setConnectedBoard('esp32');
+  };
+
   const handleConnect = async (targetBoard) => {
     const board = boardRef.current;
     if (!board || isConnecting || connected) return;
@@ -484,6 +497,17 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
           setStatusBanner({
             type: 'error',
             message: `Failed to install ${error?.label || 'driver'} on micro:bit — try reconnecting.`,
+          });
+        }
+      } else if (targetBoard === 'esp32') {
+        await connectEsp32(board);
+        try {
+          await applyPostConnectFiles(board, activePlatform);
+        } catch (error) {
+          console.error('Post-connect file install failed:', error);
+          setStatusBanner({
+            type: 'error',
+            message: `Failed to install ${error?.label || 'driver'} on device — try reconnecting.`,
           });
         }
       } else {
@@ -611,26 +635,63 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const handleSaveToMain = async () => {
     const board = boardRef.current;
     if (!board || !connected) {
-      alert('Cannot save to main.py. Please connect to the Pico W first.');
+      alert('Cannot save to main.py. Please connect to a device first.');
       return;
     }
 
     const codeToSave = editorRef.current?.getCode() || currentCodeContent;
-    
+
     // Create snapshot before saving to main.py
     await createSnapshot('save_to_main_py');
-    
+
     // Log interaction before saving to main.py
     await logInteractionSafe('save_to_main_py');
 
     try {
-      await board.upload('main.py', codeToSave);
+      if (connectedBoard === 'esp32') {
+        // ESP32 raw REPL mode times out on board.upload() — use chunked paste-mode
+        // writes instead (same mechanism as postConnectFiles / cutebot driver install).
+        await uploadFileToMicrobit(board, 'main.py', codeToSave, { label: 'main.py' });
+      } else {
+        await board.upload('main.py', codeToSave);
+      }
       await board.reset();
       setMode('repl');
       board.terminal?.focus();
     } catch (error) {
       console.error('Failed to save to main.py:', error);
       alert(`Failed to save to main.py: ${error.message}`);
+    }
+  };
+
+  const handleClearMain = async () => {
+    const board = boardRef.current;
+    if (!board || !connected || connectedBoard !== 'esp32') {
+      alert('Cannot clear main.py. Please connect to the ESP32 first.');
+      return;
+    }
+    if (operationInFlightRef.current) return;
+    operationInFlightRef.current = true;
+
+    try {
+      await logInteractionSafe('clear_main_esp32');
+
+      setIsRunning(false);
+      await board.interrupt();
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      try {
+        await board.runStatement('import os');
+        await board.runStatement("os.remove('main.py') if 'main.py' in os.listdir() else None");
+        await board.reset();
+        setMode('repl');
+        board.terminal?.focus();
+      } catch (error) {
+        console.error('Failed to clear main.py from ESP32:', error);
+        alert(`Failed to clear main.py from ESP32: ${error.message}`);
+      }
+    } finally {
+      operationInFlightRef.current = false;
     }
   };
 
@@ -736,6 +797,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
               isConnecting={isConnecting}
               onConnectMicrobit={() => handleConnect('microbit')}
               onConnectPico={() => handleConnect('pico')}
+              onConnectEsp32={() => handleConnect('esp32')}
               onDisconnect={handleDisconnect}
               onRun={handleRun}
               onCtrlC={handleCtrlC}
@@ -744,6 +806,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
               onSaveToMain={handleSaveToMain}
               onDownload={handleDownload}
               onClearDownload={handleClearDownload}
+              onClearMain={handleClearMain}
             />
             {!connected && (
               <div className={`status-banner ${statusBanner.type}`}>

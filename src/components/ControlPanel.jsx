@@ -5,6 +5,7 @@ const ControlPanel = ({
   isConnecting = false,
   onConnectMicrobit,
   onConnectPico,
+  onConnectEsp32,
   onDisconnect,
   onRun,
   onCtrlC,
@@ -12,7 +13,8 @@ const ControlPanel = ({
   onClear,
   onSaveToMain,
   onDownload,
-  onClearDownload
+  onClearDownload,
+  onClearMain
 }) => {
   return (
     <div className="control-panel right-panel">
@@ -45,6 +47,15 @@ const ControlPanel = ({
                 {isConnecting ? 'Connecting...' : 'Connect Pico'}
               </button>
             )}
+            {platformConnectionType === 'esp32' && (
+              <button
+                onClick={onConnectEsp32}
+                className="button connect-button"
+                disabled={isConnecting}
+              >
+                {isConnecting ? 'Connecting...' : 'Connect ESP32'}
+              </button>
+            )}
           </>
         )}
         <button onClick={onClear} className="button clear-console-button" disabled={isConnecting}>
@@ -70,6 +81,16 @@ const ControlPanel = ({
           {connectedBoard === 'microbit' && (
             <button onClick={onClearDownload} className="button clear-console-button">
               Clear Download
+            </button>
+          )}
+          {connectedBoard === 'esp32' && (
+            <button onClick={onSaveToMain} className="button run-button">
+              Save to main.py
+            </button>
+          )}
+          {connectedBoard === 'esp32' && (
+            <button onClick={onClearMain} className="button clear-console-button">
+              Clear main.py
             </button>
           )}
           <button onClick={onCtrlC} className="button stop-button">
