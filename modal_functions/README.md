@@ -78,6 +78,22 @@ Deploy-time options (set as env vars on the deploy command):
   `supabase-credentials` secret. Leave unset for anonymous deployments, and
   restrict CORS/keep the endpoint URL private in that case.
 
+### ESP32 Arduino Compile Service (esp32-arduino platform)
+
+```bash
+modal deploy modal_functions/esp32_compile.py
+```
+
+Copy the `compile_endpoint` URL into `.env.local` as `VITE_ESP32_COMPILE_URL`.
+
+Compiles Arduino C++ sketches with `arduino-cli` (ESP32 core + Adafruit
+SSD1306/GFX/ADXL345 libraries baked into the image) and returns base64
+binaries — a merged image (offset 0x0) and the app-only image (offset
+0x10000) — which the browser flashes over WebSerial via esptool-js. No
+secrets required; caching (result cache + core/library build cache) lives in
+the `esp32-build-cache` Modal Volume. This is a plain JSON POST endpoint,
+not SSE: `{sketch, board?}` → `{ok, binary, app_binary, ...}`.
+
 ## SSE Event Vocabulary
 
 All chat endpoints emit `data: {json}` SSE frames with a `type` field:

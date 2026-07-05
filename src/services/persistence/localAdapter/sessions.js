@@ -9,7 +9,7 @@ import { insertRow, updateRow, selectRows, nowIso } from './store';
 export const getUserSessions = async () =>
   selectRows('sessions', () => true, 'start_time', false);
 
-export const createNewSession = async ({ hardwarePlatform, name } = {}) => {
+export const createNewSession = async ({ hardwarePlatform, name, initialCode } = {}) => {
   if (!hardwarePlatform) {
     console.error('hardwarePlatform is required to create a session');
     return null;
@@ -37,7 +37,7 @@ export const createNewSession = async ({ hardwarePlatform, name } = {}) => {
   const code = insertRow('code', {
     session_id: session.id,
     name: 'Code tab 1',
-    content: '# Start your new project here!',
+    content: initialCode || '# Start your new project here!',
     save_source: 'init',
     timestamp: now,
   });

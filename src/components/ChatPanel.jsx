@@ -340,7 +340,8 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
     // Build display message with wrapped code and console
     if (finalContext.code) {
-      text += '\n```python\n' + finalContext.code + '\n```';
+      const fenceLang = activePlatform?.editorLanguage || 'python';
+      text += '\n```' + fenceLang + '\n' + finalContext.code + '\n```';
     }
     if (finalContext.console) {
       text += '\n````\n' + finalContext.console + '\n````';

@@ -107,7 +107,7 @@ class LCD():
 
 const esp32Platform = {
   id: 'esp32',
-  label: 'ESP32',
+  label: 'ESP32 (MicroPython)',
   connectionType: 'esp32',
   buildPriming: buildEsp32Priming,
   stopCode,

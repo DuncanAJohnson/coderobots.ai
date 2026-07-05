@@ -187,6 +187,7 @@ const ControlPanel = ({
   onConnectMicrobit,
   onConnectPico,
   onConnectEsp32,
+  onConnectEsp32Arduino,
   onDisconnect,
   onRun,
   onCtrlC,
@@ -204,6 +205,7 @@ const ControlPanel = ({
 }) => {
   const { t } = useLanguage();
   const isLego = platformConnectionType === 'lego-ble';
+  const isArduino = platformConnectionType === 'esp32-arduino';
   const [legoPickerOpen, setLegoPickerOpen] = useState(false);
 
   return (
@@ -272,6 +274,15 @@ const ControlPanel = ({
                 {isConnecting ? t('legoConnecting') : t('connectEsp32')}
               </button>
             )}
+            {platformConnectionType === 'esp32-arduino' && (
+              <button
+                onClick={onConnectEsp32Arduino}
+                className="button connect-button"
+                disabled={isConnecting}
+              >
+                {isConnecting ? t('legoConnecting') : t('connectEsp32')}
+              </button>
+            )}
           </>
         )}
         <button onClick={onClear} className="button clear-console-button" disabled={isConnecting}>
@@ -282,7 +293,7 @@ const ControlPanel = ({
       {connected && (
         <div className="button-group">
           <button onClick={onRun} className="button run-button">
-            {t('runProgram')}
+            {isArduino ? t('esp32CompileAndUpload') : t('runProgram')}
           </button>
           {connectedBoard === 'pico' && (
             <button onClick={onSaveToMain} className="button run-button">
@@ -309,9 +320,14 @@ const ControlPanel = ({
               {t('clearMainPy')}
             </button>
           )}
-          <button onClick={onCtrlC} className="button stop-button">
-            {t('stopProgram')}
-          </button>
+          {/* An Arduino sketch can't be interrupted — the only control is a
+              hard reset (which restarts it from setup()), so a "Stop" button
+              would be misleading. Arduino gets Reset only. */}
+          {!isArduino && (
+            <button onClick={onCtrlC} className="button stop-button">
+              {t('stopProgram')}
+            </button>
+          )}
           {/* LEGO has no serial REPL to reset — stop goes through interruptPython */}
           {!isLego && (
             <button onClick={onReset} className="button stop-button">

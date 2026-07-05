@@ -35,15 +35,17 @@ An instance config declares:
 - `routes.admin` — enables `/data`, `/usage`, `/view-data`
 
 Reference instances: `purdue.js` (research tool: telemetry, direct chat, all
-serial platforms, English) and `skolegpt-dk.js` (Danish: anonymous, tutor
-chat, lego/microbit/esp32, da default).
+serial platforms incl. MicroPython `esp32`, English) and `skolegpt-dk.js`
+(Danish: anonymous, tutor chat, lego/microbit/`esp32-arduino`, da default).
 
 ## Environment Variables
 
 Copy `.env.example` to `.env.local`. Which vars are required depends on the
 instance: telemetry instances need `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`
 and `VITE_MODAL_BUDGET_ENDPOINT_URL` (direct chat); tutor instances need
-`VITE_MODAL_TUTOR_ENDPOINT_URL`. `VITE_INSTANCE` picks the instance config.
+`VITE_MODAL_TUTOR_ENDPOINT_URL`; instances offering the `esp32-arduino`
+platform need `VITE_ESP32_COMPILE_URL`. `VITE_INSTANCE` picks the instance
+config.
 
 ## Architecture
 
@@ -115,22 +117,32 @@ Auth follows telemetry: `AuthContext.jsx` renders `SupabaseAuthProvider`
 
 ### Platform Abstraction
 
-Hardware platforms are registered in `src/platforms/index.js` and each lives in its own folder (`src/platforms/<id>/`) exposing `{ id, label, connectionType, buildPriming(hardwareConfig), stopCode, postConnectFiles?, tutorHwMode? }`:
+Hardware platforms are registered in `src/platforms/index.js` and each lives in its own folder (`src/platforms/<id>/`) exposing `{ id, label, connectionType, buildPriming(hardwareConfig), stopCode, postConnectFiles?, tutorHwMode?, editorLanguage?, starterCode? }`:
 - `lilybot` → connectionType `pico`, dynamic priming built from the user's `hardwarePromptConfig`
 - `microbit` → connectionType `microbit`, static priming
 - `cutebot` → connectionType `microbit`, uses `postConnectFiles`
-- `esp32` → connectionType `esp32`, uses `postConnectFiles`
+- `esp32` → "ESP32 (MicroPython)", connectionType `esp32`, serial REPL, uses `postConnectFiles`
+- `esp32-arduino` → "ESP32 (C++/Arduino)", connectionType `esp32-arduino` (Modal compile + esptool-js flash, no REPL; `stopCode: null`, `editorLanguage: 'cpp'`, C++ `starterCode`)
 - `lego` → connectionType `lego-ble` (Web Bluetooth + Pyodide, no serial; `stopCode: null`)
 
-`tutorHwMode` (microbit/esp32/lego) marks tutor-pipeline support; platforms without it are unsupported in `chat.mode: 'tutor'`. Instances gate the offered subset via `instance.platforms` (`getPlatform()` stays unfiltered so legacy sessions remain readable). When adding a new platform, drop a folder under `src/platforms/`, export the platform object, and register it in `src/platforms/index.js`.
+`editorLanguage` ('cpp'; default python) switches the CodeMirror mode and the chat code-fence language; `starterCode` seeds new code tabs (threaded through `createNewSession({initialCode})`/`createCode`). `tutorHwMode` (microbit / esp32-arduino→`esp32` / lego) marks tutor-pipeline support; platforms without it are unsupported in `chat.mode: 'tutor'`. Note the tutor `esp32` prompt bundle (`modal_functions/prompts/esp32.py`) is Arduino C++ (SmartMotor), so it belongs to `esp32-arduino`, not the MicroPython platform. Instances gate the offered subset via `instance.platforms` (`getPlatform()` stays unfiltered so legacy sessions remain readable). When adding a new platform, drop a folder under `src/platforms/`, export the platform object, and register it in `src/platforms/index.js`.
 
 ### Hardware Connection (SPIKEEditor)
 
 Serial platforms connect via WebSerial:
 - `src/utils/microRepl.js` — `Board` class wrapping `@microbit/microbit-connection` + xterm.js terminal
-- Supports **Raspberry Pi Pico W** (`pico`), **micro:bit v2** (`microbit`), and **ESP32** (`esp32`)
+- Supports **Raspberry Pi Pico W** (`pico`), **micro:bit v2** (`microbit`), and **ESP32 MicroPython** (`esp32`)
 - micro:bit flow: first connect attempt detects missing MicroPython → arms installer → second click flashes bundled `.hex` firmware from `src/assets/firmware/` then connects via serial (`src/utils/microbitInstall.js`)
 - On connect, runs the active platform's `stopCode` to halt any running motors
+
+The **ESP32 (C++/Arduino)** platform (`esp32-arduino`) has no REPL: the sketch
+is POSTed to the Modal arduino-cli service (`modal_functions/esp32_compile.py`,
+URL in `VITE_ESP32_COMPILE_URL`), and the returned binary is flashed over
+WebSerial with esptool-js (`src/utils/esp32/esp32Flasher.js` — tuned for the
+XIAO ESP32-C3's native USB-JTAG; app-only fast flashes after the first full
+one). The terminal is a raw 115200 serial monitor; Stop is hidden (a sketch
+can't be interrupted) and Reset hard-resets via an esptool round-trip. Compile
+errors print in the terminal (arduino-cli stderr).
 
 The **LEGO Education** platform (`lego-ble`) is different: devices pair over
 Web Bluetooth (`public/lego-education-ble.js`) and student Python runs in a
@@ -176,6 +188,7 @@ events render as a localized collapsible thinking trace. No model picker; no
 
 Deploy with `modal deploy modal_functions/<file>.py` (see `modal_functions/README.md`):
 - `chat_with_budget.py` — direct-mode endpoint. Model→provider mapping from the `ai_models` table; providers in `providers/` (`openai`, `anthropic`, `google`, `skolegpt`), gated by `MODAL_PROVIDERS` at deploy; per-user daily budgets via `budget_manager.py` against Supabase.
+- `esp32_compile.py` — Arduino compile service (`coderobots-esp32-compile` app) for the `esp32-arduino` platform. arduino-cli + ESP32 core + Adafruit libs baked into the image; plain JSON POST (`{sketch, board?}` → base64 merged/app binaries), result + build caching in the `esp32-build-cache` Volume. No secrets.
 - `tutor_pipeline.py` — tutor-mode endpoint (`coderobots-tutor` app). 4-stage `pipeline/` chain over the self-hosted SkoleGPT model: SummarizeIfOver → ClassifyDocs (doc-bundle routing) → Outline → FinalAnswer (only streamed stage, localized da/en). Server-side prompt/doc bundles in `modal_functions/prompts/` keyed by hw mode (`spike|microbit|lego|esp32`). Deploy-time env: `TUTOR_MODEL` (model id override), `TUTOR_REQUIRE_AUTH=1` (require Supabase JWT per request). `pipeline/llm.py` and `providers/skolegpt_provider.py` speak the same wire protocol — keep in sync.
 - `modal_functions/db_schemas.json` is a JSON mirror of the Zod schemas — regenerate together with the frontend schemas via `npm run generate:schema` when the DB shape changes.
 

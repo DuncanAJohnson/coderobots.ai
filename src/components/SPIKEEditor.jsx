@@ -26,6 +26,14 @@ import {
   getConnectionState as legoGetConnectionState,
   subscribe as legoSubscribe,
 } from '../utils/legoEducation/legoDevices.js';
+import {
+  connectEsp32 as connectEsp32Arduino,
+  flashBinary as flashEsp32Binary,
+  resetEsp32,
+  disconnectEsp32,
+} from '../utils/esp32/esp32Flasher.js';
+import { ESP32_USB_FILTERS, findAuthorizedEsp32SerialPort } from '../utils/esp32/esp32UsbFilters.js';
+import { compileSketch, Esp32CompileError } from '../utils/esp32/esp32Compile.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import CodeTabs from './CodeTabs.jsx';
@@ -78,6 +86,9 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   } = useSession();
 
   const isLegoMode = activePlatform?.connectionType === 'lego-ble';
+  // ESP32 C++/Arduino: sketches compile on the Modal arduino-cli service and
+  // flash over WebSerial via esptool-js — no REPL, raw serial monitor only.
+  const isArduinoMode = activePlatform?.connectionType === 'esp32-arduino';
 
   const editorRef = useRef(null);
   const boardRef = useRef(null);
@@ -91,6 +102,15 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   // Bumped every time lego mode is torn down, so in-flight async init can
   // detect it went stale and dispose whatever it just created.
   const legoModeGenRef = useRef(0);
+  // ESP32 Arduino: the flasher session (serial port + monitor pump), the xterm
+  // controller hosting its output, and the write-through wrapper handed to the
+  // flasher so everything it prints also lands in the console buffer.
+  const arduinoSessionRef = useRef(null);
+  const arduinoTerminalRef = useRef(null);
+  const arduinoIoRef = useRef(null);
+  // Serializes compile+flash: a second flash on the same port mid-write
+  // would corrupt it (state-based isRunning updates too late to guard).
+  const arduinoFlashInFlightRef = useRef(false);
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
   const isLocalChangeRef = useRef(false);
@@ -270,6 +290,146 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
       setIsRunning(false);
     };
   }, [isLegoMode]);
+
+  // ESP32 Arduino lifecycle: on leaving arduino mode, release the serial port
+  // and dispose the terminal so other platforms get a clean slate. (Entering
+  // the mode is lazy — the terminal mounts on the first connect.)
+  useEffect(() => {
+    if (!isArduinoMode) return;
+    return () => {
+      const session = arduinoSessionRef.current;
+      if (session) {
+        arduinoSessionRef.current = null;
+        disconnectEsp32(session).catch((error) => {
+          console.warn('Failed to disconnect ESP32:', error);
+        });
+      }
+      if (arduinoTerminalRef.current) {
+        try { arduinoTerminalRef.current.dispose(); } catch { /* already gone */ }
+        arduinoTerminalRef.current = null;
+      }
+      arduinoIoRef.current = null;
+      bufferRef.current = '';
+      pendingRunSaveRef.current = false;
+      setBuffer('');
+      setConnected(false);
+      setIsRunning(false);
+    };
+  }, [isArduinoMode]);
+
+  const handleArduinoConnect = async () => {
+    if (isConnecting || connected) return;
+    setIsConnecting(true);
+    void logInteractionSafe('connect_esp32_arduino');
+
+    try {
+      // Pick the port before any other await: on first use the terminal
+      // factory downloads xterm from a CDN, and requestPort() must stay
+      // inside the click's user-activation window.
+      let port = await findAuthorizedEsp32SerialPort();
+      if (!port) {
+        setStatusBanner({ type: 'info', message: t('waitingEsp32Selection') });
+        port = await navigator.serial.requestPort({ filters: ESP32_USB_FILTERS });
+      }
+
+      if (!arduinoTerminalRef.current) {
+        const host = replContainerRef.current;
+        if (!host) throw new Error('Terminal container is not mounted');
+        arduinoTerminalRef.current = await createLegoTerminal(host);
+      }
+      const xterm = arduinoTerminalRef.current.terminal;
+
+      // Everything the flasher/monitor prints is mirrored into the console
+      // buffer so run logging, the console-content-changed event and "Add
+      // Console to Chat" behave exactly like the serial path.
+      const appendOutput = (text) => {
+        bufferRef.current = (bufferRef.current + text).slice(-FIFO_SIZE);
+        setBuffer(bufferRef.current);
+      };
+      const io = {
+        write: (data) => { appendOutput(data); xterm.write(data); },
+        writeln: (data) => { appendOutput(`${data}\n`); xterm.writeln(data); },
+        clear: () => xterm.clear(),
+      };
+      arduinoIoRef.current = io;
+
+      const session = await connectEsp32Arduino({ terminal: io, preselectedPort: port });
+      arduinoSessionRef.current = session;
+      setConnected(true);
+      setConnectedPlatformId(activePlatform?.id || null);
+      setStatusBanner({ type: 'success', message: tRef.current('esp32Connected') });
+      io.write(`\r\n${tRef.current('esp32Connected')}\r\n`);
+    } catch (error) {
+      console.error('ESP32 connection failed:', error);
+      setConnected(false);
+      setConnectedPlatformId(null);
+      const message = getConnectionErrorMessage(error);
+      setStatusBanner({ type: 'error', message });
+      arduinoIoRef.current?.write(`\r\n\x1b[31m${message}\x1b[0m\r\n`);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  // Arduino run path: compile the sketch on the Modal service, then flash the
+  // binary over WebSerial; the monitor re-attaches afterwards and streams the
+  // sketch's Serial output. Telemetry mirrors the serial path — snapshot +
+  // interaction at dispatch, console tail once the flash settles.
+  const handleArduinoRun = async () => {
+    const session = arduinoSessionRef.current;
+    const io = arduinoIoRef.current;
+    if (!session || !connected || !io) return;
+    if (arduinoFlashInFlightRef.current) return;
+    arduinoFlashInFlightRef.current = true;
+    setIsRunning(true);
+
+    const codeToRun = editorRef.current?.getCode() || currentCodeContent;
+    const startedAt = Date.now();
+    try {
+      await createSnapshot('run_device');
+      await logInteractionSafe('run_device');
+
+      io.write(`\r\n\x1b[36m${tRef.current('esp32Compiling')}\x1b[0m\r\n`);
+      const compileResult = await compileSketch(codeToRun);
+
+      io.write(`\x1b[36m${tRef.current('esp32Flashing')}\x1b[0m\r\n`);
+      const xterm = arduinoTerminalRef.current?.terminal;
+      await flashEsp32Binary(
+        session,
+        {
+          merged: compileResult.merged,
+          mergedOffset: compileResult.mergedOffset,
+          app: compileResult.app,
+          appOffset: compileResult.appOffset,
+          partitionsHash: compileResult.partitionsHash,
+          mode: 'auto',
+        },
+        (written, total) => {
+          // Progress goes straight to the xterm (carriage-return updates would
+          // spam the console buffer).
+          const pct = Math.round((written / total) * 100);
+          xterm?.write(`\rFlash: ${pct}% (${written}/${total})`);
+        }
+      );
+      const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+      io.write(`\r\n\x1b[32mOK (${seconds}s)\x1b[0m\r\n`);
+    } catch (error) {
+      if (error instanceof Esp32CompileError) {
+        io.write(`\r\n\x1b[31m${tRef.current('esp32CompileFailed')}\x1b[0m\r\n`);
+        const details = error.stderr || error.message || '';
+        if (details) {
+          io.write(`\x1b[31m${String(details).replace(/\n/g, '\r\n')}\x1b[0m\r\n`);
+        }
+      } else {
+        console.error('ESP32 flash failed:', error);
+        io.write(`\r\n\x1b[31m${String(error?.message || error).replace(/\n/g, '\r\n')}\x1b[0m\r\n`);
+      }
+    } finally {
+      arduinoFlashInFlightRef.current = false;
+      setIsRunning(false);
+      await logConsoleTailSafe(bufferRef.current, 'run_device');
+    }
+  };
 
   // Lazily mount the lego terminal and boot the Pyodide worker. Called on the
   // first successful device connect — NOT on platform switch — so the Pyodide
@@ -513,6 +673,30 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   }, []);
 
   const handleDisconnect = async () => {
+    if (isArduinoMode) {
+      const session = arduinoSessionRef.current;
+      // Closing the port mid-flash would corrupt the write in progress.
+      if (!session || isConnecting || arduinoFlashInFlightRef.current) return;
+      setIsConnecting(true);
+      try {
+        setStatusBanner({ type: 'info', message: t('disconnecting') });
+        await logInteractionSafe('disconnect');
+        await logConsoleTailSafe(bufferRef.current, 'disconnect');
+        arduinoSessionRef.current = null;
+        await disconnectEsp32(session);
+        setConnected(false);
+        setConnectedPlatformId(null);
+        setIsRunning(false);
+        bufferRef.current = '';
+        setBuffer('');
+        setStatusBanner({ type: 'info', message: t('deviceDisconnected') });
+        arduinoIoRef.current?.write(`\r\n${t('deviceDisconnected')}\r\n`);
+      } finally {
+        setIsConnecting(false);
+      }
+      return;
+    }
+
     const board = boardRef.current;
     if (!board || isConnecting) return;
 
@@ -760,6 +944,10 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   };
 
   const handleRun = async () => {
+    if (isArduinoMode) {
+      await handleArduinoRun();
+      return;
+    }
     if (isLegoMode) {
       await handleLegoRun();
       return;
@@ -801,6 +989,10 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   };
 
   const handleCtrlC = async () => {
+    // Arduino has no Stop button (a sketch can't be interrupted — see
+    // ControlPanel); guard against stray calls reaching the serial path,
+    // where `connected` is true but the serial Board isn't attached.
+    if (isArduinoMode) return;
     if (isLegoMode) {
       await logInteractionSafe('send_ctrl_c');
       setIsRunning(false);
@@ -836,6 +1028,23 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   };
 
   const handleReset = async () => {
+    if (isArduinoMode) {
+      const session = arduinoSessionRef.current;
+      // Never reset mid-flash — it would corrupt the write in progress.
+      if (!session || !connected || arduinoFlashInFlightRef.current) return;
+      await logInteractionSafe('reset_device');
+      await logConsoleTailSafe(bufferRef.current, 'reset_device');
+      setIsRunning(false);
+      arduinoIoRef.current?.write('\r\n\x1b[33m[reset]\x1b[0m\r\n');
+      try {
+        // Hard-reset via esptool-js — the flashed sketch restarts from setup().
+        await resetEsp32(session);
+      } catch (error) {
+        console.warn('ESP32 reset failed:', error);
+      }
+      return;
+    }
+
     const board = boardRef.current;
     if (!board || !connected) return;
 
@@ -862,6 +1071,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
       boardRef.current.terminal.clear();
     }
     legoTerminalRef.current?.clear();
+    arduinoTerminalRef.current?.clear();
     bufferRef.current = '';
     setBuffer('');
   };
@@ -1016,6 +1226,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
               ref={editorRef}
               initialCode={currentCodeContent}
               onChange={handleCodeChange}
+              language={activePlatform?.editorLanguage || 'python'}
             />
           </div>
         </div>
@@ -1032,6 +1243,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
               onConnectMicrobit={() => handleConnect('microbit')}
               onConnectPico={() => handleConnect('pico')}
               onConnectEsp32={() => handleConnect('esp32')}
+              onConnectEsp32Arduino={handleArduinoConnect}
               onDisconnect={handleDisconnect}
               onRun={handleRun}
               onCtrlC={handleCtrlC}

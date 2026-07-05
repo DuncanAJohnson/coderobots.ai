@@ -209,7 +209,11 @@ export const SessionProvider = ({ children }) => {
         await updateCodeContentService(currentCodeId, currentCodeContent);
       }
 
-      const session = await createNewSession({ hardwarePlatform: platformId, name: name || null });
+      const session = await createNewSession({
+        hardwarePlatform: platformId,
+        name: name || null,
+        initialCode: getPlatform(platformId)?.starterCode,
+      });
       if (!session) {
         console.error('Failed to create new session');
         return false;
@@ -432,7 +436,8 @@ export const SessionProvider = ({ children }) => {
 
     try {
       const name = `Code tab ${codeRecords.length + 1}`;
-      const newCode = await createCode(activeSession.id, name);
+      const starterCode = getPlatform(activeSession.hardware_platform)?.starterCode;
+      const newCode = await createCode(activeSession.id, name, starterCode);
       if (newCode) {
         // Switch to the new code record (this will reload code records internally)
         await switchCode(newCode.id);

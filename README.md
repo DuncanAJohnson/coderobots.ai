@@ -29,7 +29,7 @@ VITE_INSTANCE=skolegpt-dk npm run build   # Danish anonymous tutor
 |---|---|---|
 | Data storage | Supabase (auth required) | Browser localStorage (anonymous) |
 | Chat | Multi-provider, budget-enforced | SkoleGPT tutor pipeline |
-| Platforms | lilybot, microbit, cutebot, esp32 | lego, microbit, esp32 |
+| Platforms | lilybot, microbit, cutebot, esp32 (MicroPython) | lego, microbit, esp32-arduino (C++, Modal compile + browser flash) |
 | Languages | en | da (default), en |
 | Admin routes (`/data`, `/usage`, `/view-data`) | yes | no |
 

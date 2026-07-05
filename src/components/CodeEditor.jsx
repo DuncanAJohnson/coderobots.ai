@@ -1,9 +1,10 @@
 import { useRef, forwardRef, useImperativeHandle } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
+import { cpp } from '@codemirror/lang-cpp';
 import { EditorView } from '@codemirror/view';
 
-const CodeEditor = forwardRef(({ initialCode = '# Start your project here!\n', onChange }, ref) => {
+const CodeEditor = forwardRef(({ initialCode = '# Start your project here!\n', onChange, language = 'python' }, ref) => {
   const editorViewRef = useRef(null);
   const codeRef = useRef(initialCode);
 
@@ -36,7 +37,7 @@ const CodeEditor = forwardRef(({ initialCode = '# Start your project here!\n', o
       defaultValue={initialCode}
       height="100%"
       extensions={[
-        python(),
+        language === 'cpp' ? cpp() : python(),
         EditorView.theme({
           '&': {
             height: '100%',

@@ -52,7 +52,7 @@ export const getUserSessions = async () => {
 /**
  * Create a new session with associated conversation, code, and console records
  */
-export const createNewSession = async ({ hardwarePlatform, name } = {}) => {
+export const createNewSession = async ({ hardwarePlatform, name, initialCode } = {}) => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -125,7 +125,7 @@ export const createNewSession = async ({ hardwarePlatform, name } = {}) => {
       user_id: user.id,
       session_id: sessionId,
       name: 'Code tab 1',
-      content: '# Start your new project here!',
+      content: initialCode || '# Start your new project here!',
       save_source: 'init',
     };
 
