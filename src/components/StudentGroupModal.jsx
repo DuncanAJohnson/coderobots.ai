@@ -6,10 +6,12 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 import './ModalBase.css';
 import './StudentGroupModal.css';
 
 const StudentGroupModal = ({ visible, onSubmit, saving = false }) => {
+  const { t } = useLanguage();
   const [value, setValue] = useState('');
   const textareaRef = useRef(null);
 
@@ -17,8 +19,8 @@ const StudentGroupModal = ({ visible, onSubmit, saving = false }) => {
     if (visible) {
       setValue('');
       // Focus after the slide-up animation so the cursor lands in the field.
-      const t = setTimeout(() => textareaRef.current?.focus(), 50);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => textareaRef.current?.focus(), 50);
+      return () => clearTimeout(timer);
     }
   }, [visible]);
 
@@ -39,15 +41,12 @@ const StudentGroupModal = ({ visible, onSubmit, saving = false }) => {
   return (
     <div className="modal-overlay">
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2 className="student-group-title">Who's in your group?</h2>
-        <p className="student-group-description">
-          List the names of the students sharing this account — one per line.
-          You'll only need to do this once.
-        </p>
+        <h2 className="student-group-title">{t('studentGroupTitle')}</h2>
+        <p className="student-group-description">{t('studentGroupDescription')}</p>
 
         <form onSubmit={handleSubmit}>
           <label className="student-group-label" htmlFor="student-group-names">
-            Student names
+            {t('studentNames')}
           </label>
           <textarea
             id="student-group-names"
@@ -55,7 +54,7 @@ const StudentGroupModal = ({ visible, onSubmit, saving = false }) => {
             className="student-group-textarea"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder={'Ada Lovelace\nGrace Hopper\nKatherine Johnson'}
+            placeholder={t('studentNamesPlaceholder')}
             rows={6}
             disabled={saving}
           />
@@ -66,7 +65,7 @@ const StudentGroupModal = ({ visible, onSubmit, saving = false }) => {
               className="modal-close-button"
               disabled={!canSubmit}
             >
-              {saving ? 'Saving…' : 'Save and continue'}
+              {saving ? t('saving') : t('saveAndContinue')}
             </button>
           </div>
         </form>

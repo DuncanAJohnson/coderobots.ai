@@ -12,6 +12,7 @@ import ControlPanel from './ControlPanel.jsx';
 import CodeTabs from './CodeTabs.jsx';
 import FlashProgressModal from './FlashProgressModal.jsx';
 import { useSession } from '../contexts/SessionContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { logConsole, logInteraction } from '../services/dataLogger';
 import './SPIKEEditor.css';
 
@@ -19,13 +20,21 @@ const FIFO_SIZE = 10000;
 
 
 const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
+  const { t } = useLanguage();
+  // The Board and its callbacks are created once on mount, so they would
+  // capture the first render's `t` (and thus the initial language). Read `t`
+  // through this ref so status messages always use the current language.
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  });
   const [connected, setConnected] = useState(false);
   const [connectedBoard, setConnectedBoard] = useState(null);
   const [connectedPlatformId, setConnectedPlatformId] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [statusBanner, setStatusBanner] = useState({
     type: 'info',
-    message: 'Not connected.'
+    message: t('notConnected')
   });
   const [mode, setMode] = useState('disconnected');
   const [isRunning, setIsRunning] = useState(false);
@@ -108,15 +117,18 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   };
 
   const getConnectionErrorMessage = (error) => {
-    const message = error?.message || 'Unknown serial error';
+    // Use tRef so the once-created Board `onerror` callback still reports in
+    // the currently selected language.
+    const tr = tRef.current;
+    const message = error?.message || tr('unknownSerialError');
     if (/WebUSB is not available/i.test(message)) {
-      return 'Connection failed: WebUSB is required to install micro:bit MicroPython. Use a Chromium-based browser.';
+      return tr('errWebUsbRequired');
     }
     if (/No device selected|no-device-selected/i.test(message)) {
-      return 'Connection failed: no micro:bit selected in the browser device picker.';
+      return tr('errNoMicrobitSelected');
     }
     if (/Bad response for 8 -> 17|reconnect-microbit/i.test(message) || /reconnect-microbit/i.test(error?.code || '')) {
-      return 'Connection failed: unstable WebUSB link to micro:bit. Unplug/replug the board, then click Connect micro:bit again.';
+      return tr('errUnstableWebUsb');
     }
     if (/WebUSB still unstable|WebUSB flashing link stayed unstable/i.test(message)) {
       return message;
@@ -125,15 +137,15 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
       return message;
     }
     if (/did not respond like a MicroPython REPL/i.test(message)) {
-      return 'Connection failed: selected device is not a compatible MicroPython REPL.';
+      return tr('errNotMicroPythonRepl');
     }
     if (/Failed to open serial port|NetworkError|busy|resource/i.test(message)) {
-      return 'Connection failed: serial port is busy. Close any other serial connections to the device and try again.';
+      return tr('errSerialPortBusy');
     }
     if (/No port selected by the user/i.test(message)) {
-      return 'Connection failed: no device selected by the user.';
+      return tr('errNoDeviceSelected');
     }
-    return `Connection failed: ${message}`;
+    return tr('errConnectionFailed').replace('{message}', message);
   };
 
   // Expose methods to parent via ref
@@ -175,8 +187,8 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     setStatusBanner({
       type: 'info',
       message: typeMismatch
-        ? 'Disconnecting previous device — session platform changed.'
-        : `Disconnecting — switching to ${activePlatform.label} session. Click Connect to install driver.`,
+        ? tRef.current('disconnectingPlatformChanged')
+        : tRef.current('disconnectingSwitchingTo').replace('{label}', activePlatform.label),
     });
     board.disconnect().catch((error) => {
       console.error('Failed to auto-disconnect after platform switch:', error);
@@ -202,7 +214,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
           setMode('repl');
           setStatusBanner({
             type: 'success',
-            message: 'Device Status: Connected. REPL is ready.'
+            message: tRef.current('deviceConnectedRepl')
           });
         },
         ondisconnect: () => {
@@ -219,13 +231,13 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
           setIsRunning(false);
           setStatusBanner({
             type: 'info',
-            message: 'Device Status: Disconnected.'
+            message: tRef.current('deviceDisconnected')
           });
         },
         onportselected: () => {
           setStatusBanner({
             type: 'info',
-            message: 'Attempting to connect...'
+            message: tRef.current('attemptingToConnect')
           });
         },
         onerror: (error) => {
@@ -352,7 +364,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
       if (!connected) return;
       setStatusBanner({
         type: 'info',
-        message: 'Disconnecting...'
+        message: t('disconnecting')
       });
       await logInteractionSafe('disconnect');
       await logConsoleTailSafe(bufferRef.current, 'disconnect');
@@ -369,14 +381,14 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const connectMicrobit = async (board) => {
     setConnectPhase('probing');
     setFlashProgress(undefined);
-    setFlashMessage('Opening micro:bit serial port...');
+    setFlashMessage(t('flashMsgOpeningSerial'));
 
     // Step 1: Try serial, preferring an already-authorized port (no picker).
     const cachedPort = await findAuthorizedMicrobitSerialPort();
     if (!cachedPort) {
       setStatusBanner({
         type: 'info',
-        message: 'Waiting for micro:bit serial device selection...'
+        message: t('waitingMicrobitSelection')
       });
     }
 
@@ -398,7 +410,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     // device is not already authorized.
     setConnectPhase('flashing');
     setFlashProgress(undefined);
-    setFlashMessage('Opening WebUSB link to micro:bit...');
+    setFlashMessage(t('flashMsgOpeningWebUsb'));
 
     let installerSession = null;
     try {
@@ -421,16 +433,14 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     // reconnect silently using the cached grant.
     setConnectPhase('reconnecting');
     setFlashProgress(undefined);
-    setFlashMessage('Waiting for micro:bit to reappear...');
+    setFlashMessage(t('flashMsgReconnecting'));
 
     const reenumeratedPort = await waitForMicrobitSerialPort(8000);
     if (!reenumeratedPort) {
-      throw new Error(
-        'micro:bit did not reappear after flashing. Unplug/replug the board, then click Connect again.'
-      );
+      throw new Error(t('errMicrobitNotReappear'));
     }
 
-    setFlashMessage('Reconnecting to micro:bit REPL...');
+    setFlashMessage(t('flashMsgReconnectingRepl'));
     await board.connect(replContainerRef.current, true, {
       boardType: 'microbit',
       serialPort: reenumeratedPort,
@@ -442,7 +452,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const connectPico = async (board) => {
     setStatusBanner({
       type: 'info',
-      message: 'Waiting for Pico serial device selection...'
+      message: t('waitingPicoSelection')
     });
     await board.connect(replContainerRef.current, true, { boardType: 'pico' });
     await board.interrupt(150);
@@ -457,7 +467,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const connectEsp32 = async (board) => {
     setStatusBanner({
       type: 'info',
-      message: 'Waiting for ESP32 serial device selection...'
+      message: t('waitingEsp32Selection')
     });
     await board.connect(replContainerRef.current, true, { boardType: 'esp32' });
     await board.interrupt(150);
@@ -496,7 +506,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
           console.error('Post-connect file install failed:', error);
           setStatusBanner({
             type: 'error',
-            message: `Failed to install ${error?.label || 'driver'} on micro:bit — try reconnecting.`,
+            message: t('errInstallDriverMicrobit').replace('{label}', error?.label || t('driver')),
           });
         }
       } else if (targetBoard === 'esp32') {
@@ -507,7 +517,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
           console.error('Post-connect file install failed:', error);
           setStatusBanner({
             type: 'error',
-            message: `Failed to install ${error?.label || 'driver'} on device — try reconnecting.`,
+            message: t('errInstallDriverDevice').replace('{label}', error?.label || t('driver')),
           });
         }
       } else {
@@ -635,7 +645,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const handleSaveToMain = async () => {
     const board = boardRef.current;
     if (!board || !connected) {
-      alert('Cannot save to main.py. Please connect to a device first.');
+      alert(t('cannotSaveToMainPyDevice'));
       return;
     }
 
@@ -660,14 +670,14 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
       board.terminal?.focus();
     } catch (error) {
       console.error('Failed to save to main.py:', error);
-      alert(`Failed to save to main.py: ${error.message}`);
+      alert(`${t('failedToSaveMainPy')}${error.message}`);
     }
   };
 
   const handleClearMain = async () => {
     const board = boardRef.current;
     if (!board || !connected || connectedBoard !== 'esp32') {
-      alert('Cannot clear main.py. Please connect to the ESP32 first.');
+      alert(t('cannotClearMainPy'));
       return;
     }
     if (operationInFlightRef.current) return;
@@ -688,7 +698,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
         board.terminal?.focus();
       } catch (error) {
         console.error('Failed to clear main.py from ESP32:', error);
-        alert(`Failed to clear main.py from ESP32: ${error.message}`);
+        alert(`${t('failedToClearMainPy')}${error.message}`);
       }
     } finally {
       operationInFlightRef.current = false;
@@ -698,7 +708,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const handleClearDownload = async () => {
     const board = boardRef.current;
     if (!board || !connected || connectedBoard !== 'microbit') {
-      alert('Cannot clear download. Please connect to the micro:bit first.');
+      alert(t('cannotClearDownload'));
       return;
     }
     if (operationInFlightRef.current) return;
@@ -719,7 +729,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
         board.terminal?.focus();
       } catch (error) {
         console.error('Failed to clear download from micro:bit:', error);
-        alert(`Failed to clear download from micro:bit: ${error.message}`);
+        alert(`${t('failedToClearDownload')}${error.message}`);
       }
     } finally {
       operationInFlightRef.current = false;
@@ -729,7 +739,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const handleDownload = async () => {
     const board = boardRef.current;
     if (!board || !connected || connectedBoard !== 'microbit') {
-      alert('Cannot download. Please connect to the micro:bit first.');
+      alert(t('cannotDownload'));
       return;
     }
     if (operationInFlightRef.current) return;
@@ -753,7 +763,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
         board.terminal?.focus();
       } catch (error) {
         console.error('Failed to download to micro:bit:', error);
-        alert(`Failed to download to micro:bit: ${error.message}`);
+        alert(`${t('failedToDownload')}${error.message}`);
       }
     } finally {
       operationInFlightRef.current = false;

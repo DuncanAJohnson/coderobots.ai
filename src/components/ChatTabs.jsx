@@ -5,6 +5,7 @@
 
 import { useState, useRef } from 'react';
 import './ChatTabs.css';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const ChatTabs = ({
   conversations,
@@ -13,6 +14,7 @@ const ChatTabs = ({
   onCreateConversation,
   onRenameConversation,
 }) => {
+  const { t } = useLanguage();
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
   const tabsContainerRef = useRef(null);
@@ -92,7 +94,7 @@ const ChatTabs = ({
                       e.stopPropagation();
                       handleStartEdit(conversation, index);
                     }}
-                    aria-label="Rename tab"
+                    aria-label={t('renameTab')}
                   >
                     &#9998;
                   </button>
@@ -101,7 +103,7 @@ const ChatTabs = ({
             </div>
           );
         })}
-        <button className="chat-tab-add" onClick={onCreateConversation} aria-label="Add new chat">
+        <button className="chat-tab-add" onClick={onCreateConversation} aria-label={t('addNewChat')}>
           +
         </button>
       </div>

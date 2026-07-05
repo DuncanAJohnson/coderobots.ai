@@ -171,3 +171,32 @@
   transform: none;
   box-shadow: none;
 }
+
+.topbar-lang-toggle {
+  display: flex;
+  border: 1px solid color-mix(in srgb, var(--brand-primary-text) 30%, transparent);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.topbar-lang-btn {
+  padding: 8px 12px;
+  background-color: transparent;
+  color: color-mix(in srgb, var(--brand-primary-text) 60%, transparent);
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+}
+
+.topbar-lang-btn:hover {
+  background-color: color-mix(in srgb, var(--brand-primary-text) 15%, transparent);
+  color: var(--brand-primary-text);
+}
+
+.topbar-lang-btn--active {
+  background-color: color-mix(in srgb, var(--brand-primary-text) 25%, transparent);
+  color: var(--brand-primary-text);
+}

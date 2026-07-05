@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { useSession } from '../contexts/SessionContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { logMessage, logConsole } from '../services/dataLogger';
 import { streamChatCompletionWithBudget } from '../utils/chatStream';
 import { getUserAccessLevel, getDailyBudgetUsage } from '../services/aiUsage';
@@ -29,6 +30,12 @@ marked.setOptions({
   breaks: true,
   gfm: true,
 });
+
+// System directive appended in direct chat mode when the UI language is not
+// English, so the model answers (and comments code) in the student's language.
+const RESPONSE_LANGUAGE_DIRECTIVES = {
+  da: 'Respond in Danish. Write code comments in Danish, but keep code identifiers and API names unchanged.',
+};
 
 const EMPTY_MODEL_METADATA = {
   rows: [],
@@ -53,7 +60,8 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     updateConversationName,
     createSnapshot,
   } = useSession();
-  
+  const { t, lang } = useLanguage();
+
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [codingLevel, setCodingLevel] = useState('beginner');
@@ -263,11 +271,11 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
   const handleSendMessage = async () => {
     if (!activeSession) {
-      alert('No active session. Please select or create a session first.');
+      alert(t('noActiveSession'));
       return;
     }
     if (!selectedModel) {
-      alert('No AI model is available right now. Please try again in a moment.');
+      alert(t('noModelAvailable'));
       return;
     }
 
@@ -345,6 +353,15 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       conversation.push({
         role: 'system',
         content: `${LEVEL_INSTRUCTION_PREFIX}\n\n${levelInstructions}`,
+      });
+    }
+
+    // Answer in the UI language (priming/level prompts stay English —
+    // instruction-following is better with English system prompts).
+    if (lang && lang !== 'en') {
+      conversation.push({
+        role: 'system',
+        content: RESPONSE_LANGUAGE_DIRECTIVES[lang] || RESPONSE_LANGUAGE_DIRECTIVES.da,
       });
     }
 
@@ -470,7 +487,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
             const newMessages = [...prev];
             newMessages[newMessages.length - 1] = {
               role: 'bot',
-              content: `Error: ${error.message}`,
+              content: `${t('errorPrefix')}${error.message}`,
               streaming: false,
             };
             return newMessages;
@@ -537,7 +554,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
   const renderMessage = (message, index) => {
     const isUser = message.role === 'user';
-    const label = isUser ? 'User' : message.role === 'system' ? 'System' : 'AI Bot';
+    const label = isUser ? t('userLabel') : message.role === 'system' ? 'System' : t('botLabel');
     const color = isUser ? '#fbe2d7' : message.role === 'system' ? '#d7e4fb' : '#d8f6d8';
     const align = isUser ? 'align-right' : 'align-left';
 
@@ -561,7 +578,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
                   className="console-btn"
                   onClick={() => openConsoleModal(consoleText)}
                 >
-                  VIEW ATTACHED CONSOLE LOG
+                  {t('viewConsoleLog')}
                 </button>
               );
             } else {
@@ -607,7 +624,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
                         className="code-btn"
                         onClick={() => openCodeModal(codeText, lang)}
                       >
-                        VIEW CODE SNIPPET
+                        {t('viewCodeSnippet')}
                       </button>
                     </div>
                   );
@@ -647,7 +664,8 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
       <div className="chat-body" ref={chatBodyRef} onScroll={handleChatScroll}>
         <div className="chat-disclaimer">
-          All activity is stored and may be reviewed by course staff.
+          {/* TODO(no-telemetry): switch disclaimer by instance.telemetry */}
+          {t('chatDisclaimerCloud')}
         </div>
         {messages.map((msg, idx) => renderMessage(msg, idx))}
         {isStreaming && streamingConversationId === currentConversationId && (
@@ -655,7 +673,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
             <div className="loader"></div>
             {!selectedModelStreaming && (
               <div style={{ marginTop: '10px', fontSize: '0.9em', color: '#666' }}>
-                Waiting for full response from {selectedModel}...
+                {t('waitingForFullResponse').replace('{model}', selectedModel)}
               </div>
             )}
           </div>
@@ -670,7 +688,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
             onClick={() => setAttachedContext(prev => ({ ...prev, includeCode: !prev.includeCode }))}
           >
             <span className="context-checkbox-btn__box">{attachedContext.includeCode ? '✓' : ''}</span>
-            <span className="context-checkbox-btn__label">Add Code to Chat</span>
+            <span className="context-checkbox-btn__label">{t('addCodeToChat')}</span>
           </button>
           <button
             type="button"
@@ -679,7 +697,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
             disabled={!consoleHasContent}
           >
             <span className="context-checkbox-btn__box">{attachedContext.includeConsole ? '✓' : ''}</span>
-            <span className="context-checkbox-btn__label">Add Console to Chat</span>
+            <span className="context-checkbox-btn__label">{t('addConsoleToChat')}</span>
           </button>
         </div>
 
@@ -687,14 +705,14 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
           <textarea
             id="chat-input"
             rows="2"
-            placeholder="Type your message…"
+            placeholder={t('messagePlaceholder')}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isStreaming}
           />
           <button id="chat-send" onClick={handleSendMessage} disabled={isStreaming}>
-            SEND
+            {t('send')}
           </button>
         </div>
       </div>

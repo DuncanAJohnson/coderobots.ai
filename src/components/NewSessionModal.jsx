@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import './ModalBase.css';
 import './NewSessionModal.css';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const NewSessionModal = ({
   visible,
@@ -16,6 +17,7 @@ const NewSessionModal = ({
   onSubmit,
   onCancel,
 }) => {
+  const { t } = useLanguage();
   const [name, setName] = useState(initialName);
   const [platformId, setPlatformId] = useState(null);
 
@@ -29,11 +31,11 @@ const NewSessionModal = ({
   if (!visible) return null;
 
   const isAssign = mode === 'assign';
-  const title = isAssign ? 'Choose a Hardware Platform' : 'New Session';
+  const title = isAssign ? t('hardwarePickerTitle') : t('newSession');
   const description = isAssign
-    ? 'This session was created before hardware platforms existed. Pick a platform to continue.'
-    : 'Name your session and pick the hardware platform you will be using.';
-  const submitLabel = isAssign ? 'Use this platform' : 'Create Session';
+    ? t('assignPlatformDescription')
+    : t('newSessionDescription');
+  const submitLabel = isAssign ? t('usePlatform') : t('createSession');
   const canSubmit = Boolean(platformId);
 
   const handleSubmit = (e) => {
@@ -55,7 +57,7 @@ const NewSessionModal = ({
 
         <form onSubmit={handleSubmit}>
           <label className="new-session-label" htmlFor="new-session-name">
-            Session name
+            {t('sessionNameLabel')}
           </label>
           <input
             id="new-session-name"
@@ -63,11 +65,11 @@ const NewSessionModal = ({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Unnamed Session"
+            placeholder={t('unnamedSession')}
             autoFocus={!isAssign}
           />
 
-          <div className="new-session-label">Hardware platform</div>
+          <div className="new-session-label">{t('hardwarePlatform')}</div>
           <div className="new-session-platforms">
             {platforms.map((platform) => (
               <button
@@ -90,7 +92,7 @@ const NewSessionModal = ({
                 className="new-session-cancel"
                 onClick={onCancel}
               >
-                Cancel
+                {t('cancel')}
               </button>
             )}
             <button

@@ -1,3 +1,5 @@
+import { useLanguage } from '../contexts/LanguageContext';
+
 const ControlPanel = ({
   connected,
   connectedBoard = null,
@@ -16,6 +18,7 @@ const ControlPanel = ({
   onClearDownload,
   onClearMain
 }) => {
+  const { t } = useLanguage();
   return (
     <div className="control-panel right-panel">
       <div className="button-group">
@@ -25,7 +28,7 @@ const ControlPanel = ({
             className="button disconnect-button"
             disabled={isConnecting}
           >
-            {isConnecting ? 'Disconnecting...' : 'Disconnect'}
+            {isConnecting ? t('disconnecting') : t('disconnect')}
           </button>
         ) : (
           <>
@@ -35,7 +38,7 @@ const ControlPanel = ({
                 className="button connect-button"
                 disabled={isConnecting}
               >
-                {isConnecting ? 'Connecting...' : 'Connect micro:bit'}
+                {isConnecting ? t('legoConnecting') : t('connectMicrobit')}
               </button>
             )}
             {platformConnectionType === 'pico' && (
@@ -44,7 +47,7 @@ const ControlPanel = ({
                 className="button connect-button"
                 disabled={isConnecting}
               >
-                {isConnecting ? 'Connecting...' : 'Connect Pico'}
+                {isConnecting ? t('legoConnecting') : t('connectPico')}
               </button>
             )}
             {platformConnectionType === 'esp32' && (
@@ -53,51 +56,51 @@ const ControlPanel = ({
                 className="button connect-button"
                 disabled={isConnecting}
               >
-                {isConnecting ? 'Connecting...' : 'Connect ESP32'}
+                {isConnecting ? t('legoConnecting') : t('connectEsp32')}
               </button>
             )}
           </>
         )}
         <button onClick={onClear} className="button clear-console-button" disabled={isConnecting}>
-          Clear Console
+          {t('clearConsole')}
         </button>
       </div>
 
       {connected && (
         <div className="button-group">
           <button onClick={onRun} className="button run-button">
-            ▶ Run Program
+            {t('runProgram')}
           </button>
           {connectedBoard === 'pico' && (
             <button onClick={onSaveToMain} className="button run-button">
-              Save to main.py
+              {t('saveToMainPy')}
             </button>
           )}
           {connectedBoard === 'microbit' && (
             <button onClick={onDownload} className="button run-button">
-              Download
+              {t('download')}
             </button>
           )}
           {connectedBoard === 'microbit' && (
             <button onClick={onClearDownload} className="button clear-console-button">
-              Clear Download
+              {t('clearDownload')}
             </button>
           )}
           {connectedBoard === 'esp32' && (
             <button onClick={onSaveToMain} className="button run-button">
-              Save to main.py
+              {t('saveToMainPy')}
             </button>
           )}
           {connectedBoard === 'esp32' && (
             <button onClick={onClearMain} className="button clear-console-button">
-              Clear main.py
+              {t('clearMainPy')}
             </button>
           )}
           <button onClick={onCtrlC} className="button stop-button">
-            Stop Program
+            {t('stopProgram')}
           </button>
           <button onClick={onReset} className="button stop-button">
-            Reset Device
+            {t('resetDevice')}
           </button>
         </div>
       )}

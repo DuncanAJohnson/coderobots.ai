@@ -2,10 +2,12 @@ import { useEffect, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
 import { EditorView } from '@codemirror/view';
+import { useLanguage } from '../contexts/LanguageContext';
 import './ModalBase.css';
 import './CodeModal.css';
 
 const CodeModal = ({ isOpen, code, lang, onClose, onCopy, onReplace }) => {
+  const { t } = useLanguage();
   const modalRef = useRef(null);
 
   useEffect(() => {
@@ -89,9 +91,9 @@ const CodeModal = ({ isOpen, code, lang, onClose, onCopy, onReplace }) => {
           />
         </div>
         <div className="code-actions">
-          <button data-act="cancel" onClick={onClose}>Cancel</button>
-          <button data-act="copy" onClick={onCopy}>Copy</button>
-          <button data-act="replace" onClick={onReplace}>Replace</button>
+          <button data-act="cancel" onClick={onClose}>{t('cancel')}</button>
+          <button data-act="copy" onClick={onCopy}>{t('copy')}</button>
+          <button data-act="replace" onClick={onReplace}>{t('replace')}</button>
         </div>
       </div>
     </div>

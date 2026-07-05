@@ -8,6 +8,7 @@ import AboutModal from './AboutModal';
 import { signOut } from '../services/auth';
 import instance from '../config/instance';
 import { getPlatform } from '../platforms';
+import { useLanguage } from '../contexts/LanguageContext';
 import './ModalBase.css';
 import './TitleBar.css';
 
@@ -21,6 +22,7 @@ const TitleBar = ({
   activeSession,
   onUpdateSessionName,
 }) => {
+  const { lang, switchLang, t } = useLanguage();
   const [showAbout, setShowAbout] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
@@ -90,20 +92,20 @@ const TitleBar = ({
                 onChange={(e) => setEditedName(e.target.value)}
                 onKeyDown={handleNameKeyDown}
                 onBlur={handleNameBlur}
-                placeholder="Enter session name"
+                placeholder={t('enterSessionName')}
                 maxLength={100}
               />
             ) : (
               <div
                 className="topbar-session-name-display"
                 onClick={handleNameClick}
-                title="Click to rename session"
+                title={t('renameSessionTitle')}
               >
-                <span>{activeSession.name || 'Unnamed Session'}</span>
+                <span>{activeSession.name || t('unnamedSession')}</span>
               </div>
             )}
             {getPlatform(activeSession.hardware_platform) && (
-              <span className="platform-badge" title="Hardware platform">
+              <span className="platform-badge" title={t('hardwarePlatform')}>
                 {getPlatform(activeSession.hardware_platform).label}
               </span>
             )}
@@ -114,52 +116,65 @@ const TitleBar = ({
             <button 
               className="topbar-button save" 
               onClick={onSaveSession}
-              title="Save current code and console"
+              title={t('saveSessionTitle')}
             >
-              SAVE SESSION
+              {t('saveSession')}
             </button>
           )}
           {onOpenSessions && (
-            <button 
-              className="topbar-button" 
+            <button
+              className="topbar-button"
               onClick={onOpenSessions}
-              title="Switch between editor sessions"
+              title={t('editorSessionsTitle')}
             >
-              EDITOR SESSIONS
+              {t('editorSessions')}
             </button>
           )}
           {onOpenHardwareConfig && activeSession?.hardware_platform === 'lilybot' && (
             <button
               className="topbar-button"
               onClick={onOpenHardwareConfig}
-              title="Configure your hardware pin mapping"
+              title={t('configureHardwareTitle')}
             >
-              CONFIGURE HARDWARE
+              {t('configureHardware')}
             </button>
           )}
-          <button 
-            className="topbar-button" 
+          <button
+            className="topbar-button"
             onClick={() => setShowAbout(true)}
-            title="About this application"
+            title={t('aboutTitle')}
           >
-            ABOUT
+            {t('about')}
           </button>
           {onShowDebug && (
-            <button 
-              className="topbar-button" 
+            <button
+              className="topbar-button"
               onClick={onShowDebug}
-              title="Open debug console"
+              title={t('debugTitle')}
             >
-              DEBUG
+              {t('debug')}
             </button>
           )}
-          <button 
-            className="topbar-button logout" 
+          <button
+            className="topbar-button logout"
             onClick={handleLogOut}
-            title="Sign out of your account"
+            title={t('logOutTitle')}
           >
-            LOG OUT
+            {t('logOut')}
           </button>
+          {instance.locales.available.length > 1 && (
+            <div className="topbar-lang-toggle">
+              {instance.locales.available.map((code) => (
+                <button
+                  key={code}
+                  className={`topbar-lang-btn${lang === code ? ' topbar-lang-btn--active' : ''}`}
+                  onClick={() => switchLang(code)}
+                >
+                  {code.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

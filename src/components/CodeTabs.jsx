@@ -5,6 +5,7 @@
 
 import { useState, useRef } from 'react';
 import './CodeTabs.css';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const CodeTabs = ({
   codeRecords,
@@ -13,6 +14,7 @@ const CodeTabs = ({
   onCreateCode,
   onRenameCode,
 }) => {
+  const { t } = useLanguage();
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
   const tabsContainerRef = useRef(null);
@@ -92,7 +94,7 @@ const CodeTabs = ({
                       e.stopPropagation();
                       handleStartEdit(codeRecord, index);
                     }}
-                    aria-label="Rename tab"
+                    aria-label={t('renameTab')}
                   >
                     &#9998;
                   </button>
@@ -101,7 +103,7 @@ const CodeTabs = ({
             </div>
           );
         })}
-        <button className="code-tab-add" onClick={onCreateCode} aria-label="Add new code">
+        <button className="code-tab-add" onClick={onCreateCode} aria-label={t('addNewCode')}>
           +
         </button>
       </div>

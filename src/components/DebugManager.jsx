@@ -4,6 +4,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 import './ModalBase.css';
 import './DebugManager.css';
 
@@ -54,6 +55,7 @@ console.warn = (...args) => {
 };
 
 const DebugManager = ({ visible, onClose }) => {
+  const { t } = useLanguage();
   const [logs, setLogs] = useState(globalLogs);
   const [copyNotifyVisible, setCopyNotifyVisible] = useState(false);
   
@@ -100,7 +102,7 @@ const DebugManager = ({ visible, onClose }) => {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content modal-content-wide dbg-box" onClick={(e) => e.stopPropagation()}>
-        <div className="dbg-header">Console Log</div>
+        <div className="dbg-header">{t('debugHeader')}</div>
         <div className="dbg-body-terminal" ref={logBodyRef}>
           {logs.map((entry, idx) => (
             <div key={idx} className={`dbg-log-entry dbg-log-${entry.type}`}>
@@ -108,19 +110,19 @@ const DebugManager = ({ visible, onClose }) => {
             </div>
           ))}
           {logs.length === 0 && (
-            <div className="dbg-empty">No logs yet. Console output will appear here.</div>
+            <div className="dbg-empty">{t('noLogs')}</div>
           )}
         </div>
 
         <div className="dbg-controls">
           {copyNotifyVisible && (
-            <span className="dbg-copy-notify">Copied to Clipboard!</span>
+            <span className="dbg-copy-notify">{t('copiedToClipboard')}</span>
           )}
           <button className="dbg-button" onClick={handleCopyToClipboard}>
-            Copy Console
+            {t('copyConsole')}
           </button>
           <button className="dbg-button" onClick={onClose}>
-            Close
+            {t('close')}
           </button>
         </div>
 
@@ -130,7 +132,7 @@ const DebugManager = ({ visible, onClose }) => {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Report a Bug
+            {t('reportBug')}
           </a>
         </div>
       </div>
