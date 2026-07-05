@@ -26,5 +26,6 @@ camp_users.csv
 
 # Cache
 __pycache__/
+modal_functions/__pycache__
 *.pyc
 research_data
