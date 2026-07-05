@@ -60,9 +60,9 @@ function AppContent() {
   const containerRef = useRef(null);
   const spikeEditorRef = useRef(null);
 
-  // Show auth modal if not authenticated
+  // Show auth modal if not authenticated (never on anonymous instances)
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (instance.telemetry && !authLoading && !user) {
       setShowAuthModal(true);
     } else {
       setShowAuthModal(false);
@@ -78,8 +78,13 @@ function AppContent() {
   }, [user]);
 
   // Check whether the user has recorded their student group yet.
+  // No profiles without telemetry — skip straight to "checked".
   useEffect(() => {
     if (user && !authLoading && !profileChecked) {
+      if (!instance.telemetry) {
+        setProfileChecked(true);
+        return;
+      }
       getUserProfile().then((profile) => {
         setNeedsStudentGroup(profileNeedsStudentGroup(profile));
         setProfileChecked(true);

@@ -1,28 +1,13 @@
 /**
  * Local (browser-only) persistence adapter for no-telemetry instances.
- * Implemented in the no-telemetry phase of the unification migration; until
- * then every call throws so accidental use is loud.
+ * Same interface as supabaseAdapter (see ../index.js); rows live in a
+ * localStorage-backed store (./store.js) instead of Supabase.
  */
 
-function stubGroup(group) {
-  return new Proxy(
-    {},
-    {
-      get(_target, name) {
-        return () => {
-          throw new Error(
-            `localAdapter.${group}.${String(name)} is not implemented yet`
-          );
-        };
-      },
-    }
-  );
-}
+import * as sessions from './sessions';
+import * as logging from './logging';
+import * as usage from './usage';
+import * as profile from './profile';
+import * as hardware from './hardware';
 
-export default {
-  sessions: stubGroup('sessions'),
-  logging: stubGroup('logging'),
-  usage: stubGroup('usage'),
-  profile: stubGroup('profile'),
-  hardware: stubGroup('hardware'),
-};
+export default { sessions, logging, usage, profile, hardware };

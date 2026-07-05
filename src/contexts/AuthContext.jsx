@@ -1,6 +1,10 @@
 /**
  * Authentication Context
- * Provides authentication state and functions globally
+ * Provides authentication state and functions globally.
+ *
+ * Instances with telemetry use Supabase email/password auth; no-telemetry
+ * instances run fully anonymous — a static local user, no login, no
+ * Supabase calls.
  */
 
 import { createContext, useContext, useState, useEffect } from 'react';
@@ -13,10 +17,35 @@ import {
   isAdmin as checkIsAdmin,
   ensureAccessLevel,
 } from '../services/auth';
+import instance from '../config/instance';
 
 const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
+const ANONYMOUS_USER = {
+  id: 'local',
+  email: null,
+  user_metadata: { access_level: 'anonymous' },
+  app_metadata: {},
+};
+
+const ANONYMOUS_AUTH_VALUE = {
+  user: ANONYMOUS_USER,
+  session: null,
+  loading: false,
+  isAdmin: false,
+  authError: null,
+  signInWithPassword: async () => {},
+  signUpWithPassword: async () => {},
+  signOut: async () => {},
+};
+
+const AnonymousAuthProvider = ({ children }) => (
+  <AuthContext.Provider value={ANONYMOUS_AUTH_VALUE}>
+    {children}
+  </AuthContext.Provider>
+);
+
+const SupabaseAuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -123,6 +152,10 @@ export const AuthProvider = ({ children }) => {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
+
+export const AuthProvider = instance.telemetry
+  ? SupabaseAuthProvider
+  : AnonymousAuthProvider;
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
