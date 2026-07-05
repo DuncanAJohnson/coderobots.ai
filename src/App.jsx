@@ -15,6 +15,7 @@ import AdminUsageDashboard from './components/admin_usage/AdminUsageDashboard';
 import ReplayView from './components/replay/ReplayView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SessionProvider, useSession } from './contexts/SessionContext';
+import instance from './config/instance';
 import { logConsole } from './services/dataLogger';
 import {
   getUserProfile,
@@ -372,7 +373,9 @@ function App() {
         Replay viewer is public and must never touch auth/Supabase, so it is
         rendered OUTSIDE AuthProvider/SessionProvider (both hit Supabase on mount).
       */}
-      <Route path="/view-data" element={<ReplayView />} />
+      {instance.routes.admin && (
+        <Route path="/view-data" element={<ReplayView />} />
+      )}
       <Route
         path="/*"
         element={
@@ -380,8 +383,12 @@ function App() {
             <SessionProvider>
               <Routes>
                 <Route path="/" element={<AppContent />} />
-                <Route path="/data" element={<DataExtractor />} />
-                <Route path="/usage" element={<AdminUsageDashboard />} />
+                {instance.routes.admin && (
+                  <Route path="/data" element={<DataExtractor />} />
+                )}
+                {instance.routes.admin && (
+                  <Route path="/usage" element={<AdminUsageDashboard />} />
+                )}
               </Routes>
             </SessionProvider>
           </AuthProvider>

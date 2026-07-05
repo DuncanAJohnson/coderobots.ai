@@ -6,9 +6,11 @@
  * the current event's timestamp, and a short description of what just happened.
  */
 
-import brand from '../../config/brand';
+import instance from '../../config/instance';
 import '../TitleBar.css';
 import './Replay.css';
+
+const brand = instance.brand;
 
 function formatTimestamp(ts) {
   if (!ts) return '';

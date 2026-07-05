@@ -6,10 +6,12 @@
 import { useState, useRef, useEffect } from 'react';
 import AboutModal from './AboutModal';
 import { signOut } from '../services/auth';
-import brand from '../config/brand';
+import instance from '../config/instance';
 import { getPlatform } from '../platforms';
 import './ModalBase.css';
 import './TitleBar.css';
+
+const brand = instance.brand;
 
 const TitleBar = ({
   onSaveSession,

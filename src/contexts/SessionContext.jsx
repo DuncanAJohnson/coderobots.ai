@@ -27,8 +27,15 @@ import {
 } from '../services/dataLogger';
 import { getPlatform, PLATFORMS } from '../platforms';
 import { getCurrentUserHardwareConfig, getHardwareCatalog, toPromptHardwareConfig } from '../services/hardwareConfig';
+import instance from '../config/instance';
 
 const SessionContext = createContext();
+
+// Platforms this instance exposes for new sessions. getPlatform() stays
+// unfiltered so legacy sessions on a disabled platform remain readable.
+const AVAILABLE_PLATFORMS = PLATFORMS.filter((p) =>
+  instance.platforms.includes(p.id)
+);
 
 export const SessionProvider = ({ children }) => {
   const [activeSession, setActiveSession] = useState(null);
@@ -575,7 +582,7 @@ export const SessionProvider = ({ children }) => {
     sessions,
     loading,
     activePlatform,
-    availablePlatforms: PLATFORMS,
+    availablePlatforms: AVAILABLE_PLATFORMS,
     pendingPlatformSession,
     clearPendingPlatformSession,
     createSessionWithPlatform,
