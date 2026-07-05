@@ -5,11 +5,13 @@
 
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import './ModalBase.css';
 import './AuthModal.css';
 
 const AuthModal = ({ visible }) => {
   const { signInWithPassword, signUpWithPassword, authError } = useAuth();
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
@@ -33,8 +35,8 @@ const AuthModal = ({ visible }) => {
   return (
     <div className="modal-overlay">
       <div className="modal-content auth-modal">
-        <h2>Welcome to the AI Editor</h2>
-        <p>Please sign in to continue.</p>
+        <h2>{t('authWelcome')}</h2>
+        <p>{t('authSignInPrompt')}</p>
 
         {authError && (
           <div className="auth-error">
@@ -45,7 +47,7 @@ const AuthModal = ({ visible }) => {
         <form onSubmit={handlePasswordAuth} className="auth-form">
           <input
             type="email"
-            placeholder="Email"
+            placeholder={t('email')}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -53,14 +55,14 @@ const AuthModal = ({ visible }) => {
           />
           <input
             type="password"
-            placeholder="Password"
+            placeholder={t('password')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
             className="auth-input"
           />
           <button type="submit" className="auth-button password-button">
-            {isSignUp ? 'Sign Up' : 'Sign In'}
+            {isSignUp ? t('signUp') : t('signIn')}
           </button>
         </form>
 
@@ -69,7 +71,7 @@ const AuthModal = ({ visible }) => {
           onClick={() => setIsSignUp(!isSignUp)}
           className="auth-toggle-button"
         >
-          {isSignUp ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
+          {isSignUp ? t('authHaveAccount') : t('authNeedAccount')}
         </button>
       </div>
     </div>

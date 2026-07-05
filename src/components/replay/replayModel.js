@@ -1,75 +1,40 @@
 /**
  * Replay data model.
  *
- * Parses a per-session merged CSV (produced by scripts/merge_sessions_to_csv.py)
- * and turns it into a list of immutable "frames" — one per event — that fully
- * describe the editor/chat state at that point in the replay.
+ * Turns a merged per-session CSV into a list of immutable "frames" — one per
+ * event — that fully describe the editor/chat state at that point in the replay.
  *
- * Everything here is pure and runs entirely in the browser; no network.
+ * Format-specific parsing lives in ./formats/ (one adapter per editor
+ * generation). Each adapter normalizes its CSV into canonical events + a
+ * capability `profile`; everything here operates on that canonical shape, so it
+ * never needs to know which editor version produced the file.
+ *
+ * Everything is pure and runs entirely in the browser; no network.
  */
 
-import Papa from 'papaparse';
+import { splitCsvRows, isBlank } from './formats/csvRows';
+import { selectFormat } from './formats';
+
+// Re-exported for back-compat with any importer of the old model API.
+export { isBlank };
 
 const DEFAULT_CODE_TAB = 'Code Tab';
 const DEFAULT_CHAT_TAB = 'Chat';
 
-/** True for null/empty/whitespace and the literal string 'None'. */
-function isBlank(value) {
-  if (value === null || value === undefined) return true;
-  const text = String(value).trim();
-  return text === '' || text.toLowerCase() === 'none';
-}
-
 /**
- * Parse the raw CSV text into { meta, events }.
- *
- * The file is a small metadata block, a blank line, then a header row that
- * starts with "Event ID" followed by the time-sorted event rows.
+ * Parse the raw CSV text into { meta, events, profile } via the matching format
+ * adapter. `events` are canonical events (see ./formats/canonical.js).
  */
 export function parseSessionCsv(text) {
-  const { data: rows } = Papa.parse(text, { skipEmptyLines: false });
-
-  const headerIdx = rows.findIndex((r) => (r[0] || '').trim() === 'Event ID');
-  if (headerIdx === -1) {
-    throw new Error(
-      'This file does not look like a merged session CSV (no "Event ID" header row was found).'
-    );
-  }
-
-  // --- Metadata block (everything before the header row) ---
-  const metaByKey = {};
-  for (const row of rows.slice(0, headerIdx)) {
-    if (row.length >= 2 && (row[0] || '').trim()) {
-      metaByKey[row[0].trim()] = row[1];
-    }
-  }
-  const meta = {
-    student: metaByKey['Student'] || '',
-    sessionId: metaByKey['Session ID'] || '',
-    sessionName: metaByKey['Session Name'] || '',
-    platform: metaByKey['Hardware Platform'] || '',
-    startedAt: metaByKey['Started At'] || '',
-    lastUpdated: metaByKey['Last Updated'] || '',
-  };
-
-  // --- Event table ---
-  const columns = rows[headerIdx];
-  const events = rows
-    .slice(headerIdx + 1)
-    .filter((r) => r.some((cell) => cell !== '' && cell !== null && cell !== undefined))
-    .map((r) => {
-      const obj = {};
-      columns.forEach((col, i) => {
-        obj[col] = r[i] ?? '';
-      });
-      return obj;
-    });
+  const { columns, metaByKey, eventRows } = splitCsvRows(text);
+  const adapter = selectFormat({ columns, metaByKey });
+  const { meta, events, profile } = adapter.parse({ columns, eventRows, metaByKey });
 
   if (events.length === 0) {
     throw new Error('This session CSV has no events to replay.');
   }
 
-  return { meta, events };
+  return { meta, events, profile };
 }
 
 /**
@@ -119,6 +84,7 @@ function describeEvent(type, fields) {
     case 'interaction':
       return `Button pressed: ${fields.buttonName || 'unknown'}`;
     case 'message':
+      if (fields.role === 'system') return 'System priming message';
       return `New message from ${
         fields.role === 'user' ? 'User' : 'AI Bot'
       } in "${fields.tabName}"`;
@@ -131,7 +97,8 @@ function describeEvent(type, fields) {
  * Build one frame per event. Each frame is a self-contained snapshot of what
  * the replay UI should show at that step.
  *
- * Tabs are keyed by name (the CSV carries no tab IDs); same-named tabs merge.
+ * Tabs are keyed by name (canonical events carry no tab IDs); same-named tabs
+ * merge, and formats without tabs collapse onto a single implicit tab.
  */
 export function buildFrames(events) {
   const codeTabs = new Map(); // name -> latest content
@@ -143,8 +110,8 @@ export function buildFrames(events) {
   const frames = [];
 
   for (const ev of events) {
-    const type = ev['Type'];
-    const timestamp = ev['Timestamp'] || '';
+    const type = ev.type;
+    const timestamp = ev.timestamp || '';
 
     let changedLines = null;
     let codeTabSwitched = false;
@@ -154,31 +121,33 @@ export function buildFrames(events) {
     const descFields = {};
 
     if (type === 'code') {
-      const name = !isBlank(ev['Code Tab Name']) ? ev['Code Tab Name'] : DEFAULT_CODE_TAB;
-      const content = ev['Code'] || '';
+      const name = !isBlank(ev.codeTabName) ? ev.codeTabName : DEFAULT_CODE_TAB;
+      const content = ev.code || '';
       const prevContent = codeTabs.get(name) ?? '';
       changedLines = diffLines(prevContent, content);
       codeTabs.set(name, content);
       codeTabSwitched = activeCodeTab !== name;
       activeCodeTab = name;
       descFields.tabName = name;
-      descFields.saveSource = ev['Code Save Source'] || '';
+      descFields.saveSource = ev.codeSaveSource || '';
     } else if (type === 'console') {
-      consoleText = ev['Console'] || '';
-      descFields.saveSource = ev['Console Save Source'] || '';
+      consoleText = ev.console || '';
+      descFields.saveSource = ev.consoleSaveSource || '';
     } else if (type === 'interaction') {
-      buttonName = ev['Button Clicked'] || '';
+      buttonName = ev.buttonName || '';
       descFields.buttonName = buttonName;
     } else if (type === 'message') {
-      const name = !isBlank(ev['Chat Tab Name']) ? ev['Chat Tab Name'] : DEFAULT_CHAT_TAB;
-      const role = ev['Message Author'] === 'user' ? 'user' : 'bot';
+      const name = !isBlank(ev.chatTabName) ? ev.chatTabName : DEFAULT_CHAT_TAB;
+      const author = (ev.messageAuthor || '').toLowerCase();
+      const role = author === 'user' ? 'user' : author === 'system' ? 'system' : 'bot';
       const msg = {
         role,
-        content: ev['Message'] || '',
-        aiModel: ev['AI Model'] || '',
-        codingLevel: ev['LLM Coding Level'] || '',
-        promptTokens: ev['Prompt Tokens'] || '',
-        completionTokens: ev['Completion Tokens'] || '',
+        content: ev.message || '',
+        aiModel: ev.aiModel || '',
+        codingLevel: ev.codingLevel || '',
+        promptTokens: ev.promptTokens || '',
+        completionTokens: ev.completionTokens || '',
+        contextAttached: !!(ev.codeContextAttached || ev.consoleContextAttached),
       };
       if (!convs.has(name)) convs.set(name, []);
       const list = convs.get(name);
@@ -187,7 +156,7 @@ export function buildFrames(events) {
       chatTabSwitched = activeChatTab !== name;
       activeChatTab = name;
       descFields.tabName = name;
-      descFields.role = ev['Message Author'];
+      descFields.role = role;
     }
 
     frames.push({
@@ -219,9 +188,9 @@ export function buildFrames(events) {
   return frames;
 }
 
-/** Parse + build in one call. Returns { meta, events, frames }. */
+/** Parse + build in one call. Returns { meta, events, profile, frames }. */
 export function loadSession(text) {
-  const { meta, events } = parseSessionCsv(text);
+  const { meta, events, profile } = parseSessionCsv(text);
   const frames = buildFrames(events);
-  return { meta, events, frames };
+  return { meta, events, profile, frames };
 }

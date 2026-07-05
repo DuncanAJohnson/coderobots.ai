@@ -292,6 +292,10 @@ def main():
 
         with out_path.open("w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
+            # Bump whenever EVENT_COLUMNS / the metadata block changes shape; the
+            # replay viewer selects its parser off this (falling back to header
+            # signatures for files exported before this line existed).
+            writer.writerow(["Schema Version", 1])
             writer.writerow(["Student", student])
             writer.writerow(["Session ID", sid])
             writer.writerow(["User ID", user_id])

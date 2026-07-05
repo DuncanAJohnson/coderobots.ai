@@ -4,9 +4,11 @@
  */
 
 import { useRef, useState } from 'react';
-import brand from '../../config/brand';
+import instance from '../../config/instance';
 import { loadSession } from './replayModel';
 import './Replay.css';
+
+const brand = instance.brand;
 
 const ReplayUpload = ({ onLoaded }) => {
   const inputRef = useRef(null);

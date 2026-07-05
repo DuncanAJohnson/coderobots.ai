@@ -192,3 +192,190 @@
   }
 }
 
+/* LEGO Education hardware icon row + per-icon popover */
+
+.lego-icon-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+
+.lego-icon-wrapper {
+  position: relative;
+  outline: none;
+}
+
+.lego-icon-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #c7d3c0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #2d3a25;
+  cursor: pointer;
+  font-weight: 700;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.lego-icon-button:hover {
+  border-color: #61a836;
+  background: #f4fbef;
+}
+
+.lego-icon-button--has {
+  border-color: #61a836;
+  background: #ecf7e3;
+}
+
+.lego-icon-letter {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.lego-icon-count {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #2d3a25;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+}
+
+.lego-icon-button--has .lego-icon-count {
+  background: #61a836;
+}
+
+/* Popover is portaled to <body> and positioned via inline style coords
+ * computed from the icon's bounding rect, so it escapes ancestor overflow. */
+.lego-icon-popover {
+  position: fixed;
+  z-index: 9999;
+  min-width: 240px;
+  max-width: 320px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #c7d3c0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  text-align: left;
+  color: #1f2937;
+}
+
+.lego-icon-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.lego-icon-popover-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: #2d3a25;
+}
+
+.lego-icon-popover-empty {
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.lego-icon-popover-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lego-icon-popover-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f9fafb;
+}
+
+.lego-icon-popover-row-id {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.lego-icon-popover-row-id .lego-icon-popover-disconnect {
+  margin-left: auto;
+}
+
+.lego-icon-popover-id-label {
+  color: #6b7280;
+}
+
+.lego-icon-popover-id-value {
+  background: transparent;
+  border: 1px dashed transparent;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font: inherit;
+  color: #1f2937;
+  cursor: text;
+}
+
+.lego-icon-popover-id-value:hover {
+  border-color: #c7d3c0;
+  background: #ffffff;
+}
+
+.lego-icon-popover-id-input {
+  font: inherit;
+  padding: 1px 4px;
+  border: 1px solid #61a836;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #1f2937;
+  width: 8em;
+}
+
+.lego-icon-popover-disconnect {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid #e5b4b4;
+  border-radius: 4px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.lego-icon-popover-disconnect:hover {
+  background: #fde8e8;
+  border-color: #b91c1c;
+}
+
+.lego-icon-popover-error {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #b91c1c;
+}
+

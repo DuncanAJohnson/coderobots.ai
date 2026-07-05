@@ -7,6 +7,7 @@ const microbitPlatform = {
   connectionType: 'microbit',
   buildPriming: buildMicrobitPriming,
   stopCode,
+  tutorHwMode: 'microbit',
 };
 
 export default microbitPlatform;

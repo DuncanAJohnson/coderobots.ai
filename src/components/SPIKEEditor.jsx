@@ -7,11 +7,39 @@ import {
   waitForMicrobitSerialPort,
 } from '../utils/microbitInstall.js';
 import { applyPostConnectFiles, uploadFileToMicrobit } from '../utils/postConnectFiles.js';
+import { createLegoTerminal } from '../utils/legoEducation/legoTerminal.js';
+import {
+  ensurePyodide,
+  runPython,
+  isPyodideReady,
+  interruptPython,
+  freezeBridge,
+  terminatePyodide,
+} from '../utils/legoEducation/pyodideRunner.js';
+import {
+  preloadLegoLibrary,
+  connectDevice as legoConnectDevice,
+  disconnectDevice as legoDisconnectDevice,
+  renameDevice as legoRenameDevice,
+  disconnectAll as legoDisconnectAll,
+  stopAllMotion as legoStopAllMotion,
+  getConnectionState as legoGetConnectionState,
+  subscribe as legoSubscribe,
+} from '../utils/legoEducation/legoDevices.js';
+import {
+  connectEsp32 as connectEsp32Arduino,
+  flashBinary as flashEsp32Binary,
+  resetEsp32,
+  disconnectEsp32,
+} from '../utils/esp32/esp32Flasher.js';
+import { ESP32_USB_FILTERS, findAuthorizedEsp32SerialPort } from '../utils/esp32/esp32UsbFilters.js';
+import { compileSketch, Esp32CompileError } from '../utils/esp32/esp32Compile.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import CodeTabs from './CodeTabs.jsx';
 import FlashProgressModal from './FlashProgressModal.jsx';
 import { useSession } from '../contexts/SessionContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { logConsole, logInteraction } from '../services/dataLogger';
 import './SPIKEEditor.css';
 
@@ -19,13 +47,21 @@ const FIFO_SIZE = 10000;
 
 
 const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
+  const { t } = useLanguage();
+  // The Board and its callbacks are created once on mount, so they would
+  // capture the first render's `t` (and thus the initial language). Read `t`
+  // through this ref so status messages always use the current language.
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  });
   const [connected, setConnected] = useState(false);
   const [connectedBoard, setConnectedBoard] = useState(null);
   const [connectedPlatformId, setConnectedPlatformId] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [statusBanner, setStatusBanner] = useState({
     type: 'info',
-    message: 'Not connected.'
+    message: t('notConnected')
   });
   const [mode, setMode] = useState('disconnected');
   const [isRunning, setIsRunning] = useState(false);
@@ -34,6 +70,8 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const [connectPhase, setConnectPhase] = useState('idle');
   const [flashProgress, setFlashProgress] = useState(undefined);
   const [flashMessage, setFlashMessage] = useState('');
+  // LEGO Education BLE: per-kind device lists for the ControlPanel icon row.
+  const [legoConnectionState, setLegoConnectionState] = useState(legoGetConnectionState);
 
   const {
     codeRecords,
@@ -47,9 +85,32 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     createSnapshot
   } = useSession();
 
+  const isLegoMode = activePlatform?.connectionType === 'lego-ble';
+  // ESP32 C++/Arduino: sketches compile on the Modal arduino-cli service and
+  // flash over WebSerial via esptool-js — no REPL, raw serial monitor only.
+  const isArduinoMode = activePlatform?.connectionType === 'esp32-arduino';
+
   const editorRef = useRef(null);
   const boardRef = useRef(null);
   const replContainerRef = useRef(null);
+  // LEGO Education BLE: xterm controller for Pyodide stdout/stderr (the serial
+  // Board owns its own terminal; only one of the two is ever mounted).
+  const legoTerminalRef = useRef(null);
+  // Single-flight init of the lego terminal + Pyodide worker. Cleared on
+  // failure (so the next connect retries) and on leaving lego mode.
+  const legoRuntimePromiseRef = useRef(null);
+  // Bumped every time lego mode is torn down, so in-flight async init can
+  // detect it went stale and dispose whatever it just created.
+  const legoModeGenRef = useRef(0);
+  // ESP32 Arduino: the flasher session (serial port + monitor pump), the xterm
+  // controller hosting its output, and the write-through wrapper handed to the
+  // flasher so everything it prints also lands in the console buffer.
+  const arduinoSessionRef = useRef(null);
+  const arduinoTerminalRef = useRef(null);
+  const arduinoIoRef = useRef(null);
+  // Serializes compile+flash: a second flash on the same port mid-write
+  // would corrupt it (state-based isRunning updates too late to guard).
+  const arduinoFlashInFlightRef = useRef(false);
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
   const isLocalChangeRef = useRef(false);
@@ -108,15 +169,18 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   };
 
   const getConnectionErrorMessage = (error) => {
-    const message = error?.message || 'Unknown serial error';
+    // Use tRef so the once-created Board `onerror` callback still reports in
+    // the currently selected language.
+    const tr = tRef.current;
+    const message = error?.message || tr('unknownSerialError');
     if (/WebUSB is not available/i.test(message)) {
-      return 'Connection failed: WebUSB is required to install micro:bit MicroPython. Use a Chromium-based browser.';
+      return tr('errWebUsbRequired');
     }
     if (/No device selected|no-device-selected/i.test(message)) {
-      return 'Connection failed: no micro:bit selected in the browser device picker.';
+      return tr('errNoMicrobitSelected');
     }
     if (/Bad response for 8 -> 17|reconnect-microbit/i.test(message) || /reconnect-microbit/i.test(error?.code || '')) {
-      return 'Connection failed: unstable WebUSB link to micro:bit. Unplug/replug the board, then click Connect micro:bit again.';
+      return tr('errUnstableWebUsb');
     }
     if (/WebUSB still unstable|WebUSB flashing link stayed unstable/i.test(message)) {
       return message;
@@ -125,15 +189,15 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
       return message;
     }
     if (/did not respond like a MicroPython REPL/i.test(message)) {
-      return 'Connection failed: selected device is not a compatible MicroPython REPL.';
+      return tr('errNotMicroPythonRepl');
     }
     if (/Failed to open serial port|NetworkError|busy|resource/i.test(message)) {
-      return 'Connection failed: serial port is busy. Close any other serial connections to the device and try again.';
+      return tr('errSerialPortBusy');
     }
     if (/No port selected by the user/i.test(message)) {
-      return 'Connection failed: no device selected by the user.';
+      return tr('errNoDeviceSelected');
     }
-    return `Connection failed: ${message}`;
+    return tr('errConnectionFailed').replace('{message}', message);
   };
 
   // Expose methods to parent via ref
@@ -175,13 +239,278 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     setStatusBanner({
       type: 'info',
       message: typeMismatch
-        ? 'Disconnecting previous device — session platform changed.'
-        : `Disconnecting — switching to ${activePlatform.label} session. Click Connect to install driver.`,
+        ? tRef.current('disconnectingPlatformChanged')
+        : tRef.current('disconnectingSwitchingTo').replace('{label}', activePlatform.label),
     });
     board.disconnect().catch((error) => {
       console.error('Failed to auto-disconnect after platform switch:', error);
     });
   }, [activePlatform, connected, connectedBoard, connectedPlatformId]);
+
+  // LEGO Education BLE lifecycle. While in lego mode, mirror the device
+  // registry into local state and surface "any device connected" through the
+  // same `connected`/status-banner channel the serial platforms use. On
+  // leaving lego mode, disconnect every BLE device, kill the Pyodide worker
+  // and dispose the lego terminal so serial platforms get a clean slate.
+  useEffect(() => {
+    if (!isLegoMode) return;
+
+    const applyState = (next) => {
+      setLegoConnectionState(next);
+      const anyConnected = Object.values(next).some((devices) =>
+        devices.some((device) => device.connected)
+      );
+      setConnected(anyConnected);
+      setStatusBanner(
+        anyConnected
+          ? { type: 'success', message: tRef.current('legoEducationConnected') }
+          : { type: 'info', message: tRef.current('notConnected') }
+      );
+    };
+
+    applyState(legoGetConnectionState());
+    const unsubscribe = legoSubscribe(applyState);
+
+    return () => {
+      unsubscribe();
+      legoModeGenRef.current += 1;
+      legoDisconnectAll().catch((error) => {
+        console.warn('Failed to disconnect LEGO devices:', error);
+      });
+      try { terminatePyodide(); } catch (error) { console.warn(error); }
+      legoRuntimePromiseRef.current = null;
+      if (legoTerminalRef.current) {
+        try { legoTerminalRef.current.dispose(); } catch { /* already gone */ }
+        legoTerminalRef.current = null;
+      }
+      bufferRef.current = '';
+      pendingRunSaveRef.current = false;
+      setBuffer('');
+      setConnected(false);
+      setIsRunning(false);
+    };
+  }, [isLegoMode]);
+
+  // ESP32 Arduino lifecycle: on leaving arduino mode, release the serial port
+  // and dispose the terminal so other platforms get a clean slate. (Entering
+  // the mode is lazy — the terminal mounts on the first connect.)
+  useEffect(() => {
+    if (!isArduinoMode) return;
+    return () => {
+      const session = arduinoSessionRef.current;
+      if (session) {
+        arduinoSessionRef.current = null;
+        disconnectEsp32(session).catch((error) => {
+          console.warn('Failed to disconnect ESP32:', error);
+        });
+      }
+      if (arduinoTerminalRef.current) {
+        try { arduinoTerminalRef.current.dispose(); } catch { /* already gone */ }
+        arduinoTerminalRef.current = null;
+      }
+      arduinoIoRef.current = null;
+      bufferRef.current = '';
+      pendingRunSaveRef.current = false;
+      setBuffer('');
+      setConnected(false);
+      setIsRunning(false);
+    };
+  }, [isArduinoMode]);
+
+  const handleArduinoConnect = async () => {
+    if (isConnecting || connected) return;
+    setIsConnecting(true);
+    void logInteractionSafe('connect_esp32_arduino');
+
+    try {
+      // Pick the port before any other await: on first use the terminal
+      // factory downloads xterm from a CDN, and requestPort() must stay
+      // inside the click's user-activation window.
+      let port = await findAuthorizedEsp32SerialPort();
+      if (!port) {
+        setStatusBanner({ type: 'info', message: t('waitingEsp32Selection') });
+        port = await navigator.serial.requestPort({ filters: ESP32_USB_FILTERS });
+      }
+
+      if (!arduinoTerminalRef.current) {
+        const host = replContainerRef.current;
+        if (!host) throw new Error('Terminal container is not mounted');
+        arduinoTerminalRef.current = await createLegoTerminal(host);
+      }
+      const xterm = arduinoTerminalRef.current.terminal;
+
+      // Everything the flasher/monitor prints is mirrored into the console
+      // buffer so run logging, the console-content-changed event and "Add
+      // Console to Chat" behave exactly like the serial path.
+      const appendOutput = (text) => {
+        bufferRef.current = (bufferRef.current + text).slice(-FIFO_SIZE);
+        setBuffer(bufferRef.current);
+      };
+      const io = {
+        write: (data) => { appendOutput(data); xterm.write(data); },
+        writeln: (data) => { appendOutput(`${data}\n`); xterm.writeln(data); },
+        clear: () => xterm.clear(),
+      };
+      arduinoIoRef.current = io;
+
+      const session = await connectEsp32Arduino({ terminal: io, preselectedPort: port });
+      arduinoSessionRef.current = session;
+      setConnected(true);
+      setConnectedPlatformId(activePlatform?.id || null);
+      setStatusBanner({ type: 'success', message: tRef.current('esp32Connected') });
+      io.write(`\r\n${tRef.current('esp32Connected')}\r\n`);
+    } catch (error) {
+      console.error('ESP32 connection failed:', error);
+      setConnected(false);
+      setConnectedPlatformId(null);
+      const message = getConnectionErrorMessage(error);
+      setStatusBanner({ type: 'error', message });
+      arduinoIoRef.current?.write(`\r\n\x1b[31m${message}\x1b[0m\r\n`);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  // Arduino run path: compile the sketch on the Modal service, then flash the
+  // binary over WebSerial; the monitor re-attaches afterwards and streams the
+  // sketch's Serial output. Telemetry mirrors the serial path — snapshot +
+  // interaction at dispatch, console tail once the flash settles.
+  const handleArduinoRun = async () => {
+    const session = arduinoSessionRef.current;
+    const io = arduinoIoRef.current;
+    if (!session || !connected || !io) return;
+    if (arduinoFlashInFlightRef.current) return;
+    arduinoFlashInFlightRef.current = true;
+    setIsRunning(true);
+
+    const codeToRun = editorRef.current?.getCode() || currentCodeContent;
+    const startedAt = Date.now();
+    try {
+      await createSnapshot('run_device');
+      await logInteractionSafe('run_device');
+
+      io.write(`\r\n\x1b[36m${tRef.current('esp32Compiling')}\x1b[0m\r\n`);
+      const compileResult = await compileSketch(codeToRun);
+
+      io.write(`\x1b[36m${tRef.current('esp32Flashing')}\x1b[0m\r\n`);
+      const xterm = arduinoTerminalRef.current?.terminal;
+      await flashEsp32Binary(
+        session,
+        {
+          merged: compileResult.merged,
+          mergedOffset: compileResult.mergedOffset,
+          app: compileResult.app,
+          appOffset: compileResult.appOffset,
+          partitionsHash: compileResult.partitionsHash,
+          mode: 'auto',
+        },
+        (written, total) => {
+          // Progress goes straight to the xterm (carriage-return updates would
+          // spam the console buffer).
+          const pct = Math.round((written / total) * 100);
+          xterm?.write(`\rFlash: ${pct}% (${written}/${total})`);
+        }
+      );
+      const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+      io.write(`\r\n\x1b[32mOK (${seconds}s)\x1b[0m\r\n`);
+    } catch (error) {
+      if (error instanceof Esp32CompileError) {
+        io.write(`\r\n\x1b[31m${tRef.current('esp32CompileFailed')}\x1b[0m\r\n`);
+        const details = error.stderr || error.message || '';
+        if (details) {
+          io.write(`\x1b[31m${String(details).replace(/\n/g, '\r\n')}\x1b[0m\r\n`);
+        }
+      } else {
+        console.error('ESP32 flash failed:', error);
+        io.write(`\r\n\x1b[31m${String(error?.message || error).replace(/\n/g, '\r\n')}\x1b[0m\r\n`);
+      }
+    } finally {
+      arduinoFlashInFlightRef.current = false;
+      setIsRunning(false);
+      await logConsoleTailSafe(bufferRef.current, 'run_device');
+    }
+  };
+
+  // Lazily mount the lego terminal and boot the Pyodide worker. Called on the
+  // first successful device connect — NOT on platform switch — so the Pyodide
+  // CDN download only happens for users who actually connect LEGO hardware.
+  const ensureLegoRuntime = () => {
+    if (legoRuntimePromiseRef.current) return legoRuntimePromiseRef.current;
+
+    const generation = legoModeGenRef.current;
+    const promise = (async () => {
+      if (!legoTerminalRef.current) {
+        const host = replContainerRef.current;
+        if (!host) throw new Error('Terminal container is not mounted');
+        const controller = await createLegoTerminal(host);
+        if (generation !== legoModeGenRef.current) {
+          try { controller.dispose(); } catch { /* already gone */ }
+          return;
+        }
+        legoTerminalRef.current = controller;
+      }
+
+      // Mirror worker output into the console buffer so run logging, the
+      // console-content-changed event and "Add Console to Chat" all behave
+      // exactly like the serial path.
+      const appendLegoOutput = (text) => {
+        bufferRef.current = (bufferRef.current + text).slice(-FIFO_SIZE);
+        setBuffer(bufferRef.current);
+      };
+
+      legoTerminalRef.current.write(`${tRef.current('legoLoadingPython')}\r\n`);
+      await ensurePyodide({
+        onStdout: (s) => {
+          appendLegoOutput(s);
+          legoTerminalRef.current?.write(s.replace(/\n/g, '\r\n'));
+        },
+        onStderr: (s) => {
+          appendLegoOutput(s);
+          legoTerminalRef.current?.write(`\x1b[31m${s.replace(/\n/g, '\r\n')}\x1b[0m`);
+        },
+      });
+      if (generation !== legoModeGenRef.current) return;
+      legoTerminalRef.current?.write(`\r\n${tRef.current('legoPythonReady')}\r\n`);
+    })();
+
+    legoRuntimePromiseRef.current = promise;
+    promise.catch(() => {
+      // Allow the next connect/run to retry a failed init.
+      if (legoRuntimePromiseRef.current === promise) {
+        legoRuntimePromiseRef.current = null;
+      }
+    });
+    return promise;
+  };
+
+  // Kick off the BLE library fetch as soon as the picker opens so the actual
+  // requestDevice() call inside connectDevice stays within the user gesture.
+  const handleLegoPickerOpen = () => {
+    preloadLegoLibrary();
+  };
+
+  const handleLegoDeviceConnect = async (kind, cardEmoji) => {
+    void logInteractionSafe('connect_lego');
+    const result = await legoConnectDevice(kind, cardEmoji);
+    if (result?.ok) {
+      ensureLegoRuntime().catch((error) => {
+        console.error('[LEGO] Pyodide init failed:', error);
+        const message = tRef.current('errConnectionFailed')
+          .replace('{message}', error?.message || String(error));
+        setStatusBanner({ type: 'error', message });
+        legoTerminalRef.current?.write(`\r\n\x1b[31m${message}\x1b[0m\r\n`);
+      });
+    }
+    return result;
+  };
+
+  const handleLegoDeviceRename = (kind, oldName, newName) =>
+    legoRenameDevice(kind, oldName, newName);
+
+  const handleLegoDeviceDisconnect = async (kind, name) => {
+    void logInteractionSafe('disconnect');
+    await legoDisconnectDevice(kind, name);
+  };
 
   // Handle code changes in the editor (local state only, no database save)
   const handleCodeChange = (newCode) => {
@@ -202,7 +531,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
           setMode('repl');
           setStatusBanner({
             type: 'success',
-            message: 'Device Status: Connected. REPL is ready.'
+            message: tRef.current('deviceConnectedRepl')
           });
         },
         ondisconnect: () => {
@@ -219,13 +548,13 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
           setIsRunning(false);
           setStatusBanner({
             type: 'info',
-            message: 'Device Status: Disconnected.'
+            message: tRef.current('deviceDisconnected')
           });
         },
         onportselected: () => {
           setStatusBanner({
             type: 'info',
-            message: 'Attempting to connect...'
+            message: tRef.current('attemptingToConnect')
           });
         },
         onerror: (error) => {
@@ -344,6 +673,30 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   }, []);
 
   const handleDisconnect = async () => {
+    if (isArduinoMode) {
+      const session = arduinoSessionRef.current;
+      // Closing the port mid-flash would corrupt the write in progress.
+      if (!session || isConnecting || arduinoFlashInFlightRef.current) return;
+      setIsConnecting(true);
+      try {
+        setStatusBanner({ type: 'info', message: t('disconnecting') });
+        await logInteractionSafe('disconnect');
+        await logConsoleTailSafe(bufferRef.current, 'disconnect');
+        arduinoSessionRef.current = null;
+        await disconnectEsp32(session);
+        setConnected(false);
+        setConnectedPlatformId(null);
+        setIsRunning(false);
+        bufferRef.current = '';
+        setBuffer('');
+        setStatusBanner({ type: 'info', message: t('deviceDisconnected') });
+        arduinoIoRef.current?.write(`\r\n${t('deviceDisconnected')}\r\n`);
+      } finally {
+        setIsConnecting(false);
+      }
+      return;
+    }
+
     const board = boardRef.current;
     if (!board || isConnecting) return;
 
@@ -352,7 +705,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
       if (!connected) return;
       setStatusBanner({
         type: 'info',
-        message: 'Disconnecting...'
+        message: t('disconnecting')
       });
       await logInteractionSafe('disconnect');
       await logConsoleTailSafe(bufferRef.current, 'disconnect');
@@ -369,14 +722,14 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const connectMicrobit = async (board) => {
     setConnectPhase('probing');
     setFlashProgress(undefined);
-    setFlashMessage('Opening micro:bit serial port...');
+    setFlashMessage(t('flashMsgOpeningSerial'));
 
     // Step 1: Try serial, preferring an already-authorized port (no picker).
     const cachedPort = await findAuthorizedMicrobitSerialPort();
     if (!cachedPort) {
       setStatusBanner({
         type: 'info',
-        message: 'Waiting for micro:bit serial device selection...'
+        message: t('waitingMicrobitSelection')
       });
     }
 
@@ -398,7 +751,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     // device is not already authorized.
     setConnectPhase('flashing');
     setFlashProgress(undefined);
-    setFlashMessage('Opening WebUSB link to micro:bit...');
+    setFlashMessage(t('flashMsgOpeningWebUsb'));
 
     let installerSession = null;
     try {
@@ -421,16 +774,14 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     // reconnect silently using the cached grant.
     setConnectPhase('reconnecting');
     setFlashProgress(undefined);
-    setFlashMessage('Waiting for micro:bit to reappear...');
+    setFlashMessage(t('flashMsgReconnecting'));
 
     const reenumeratedPort = await waitForMicrobitSerialPort(8000);
     if (!reenumeratedPort) {
-      throw new Error(
-        'micro:bit did not reappear after flashing. Unplug/replug the board, then click Connect again.'
-      );
+      throw new Error(t('errMicrobitNotReappear'));
     }
 
-    setFlashMessage('Reconnecting to micro:bit REPL...');
+    setFlashMessage(t('flashMsgReconnectingRepl'));
     await board.connect(replContainerRef.current, true, {
       boardType: 'microbit',
       serialPort: reenumeratedPort,
@@ -442,7 +793,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const connectPico = async (board) => {
     setStatusBanner({
       type: 'info',
-      message: 'Waiting for Pico serial device selection...'
+      message: t('waitingPicoSelection')
     });
     await board.connect(replContainerRef.current, true, { boardType: 'pico' });
     await board.interrupt(150);
@@ -457,7 +808,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const connectEsp32 = async (board) => {
     setStatusBanner({
       type: 'info',
-      message: 'Waiting for ESP32 serial device selection...'
+      message: t('waitingEsp32Selection')
     });
     await board.connect(replContainerRef.current, true, { boardType: 'esp32' });
     await board.interrupt(150);
@@ -496,7 +847,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
           console.error('Post-connect file install failed:', error);
           setStatusBanner({
             type: 'error',
-            message: `Failed to install ${error?.label || 'driver'} on micro:bit — try reconnecting.`,
+            message: t('errInstallDriverMicrobit').replace('{label}', error?.label || t('driver')),
           });
         }
       } else if (targetBoard === 'esp32') {
@@ -507,7 +858,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
           console.error('Post-connect file install failed:', error);
           setStatusBanner({
             type: 'error',
-            message: `Failed to install ${error?.label || 'driver'} on device — try reconnecting.`,
+            message: t('errInstallDriverDevice').replace('{label}', error?.label || t('driver')),
           });
         }
       } else {
@@ -552,7 +903,56 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     }
   };
 
+  // LEGO run path: dispatch the code to the Pyodide worker instead of pasting
+  // over serial. Telemetry mirrors the serial path — snapshot + interaction at
+  // dispatch, console tail once the program finishes. No operationInFlightRef
+  // here: that lock protects the serial paste handshake, and holding it across
+  // the whole (possibly long) Python run would block the Stop button.
+  const handleLegoRun = async () => {
+    if (!connected) return;
+    const codeToRun = editorRef.current?.getCode() || currentCodeContent;
+
+    await createSnapshot('run_device');
+    await logInteractionSafe('run_device');
+
+    if (!isPyodideReady()) {
+      legoTerminalRef.current?.write(`\r\n\x1b[33m${tRef.current('legoLoadingPython')}\x1b[0m\r\n`);
+      // A failed init leaves the promise cleared — retry it here.
+      ensureLegoRuntime().catch(() => {});
+      return;
+    }
+
+    setIsRunning(true);
+    try {
+      legoTerminalRef.current?.write('\r\n>>> run\r\n');
+      await runPython(codeToRun);
+    } catch (error) {
+      // KeyboardInterrupt is expected when the user presses Stop — it's how
+      // the script unwinds. Don't surface it as a failure. ("Programmet blev
+      // stoppet" is the bridge's message when an RPC is rejected mid-stop.)
+      const msg = String(error?.message || error);
+      if (msg.includes('KeyboardInterrupt') || msg.includes('Programmet blev stoppet')) {
+        legoTerminalRef.current?.write('\r\n\x1b[33m[stopped]\x1b[0m\r\n');
+      } else {
+        console.error('Pyodide run failed:', error);
+        legoTerminalRef.current?.write(`\r\n\x1b[31m${msg.replace(/\n/g, '\r\n')}\x1b[0m\r\n`);
+      }
+    } finally {
+      setIsRunning(false);
+      await logConsoleTailSafe(bufferRef.current, 'run_device');
+    }
+  };
+
   const handleRun = async () => {
+    if (isArduinoMode) {
+      await handleArduinoRun();
+      return;
+    }
+    if (isLegoMode) {
+      await handleLegoRun();
+      return;
+    }
+
     const board = boardRef.current;
     if (!board || !connected) return;
     if (operationInFlightRef.current) return;
@@ -589,6 +989,31 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   };
 
   const handleCtrlC = async () => {
+    // Arduino has no Stop button (a sketch can't be interrupted — see
+    // ControlPanel); guard against stray calls reaching the serial path,
+    // where `connected` is true but the serial Board isn't attached.
+    if (isArduinoMode) return;
+    if (isLegoMode) {
+      await logInteractionSafe('send_ctrl_c');
+      setIsRunning(false);
+      // Freeze the bridge FIRST so the Python worker can no longer issue
+      // device commands — any in-flight RPC fails immediately, and any
+      // subsequent motor_run gets rejected on arrival instead of racing
+      // ahead of our motor_stop below.
+      try { freezeBridge(); } catch (e) { console.warn(e); }
+      // Raise KeyboardInterrupt so the script unwinds instead of
+      // continuing to issue (now-failing) commands.
+      try { interruptPython(); } catch (e) { console.warn(e); }
+      // Halt motors directly from the main thread — this BLE call is
+      // not routed through the paused bridge.
+      try { await legoStopAllMotion(); } catch (e) { console.warn(e); }
+      // Send stop a second time once any late GATT writes have drained,
+      // in case the firmware received a motor_run after our first stop.
+      setTimeout(() => { legoStopAllMotion().catch(() => {}); }, 150);
+      legoTerminalRef.current?.write('\r\n\x1b[33m[stop]\x1b[0m\r\n');
+      return;
+    }
+
     const board = boardRef.current;
     if (!board || !connected) return;
     if (operationInFlightRef.current) return;
@@ -603,6 +1028,23 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   };
 
   const handleReset = async () => {
+    if (isArduinoMode) {
+      const session = arduinoSessionRef.current;
+      // Never reset mid-flash — it would corrupt the write in progress.
+      if (!session || !connected || arduinoFlashInFlightRef.current) return;
+      await logInteractionSafe('reset_device');
+      await logConsoleTailSafe(bufferRef.current, 'reset_device');
+      setIsRunning(false);
+      arduinoIoRef.current?.write('\r\n\x1b[33m[reset]\x1b[0m\r\n');
+      try {
+        // Hard-reset via esptool-js — the flashed sketch restarts from setup().
+        await resetEsp32(session);
+      } catch (error) {
+        console.warn('ESP32 reset failed:', error);
+      }
+      return;
+    }
+
     const board = boardRef.current;
     if (!board || !connected) return;
 
@@ -628,6 +1070,8 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     if (boardRef.current?.terminal) {
       boardRef.current.terminal.clear();
     }
+    legoTerminalRef.current?.clear();
+    arduinoTerminalRef.current?.clear();
     bufferRef.current = '';
     setBuffer('');
   };
@@ -635,7 +1079,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const handleSaveToMain = async () => {
     const board = boardRef.current;
     if (!board || !connected) {
-      alert('Cannot save to main.py. Please connect to a device first.');
+      alert(t('cannotSaveToMainPyDevice'));
       return;
     }
 
@@ -660,14 +1104,14 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
       board.terminal?.focus();
     } catch (error) {
       console.error('Failed to save to main.py:', error);
-      alert(`Failed to save to main.py: ${error.message}`);
+      alert(`${t('failedToSaveMainPy')}${error.message}`);
     }
   };
 
   const handleClearMain = async () => {
     const board = boardRef.current;
     if (!board || !connected || connectedBoard !== 'esp32') {
-      alert('Cannot clear main.py. Please connect to the ESP32 first.');
+      alert(t('cannotClearMainPy'));
       return;
     }
     if (operationInFlightRef.current) return;
@@ -688,7 +1132,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
         board.terminal?.focus();
       } catch (error) {
         console.error('Failed to clear main.py from ESP32:', error);
-        alert(`Failed to clear main.py from ESP32: ${error.message}`);
+        alert(`${t('failedToClearMainPy')}${error.message}`);
       }
     } finally {
       operationInFlightRef.current = false;
@@ -698,7 +1142,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const handleClearDownload = async () => {
     const board = boardRef.current;
     if (!board || !connected || connectedBoard !== 'microbit') {
-      alert('Cannot clear download. Please connect to the micro:bit first.');
+      alert(t('cannotClearDownload'));
       return;
     }
     if (operationInFlightRef.current) return;
@@ -719,7 +1163,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
         board.terminal?.focus();
       } catch (error) {
         console.error('Failed to clear download from micro:bit:', error);
-        alert(`Failed to clear download from micro:bit: ${error.message}`);
+        alert(`${t('failedToClearDownload')}${error.message}`);
       }
     } finally {
       operationInFlightRef.current = false;
@@ -729,7 +1173,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const handleDownload = async () => {
     const board = boardRef.current;
     if (!board || !connected || connectedBoard !== 'microbit') {
-      alert('Cannot download. Please connect to the micro:bit first.');
+      alert(t('cannotDownload'));
       return;
     }
     if (operationInFlightRef.current) return;
@@ -753,7 +1197,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
         board.terminal?.focus();
       } catch (error) {
         console.error('Failed to download to micro:bit:', error);
-        alert(`Failed to download to micro:bit: ${error.message}`);
+        alert(`${t('failedToDownload')}${error.message}`);
       }
     } finally {
       operationInFlightRef.current = false;
@@ -782,6 +1226,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
               ref={editorRef}
               initialCode={currentCodeContent}
               onChange={handleCodeChange}
+              language={activePlatform?.editorLanguage || 'python'}
             />
           </div>
         </div>
@@ -798,6 +1243,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
               onConnectMicrobit={() => handleConnect('microbit')}
               onConnectPico={() => handleConnect('pico')}
               onConnectEsp32={() => handleConnect('esp32')}
+              onConnectEsp32Arduino={handleArduinoConnect}
               onDisconnect={handleDisconnect}
               onRun={handleRun}
               onCtrlC={handleCtrlC}
@@ -807,6 +1253,11 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
               onDownload={handleDownload}
               onClearDownload={handleClearDownload}
               onClearMain={handleClearMain}
+              legoConnectionState={legoConnectionState}
+              onLegoPickerOpen={handleLegoPickerOpen}
+              onLegoConnectDevice={handleLegoDeviceConnect}
+              onLegoRenameDevice={handleLegoDeviceRename}
+              onLegoDisconnectDevice={handleLegoDeviceDisconnect}
             />
             {!connected && (
               <div className={`status-banner ${statusBanner.type}`}>

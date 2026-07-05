@@ -6,8 +6,11 @@
 import './ModalBase.css';
 import './SessionModal.css';
 import { getPlatform } from '../platforms';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const SessionModal = ({ visible, sessions, onSelect, onCreateNew, cancellable = false, onCancel }) => {
+  const { t } = useLanguage();
+
   if (!visible) return null;
 
   const handleOverlayClick = (e) => {
@@ -36,17 +39,17 @@ const SessionModal = ({ visible, sessions, onSelect, onCreateNew, cancellable = 
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffMins < 1) return t('justNow');
+    if (diffMins < 60) return t('minutesAgo').replace('{m}', diffMins);
+    if (diffHours < 24) return t('hoursAgo').replace('{h}', diffHours);
+    if (diffDays < 7) return t('daysAgo').replace('{d}', diffDays);
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
 
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2 className="session-modal-title">Select a Session</h2>
+        <h2 className="session-modal-title">{t('selectSession')}</h2>
         
         <div className="session-modal-list">
           {sessions && sessions.length > 0 ? (
@@ -59,10 +62,10 @@ const SessionModal = ({ visible, sessions, onSelect, onCreateNew, cancellable = 
                 <div className="session-modal-button-content">
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center', minWidth: 0 }}>
                     <span className="session-name">
-                      {session.name || 'Unnamed Session'}
+                      {session.name || t('unnamedSession')}
                     </span>
                     {getPlatform(session.hardware_platform) && (
-                      <span className="platform-badge" title="Hardware platform">
+                      <span className="platform-badge" title={t('hardwarePlatform')}>
                         {getPlatform(session.hardware_platform).label}
                       </span>
                     )}
@@ -76,7 +79,7 @@ const SessionModal = ({ visible, sessions, onSelect, onCreateNew, cancellable = 
               </button>
             ))
           ) : (
-            <p className="session-modal-empty">No past sessions found</p>
+            <p className="session-modal-empty">{t('noPastSessions')}</p>
           )}
         </div>
 
@@ -85,7 +88,7 @@ const SessionModal = ({ visible, sessions, onSelect, onCreateNew, cancellable = 
             className="session-modal-button session-modal-new-button"
             onClick={() => onCreateNew?.()}
           >
-            Start New Session
+            {t('startNewSession')}
           </button>
         </div>
       </div>

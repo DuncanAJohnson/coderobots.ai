@@ -1,4 +1,6 @@
-import brand from './brand';
+import instance from './instance';
+
+const brand = instance.brand;
 
 export function applyBrand() {
   const root = document.documentElement.style;

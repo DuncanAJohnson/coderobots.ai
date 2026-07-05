@@ -1,7 +1,9 @@
+import { useLanguage } from '../contexts/LanguageContext';
 import './FlashProgressModal.css';
 import './ModalBase.css';
 
 const FlashProgressModal = ({ open, phase, progress, message }) => {
+  const { t } = useLanguage();
   if (!open) return null;
 
   const hasProgress = typeof progress === 'number';
@@ -9,12 +11,12 @@ const FlashProgressModal = ({ open, phase, progress, message }) => {
 
   const title =
     phase === 'probing'
-      ? 'Checking micro:bit...'
+      ? t('flashTitleProbing')
       : phase === 'flashing'
-      ? 'Installing MicroPython'
+      ? t('flashTitleFlashing')
       : phase === 'reconnecting'
-      ? 'Reconnecting micro:bit...'
-      : 'Connecting micro:bit';
+      ? t('flashTitleReconnecting')
+      : t('flashTitleConnecting');
 
   return (
     <div className="modal-overlay flash-progress-overlay">
@@ -28,10 +30,10 @@ const FlashProgressModal = ({ open, phase, progress, message }) => {
           />
         </div>
         <div className="flash-progress-percent">
-          {hasProgress ? `${pct}%` : 'Working...'}
+          {hasProgress ? `${pct}%` : t('flashWorking')}
         </div>
         <p className="flash-progress-hint">
-          Keep the micro:bit plugged in. This can take up to a minute.
+          {t('flashHint')}
         </p>
       </div>
     </div>

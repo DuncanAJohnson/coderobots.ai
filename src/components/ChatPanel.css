@@ -417,3 +417,58 @@
     cursor:pointer;
     font-size:.75rem;
 }
+
+/* Tutor-pipeline thinking trace (progress events, chat.mode 'tutor') */
+.chat-thinking {
+    margin: .25rem 0 .6rem;
+    padding: .3rem .5rem;
+    background: rgba(0, 0, 0, 0.04);
+    border-left: 3px solid #888;
+    border-radius: 4px;
+    font-size: .78rem;
+    color: #444;
+}
+
+.chat-thinking > summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: #555;
+    list-style: none;
+    user-select: none;
+}
+
+.chat-thinking > summary::-webkit-details-marker {
+    display: none;
+}
+
+.chat-thinking > summary::before {
+    content: '▸';
+    display: inline-block;
+    margin-right: .3rem;
+    transition: transform .15s;
+}
+
+.chat-thinking[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.chat-thinking-steps {
+    margin: .3rem 0 0;
+    padding-left: 1.1rem;
+}
+
+.chat-thinking-steps li {
+    margin-bottom: .35rem;
+}
+
+.chat-thinking-detail {
+    margin-top: .15rem;
+    color: #555;
+    font-weight: normal;
+    white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .72rem;
+    line-height: 1.35;
+    max-height: 12rem;
+    overflow-y: auto;
+}

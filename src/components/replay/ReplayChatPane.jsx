@@ -20,15 +20,18 @@ marked.setOptions({ breaks: true, gfm: true });
 
 const noop = () => {};
 
-const ReplayChatPane = ({ frame }) => {
+const ReplayChatPane = ({ frame, profile }) => {
   const bodyRef = useRef(null);
   const [codeModal, setCodeModal] = useState({ open: false, code: '', lang: '' });
   const [consoleModal, setConsoleModal] = useState({ open: false, content: '' });
+  const [expandedSystem, setExpandedSystem] = useState({}); // message index -> expanded?
 
   const conversations = frame?.conversations || [];
   const activeChatTab = frame?.activeChatTab;
   const activeConv = conversations.find((c) => c.name === activeChatTab) || conversations[0];
   const messages = activeConv?.messages || [];
+  // Legacy single-conversation sessions had no chat tabs.
+  const showChatTabs = profile?.hasChatTabs !== false;
 
   // Highlight the message created by the current event (if it's in this tab).
   const highlightIndex =
@@ -43,11 +46,37 @@ const ReplayChatPane = ({ frame }) => {
   }, [frame]);
 
   const renderMessage = (message, index) => {
+    const highlight = index === highlightIndex ? ' replay-highlight' : '';
+
+    // System priming messages were hidden from students by the old editor; show
+    // them here as a distinct block that is collapsed by default.
+    if (message.role === 'system') {
+      const expanded = !!expandedSystem[index];
+      const html = expanded
+        ? DOMPurify.sanitize(marked.parse(message.content || '', { async: false }))
+        : '';
+      return (
+        <div key={index} className="chat-msg-wrap align-left">
+          <div className="chat-label">System Prompt</div>
+          <div className={`chat-bubble chat-bubble-system${highlight}`}>
+            <button
+              className="replay-system-toggle"
+              onClick={() => setExpandedSystem((s) => ({ ...s, [index]: !s[index] }))}
+            >
+              {expanded ? '▾ Hide system prompt' : '▸ Show system prompt'}
+            </button>
+            {expanded && (
+              <div className="markdown-content" dangerouslySetInnerHTML={{ __html: html }} />
+            )}
+          </div>
+        </div>
+      );
+    }
+
     const isUser = message.role === 'user';
     const label = isUser ? 'User' : 'AI Bot';
     const color = isUser ? '#fbe2d7' : '#d8f6d8';
     const align = isUser ? 'align-right' : 'align-left';
-    const highlight = index === highlightIndex ? ' replay-highlight' : '';
 
     const consoleSegments = (message.content || '').split(/````([\s\S]*?)````/g);
 
@@ -115,7 +144,7 @@ const ReplayChatPane = ({ frame }) => {
 
   return (
     <div className="chat-panel">
-      {conversations.length > 0 && (
+      {showChatTabs && conversations.length > 0 && (
         <ChatTabs
           conversations={conversations.map((c) => ({ id: c.name, name: c.name }))}
           currentConversationId={activeChatTab}
@@ -124,7 +153,7 @@ const ReplayChatPane = ({ frame }) => {
           onRenameConversation={noop}
         />
       )}
-      {frame?.chatTabSwitched && (
+      {showChatTabs && frame?.chatTabSwitched && (
         <div className="replay-tab-flash">Switched to chat “{activeChatTab}”</div>
       )}
 

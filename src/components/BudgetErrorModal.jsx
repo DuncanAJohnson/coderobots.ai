@@ -4,10 +4,12 @@
  */
 
 import { useEffect } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 import './ModalBase.css';
 import './BudgetErrorModal.css';
 
 const BudgetErrorModal = ({ visible, onClose, accessLevel, premiumModels = [], nonPremiumModels = [] }) => {
+  const { t } = useLanguage();
   useEffect(() => {
     if (!visible) return;
   }, [visible]);
@@ -20,17 +22,17 @@ const BudgetErrorModal = ({ visible, onClose, accessLevel, premiumModels = [], n
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="budget-error-modal-header">
-          <h2>Daily LLM Usage Limit Reached</h2>
+          <h2>{t('budgetLimitTitle')}</h2>
         </div>
         <div className="budget-error-modal-body">
           {isCamps ? (
             <>
               <p className="budget-error-message">
-                Every message sent to a Large Language Model (LLM) uses power and water. To ensure everyone is using these resources respectfully, there is a daily usage limit for premium models.
+                {t('budgetMessagePremium')}
               </p>
               <div className="budget-error-suggestion-block">
                 <p className="budget-error-suggestion">
-                  <strong>{nonPremiumModels.length > 1 ? 'Please use one of these non-premium models:' : 'Please use the non-premium model:'}</strong>
+                  <strong>{nonPremiumModels.length > 1 ? t('budgetUseNonPremiumPlural') : t('budgetUseNonPremiumSingular')}</strong>
                 </p>
                 <ul className="budget-error-model-list">
                   {nonPremiumModels.map((model) => (
@@ -39,23 +41,23 @@ const BudgetErrorModal = ({ visible, onClose, accessLevel, premiumModels = [], n
                 </ul>
               </div>
               <p className="budget-error-info">
-                You can use premium models again at midnight Eastern Time.
+                {t('budgetResetPremium')}
               </p>
             </>
           ) : (
             <>
               <p className="budget-error-message">
-              Every message sent to a Large Language Model (LLM) uses power and water. To ensure everyone is using these resources respectfully, there is a daily usage limit.
+                {t('budgetMessageGeneral')}
               </p>
               <p className="budget-error-info">
-                You can use LLMs again at midnight Eastern Time.
+                {t('budgetResetGeneral')}
               </p>
             </>
           )}
         </div>
         <div className="budget-error-modal-footer">
           <button className="modal-close-button" onClick={onClose}>
-            OK
+            {t('ok')}
           </button>
         </div>
       </div>
