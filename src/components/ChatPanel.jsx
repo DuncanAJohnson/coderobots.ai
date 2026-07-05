@@ -46,6 +46,9 @@ const TUTOR_MODE = instance.chat.mode === 'tutor';
 // Logged as ai_model on tutor-pipeline assistant messages (no selectedModel).
 const TUTOR_AI_MODEL = 'tutor-pipeline';
 
+// Budget/usage UI and its Supabase reads are per-instance.
+const SHOW_BUDGET_UI = Boolean(instance.chat.showBudgetUI);
+
 const EMPTY_MODEL_METADATA = {
   rows: [],
   allModels: [],
@@ -168,8 +171,9 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     return () => window.removeEventListener('console-content-changed', handler);
   }, []);
 
-  // Fetch user access level
+  // Fetch user access level (budget instances only)
   useEffect(() => {
+    if (!SHOW_BUDGET_UI) return;
     const fetchAccessLevel = async () => {
       try {
         const level = await getUserAccessLevel();
@@ -210,7 +214,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   }, [modelMetadata, selectedModel]);
 
   const refreshDailyUsage = async () => {
-    if (!userAccessLevel) return;
+    if (!SHOW_BUDGET_UI || !userAccessLevel) return;
 
     setDailyUsageLoading(true);
     try {
@@ -810,6 +814,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         codingLevel={codingLevel}
         onCodingLevelChange={setCodingLevel}
         showModelPicker={!TUTOR_MODE}
+        showUsage={SHOW_BUDGET_UI}
         selectedModel={selectedModel}
         onModelChange={setSelectedModel}
         modelsByProvider={modelMetadata.modelsByProvider}
@@ -831,8 +836,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
 
       <div className="chat-body" ref={chatBodyRef} onScroll={handleChatScroll}>
         <div className="chat-disclaimer">
-          {/* TODO(no-telemetry): switch disclaimer by instance.telemetry */}
-          {t('chatDisclaimerCloud')}
+          {instance.telemetry ? t('chatDisclaimerCloud') : t('chatDisclaimer')}
         </div>
         {messages.map((msg, idx) => renderMessage(msg, idx))}
         {isStreaming && streamingConversationId === currentConversationId && (

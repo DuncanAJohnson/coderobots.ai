@@ -73,13 +73,15 @@ const TitleBar = ({
   return (
     <>
       <div className="topbar">
-        <div className="topbar-logo">
-          <img
-            src={brand.logoSrc}
-            alt={brand.logoAlt}
-            style={{ height: brand.logoHeight }}
-          />
-        </div>
+        {brand.logoSrc && (
+          <div className="topbar-logo">
+            <img
+              src={brand.logoSrc}
+              alt={brand.logoAlt}
+              style={{ height: brand.logoHeight }}
+            />
+          </div>
+        )}
         <div className="topbar-title">{brand.name}</div>
         {activeSession && (
           <div className="topbar-session-name">
@@ -155,13 +157,15 @@ const TitleBar = ({
               {t('debug')}
             </button>
           )}
-          <button
-            className="topbar-button logout"
-            onClick={handleLogOut}
-            title={t('logOutTitle')}
-          >
-            {t('logOut')}
-          </button>
+          {instance.telemetry && (
+            <button
+              className="topbar-button logout"
+              onClick={handleLogOut}
+              title={t('logOutTitle')}
+            >
+              {t('logOut')}
+            </button>
+          )}
           {instance.locales.available.length > 1 && (
             <div className="topbar-lang-toggle">
               {instance.locales.available.map((code) => (

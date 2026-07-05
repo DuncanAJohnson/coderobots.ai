@@ -9,7 +9,8 @@
  * progress; readSseEvents handles the union.)
  */
 
-import { supabase } from '../services/supabase';
+import { supabase, isSupabaseConfigured } from '../services/supabase';
+import instance from '../config/instance';
 
 const MODAL_ENDPOINT_URL = import.meta.env.VITE_MODAL_ENDPOINT_URL;
 const MODAL_BUDGET_ENDPOINT_URL = import.meta.env.VITE_MODAL_BUDGET_ENDPOINT_URL;
@@ -160,7 +161,18 @@ export async function* streamTutorCompletion(payload) {
   }
 
   try {
-    const response = await postJson(endpoint, payload);
+    // Telemetry instances attach auth so TUTOR_REQUIRE_AUTH deployments can
+    // validate the request; anonymous instances send the payload as-is.
+    let authFields = {};
+    if (instance.telemetry && isSupabaseConfigured) {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (user && session) {
+        authFields = { user_id: user.id, auth_token: session.access_token };
+      }
+    }
+
+    const response = await postJson(endpoint, { ...payload, ...authFields });
     yield* readSseEvents(response);
   } catch (error) {
     console.error('Error in streamTutorCompletion:', error);

@@ -10,6 +10,7 @@ const ChatConfiguration = ({
   codingLevel,
   onCodingLevelChange,
   showModelPicker = true,
+  showUsage = true,
   selectedModel,
   onModelChange,
   attachDocumentation,
@@ -61,24 +62,26 @@ const ChatConfiguration = ({
             </select>
           </>
         )}
-        <div className="llm-usage-indicator">
-          <div
-            className="llm-usage-ring"
-            style={{ '--usage-percent': usagePercent }}
-            aria-label={t('llmUsageAria').replace('{percent}', usagePercent)}
-            role="img"
-          >
-          </div>
-          <div className="llm-usage-text">
-            {t('llmUsageToday').replace('{percent}', usagePercent)}
-            <span className="usage-tooltip">
-              <span className="usage-tooltip-icon">ℹ️</span>
-              <span className="usage-tooltip-text">
-                {t('llmUsageTooltip')}
+        {showUsage && (
+          <div className="llm-usage-indicator">
+            <div
+              className="llm-usage-ring"
+              style={{ '--usage-percent': usagePercent }}
+              aria-label={t('llmUsageAria').replace('{percent}', usagePercent)}
+              role="img"
+            >
+            </div>
+            <div className="llm-usage-text">
+              {t('llmUsageToday').replace('{percent}', usagePercent)}
+              <span className="usage-tooltip">
+                <span className="usage-tooltip-icon">ℹ️</span>
+                <span className="usage-tooltip-text">
+                  {t('llmUsageTooltip')}
+                </span>
               </span>
-            </span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
