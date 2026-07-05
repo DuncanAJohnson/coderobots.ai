@@ -7,6 +7,25 @@ import {
   waitForMicrobitSerialPort,
 } from '../utils/microbitInstall.js';
 import { applyPostConnectFiles, uploadFileToMicrobit } from '../utils/postConnectFiles.js';
+import { createLegoTerminal } from '../utils/legoEducation/legoTerminal.js';
+import {
+  ensurePyodide,
+  runPython,
+  isPyodideReady,
+  interruptPython,
+  freezeBridge,
+  terminatePyodide,
+} from '../utils/legoEducation/pyodideRunner.js';
+import {
+  preloadLegoLibrary,
+  connectDevice as legoConnectDevice,
+  disconnectDevice as legoDisconnectDevice,
+  renameDevice as legoRenameDevice,
+  disconnectAll as legoDisconnectAll,
+  stopAllMotion as legoStopAllMotion,
+  getConnectionState as legoGetConnectionState,
+  subscribe as legoSubscribe,
+} from '../utils/legoEducation/legoDevices.js';
 import CodeEditor from './CodeEditor.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import CodeTabs from './CodeTabs.jsx';
@@ -43,6 +62,8 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   const [connectPhase, setConnectPhase] = useState('idle');
   const [flashProgress, setFlashProgress] = useState(undefined);
   const [flashMessage, setFlashMessage] = useState('');
+  // LEGO Education BLE: per-kind device lists for the ControlPanel icon row.
+  const [legoConnectionState, setLegoConnectionState] = useState(legoGetConnectionState);
 
   const {
     codeRecords,
@@ -56,9 +77,20 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     createSnapshot
   } = useSession();
 
+  const isLegoMode = activePlatform?.connectionType === 'lego-ble';
+
   const editorRef = useRef(null);
   const boardRef = useRef(null);
   const replContainerRef = useRef(null);
+  // LEGO Education BLE: xterm controller for Pyodide stdout/stderr (the serial
+  // Board owns its own terminal; only one of the two is ever mounted).
+  const legoTerminalRef = useRef(null);
+  // Single-flight init of the lego terminal + Pyodide worker. Cleared on
+  // failure (so the next connect retries) and on leaving lego mode.
+  const legoRuntimePromiseRef = useRef(null);
+  // Bumped every time lego mode is torn down, so in-flight async init can
+  // detect it went stale and dispose whatever it just created.
+  const legoModeGenRef = useRef(0);
   const resizerRef = useRef(null);
   const containerRef = useRef(null);
   const isLocalChangeRef = useRef(false);
@@ -194,6 +226,131 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
       console.error('Failed to auto-disconnect after platform switch:', error);
     });
   }, [activePlatform, connected, connectedBoard, connectedPlatformId]);
+
+  // LEGO Education BLE lifecycle. While in lego mode, mirror the device
+  // registry into local state and surface "any device connected" through the
+  // same `connected`/status-banner channel the serial platforms use. On
+  // leaving lego mode, disconnect every BLE device, kill the Pyodide worker
+  // and dispose the lego terminal so serial platforms get a clean slate.
+  useEffect(() => {
+    if (!isLegoMode) return;
+
+    const applyState = (next) => {
+      setLegoConnectionState(next);
+      const anyConnected = Object.values(next).some((devices) =>
+        devices.some((device) => device.connected)
+      );
+      setConnected(anyConnected);
+      setStatusBanner(
+        anyConnected
+          ? { type: 'success', message: tRef.current('legoEducationConnected') }
+          : { type: 'info', message: tRef.current('notConnected') }
+      );
+    };
+
+    applyState(legoGetConnectionState());
+    const unsubscribe = legoSubscribe(applyState);
+
+    return () => {
+      unsubscribe();
+      legoModeGenRef.current += 1;
+      legoDisconnectAll().catch((error) => {
+        console.warn('Failed to disconnect LEGO devices:', error);
+      });
+      try { terminatePyodide(); } catch (error) { console.warn(error); }
+      legoRuntimePromiseRef.current = null;
+      if (legoTerminalRef.current) {
+        try { legoTerminalRef.current.dispose(); } catch { /* already gone */ }
+        legoTerminalRef.current = null;
+      }
+      bufferRef.current = '';
+      pendingRunSaveRef.current = false;
+      setBuffer('');
+      setConnected(false);
+      setIsRunning(false);
+    };
+  }, [isLegoMode]);
+
+  // Lazily mount the lego terminal and boot the Pyodide worker. Called on the
+  // first successful device connect — NOT on platform switch — so the Pyodide
+  // CDN download only happens for users who actually connect LEGO hardware.
+  const ensureLegoRuntime = () => {
+    if (legoRuntimePromiseRef.current) return legoRuntimePromiseRef.current;
+
+    const generation = legoModeGenRef.current;
+    const promise = (async () => {
+      if (!legoTerminalRef.current) {
+        const host = replContainerRef.current;
+        if (!host) throw new Error('Terminal container is not mounted');
+        const controller = await createLegoTerminal(host);
+        if (generation !== legoModeGenRef.current) {
+          try { controller.dispose(); } catch { /* already gone */ }
+          return;
+        }
+        legoTerminalRef.current = controller;
+      }
+
+      // Mirror worker output into the console buffer so run logging, the
+      // console-content-changed event and "Add Console to Chat" all behave
+      // exactly like the serial path.
+      const appendLegoOutput = (text) => {
+        bufferRef.current = (bufferRef.current + text).slice(-FIFO_SIZE);
+        setBuffer(bufferRef.current);
+      };
+
+      legoTerminalRef.current.write(`${tRef.current('legoLoadingPython')}\r\n`);
+      await ensurePyodide({
+        onStdout: (s) => {
+          appendLegoOutput(s);
+          legoTerminalRef.current?.write(s.replace(/\n/g, '\r\n'));
+        },
+        onStderr: (s) => {
+          appendLegoOutput(s);
+          legoTerminalRef.current?.write(`\x1b[31m${s.replace(/\n/g, '\r\n')}\x1b[0m`);
+        },
+      });
+      if (generation !== legoModeGenRef.current) return;
+      legoTerminalRef.current?.write(`\r\n${tRef.current('legoPythonReady')}\r\n`);
+    })();
+
+    legoRuntimePromiseRef.current = promise;
+    promise.catch(() => {
+      // Allow the next connect/run to retry a failed init.
+      if (legoRuntimePromiseRef.current === promise) {
+        legoRuntimePromiseRef.current = null;
+      }
+    });
+    return promise;
+  };
+
+  // Kick off the BLE library fetch as soon as the picker opens so the actual
+  // requestDevice() call inside connectDevice stays within the user gesture.
+  const handleLegoPickerOpen = () => {
+    preloadLegoLibrary();
+  };
+
+  const handleLegoDeviceConnect = async (kind, cardEmoji) => {
+    void logInteractionSafe('connect_lego');
+    const result = await legoConnectDevice(kind, cardEmoji);
+    if (result?.ok) {
+      ensureLegoRuntime().catch((error) => {
+        console.error('[LEGO] Pyodide init failed:', error);
+        const message = tRef.current('errConnectionFailed')
+          .replace('{message}', error?.message || String(error));
+        setStatusBanner({ type: 'error', message });
+        legoTerminalRef.current?.write(`\r\n\x1b[31m${message}\x1b[0m\r\n`);
+      });
+    }
+    return result;
+  };
+
+  const handleLegoDeviceRename = (kind, oldName, newName) =>
+    legoRenameDevice(kind, oldName, newName);
+
+  const handleLegoDeviceDisconnect = async (kind, name) => {
+    void logInteractionSafe('disconnect');
+    await legoDisconnectDevice(kind, name);
+  };
 
   // Handle code changes in the editor (local state only, no database save)
   const handleCodeChange = (newCode) => {
@@ -562,7 +719,52 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     }
   };
 
+  // LEGO run path: dispatch the code to the Pyodide worker instead of pasting
+  // over serial. Telemetry mirrors the serial path — snapshot + interaction at
+  // dispatch, console tail once the program finishes. No operationInFlightRef
+  // here: that lock protects the serial paste handshake, and holding it across
+  // the whole (possibly long) Python run would block the Stop button.
+  const handleLegoRun = async () => {
+    if (!connected) return;
+    const codeToRun = editorRef.current?.getCode() || currentCodeContent;
+
+    await createSnapshot('run_device');
+    await logInteractionSafe('run_device');
+
+    if (!isPyodideReady()) {
+      legoTerminalRef.current?.write(`\r\n\x1b[33m${tRef.current('legoLoadingPython')}\x1b[0m\r\n`);
+      // A failed init leaves the promise cleared — retry it here.
+      ensureLegoRuntime().catch(() => {});
+      return;
+    }
+
+    setIsRunning(true);
+    try {
+      legoTerminalRef.current?.write('\r\n>>> run\r\n');
+      await runPython(codeToRun);
+    } catch (error) {
+      // KeyboardInterrupt is expected when the user presses Stop — it's how
+      // the script unwinds. Don't surface it as a failure. ("Programmet blev
+      // stoppet" is the bridge's message when an RPC is rejected mid-stop.)
+      const msg = String(error?.message || error);
+      if (msg.includes('KeyboardInterrupt') || msg.includes('Programmet blev stoppet')) {
+        legoTerminalRef.current?.write('\r\n\x1b[33m[stopped]\x1b[0m\r\n');
+      } else {
+        console.error('Pyodide run failed:', error);
+        legoTerminalRef.current?.write(`\r\n\x1b[31m${msg.replace(/\n/g, '\r\n')}\x1b[0m\r\n`);
+      }
+    } finally {
+      setIsRunning(false);
+      await logConsoleTailSafe(bufferRef.current, 'run_device');
+    }
+  };
+
   const handleRun = async () => {
+    if (isLegoMode) {
+      await handleLegoRun();
+      return;
+    }
+
     const board = boardRef.current;
     if (!board || !connected) return;
     if (operationInFlightRef.current) return;
@@ -599,6 +801,27 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
   };
 
   const handleCtrlC = async () => {
+    if (isLegoMode) {
+      await logInteractionSafe('send_ctrl_c');
+      setIsRunning(false);
+      // Freeze the bridge FIRST so the Python worker can no longer issue
+      // device commands — any in-flight RPC fails immediately, and any
+      // subsequent motor_run gets rejected on arrival instead of racing
+      // ahead of our motor_stop below.
+      try { freezeBridge(); } catch (e) { console.warn(e); }
+      // Raise KeyboardInterrupt so the script unwinds instead of
+      // continuing to issue (now-failing) commands.
+      try { interruptPython(); } catch (e) { console.warn(e); }
+      // Halt motors directly from the main thread — this BLE call is
+      // not routed through the paused bridge.
+      try { await legoStopAllMotion(); } catch (e) { console.warn(e); }
+      // Send stop a second time once any late GATT writes have drained,
+      // in case the firmware received a motor_run after our first stop.
+      setTimeout(() => { legoStopAllMotion().catch(() => {}); }, 150);
+      legoTerminalRef.current?.write('\r\n\x1b[33m[stop]\x1b[0m\r\n');
+      return;
+    }
+
     const board = boardRef.current;
     if (!board || !connected) return;
     if (operationInFlightRef.current) return;
@@ -638,6 +861,7 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
     if (boardRef.current?.terminal) {
       boardRef.current.terminal.clear();
     }
+    legoTerminalRef.current?.clear();
     bufferRef.current = '';
     setBuffer('');
   };
@@ -817,6 +1041,11 @@ const SPIKEEditor = forwardRef(({ sessionId }, ref) => {
               onDownload={handleDownload}
               onClearDownload={handleClearDownload}
               onClearMain={handleClearMain}
+              legoConnectionState={legoConnectionState}
+              onLegoPickerOpen={handleLegoPickerOpen}
+              onLegoConnectDevice={handleLegoDeviceConnect}
+              onLegoRenameDevice={handleLegoDeviceRename}
+              onLegoDisconnectDevice={handleLegoDeviceDisconnect}
             />
             {!connected && (
               <div className={`status-banner ${statusBanner.type}`}>
