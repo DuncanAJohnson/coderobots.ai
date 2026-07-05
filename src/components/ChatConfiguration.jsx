@@ -6,9 +6,10 @@
 import { useLanguage } from '../contexts/LanguageContext';
 import './ChatConfiguration.css';
 
-const ChatConfiguration = ({ 
-  codingLevel, 
+const ChatConfiguration = ({
+  codingLevel,
   onCodingLevelChange,
+  showModelPicker = true,
   selectedModel,
   onModelChange,
   attachDocumentation,
@@ -37,25 +38,29 @@ const ChatConfiguration = ({
           <option value="experienced">{t('experienced')}</option>
         </select>
 
-        <label htmlFor="model-selector" style={{ marginLeft: '15px' }}>{t('aiModelLabel')}</label>
-        <select
-          id="model-selector"
-          className="chat-level-selector"
-          value={selectedModel}
-          onChange={(e) => onModelChange(e.target.value)}
-        >
-          {Object.entries(modelsByProvider || {}).map(([provider, models]) => (
-            <optgroup key={provider} label={provider.toUpperCase()}>
-              {models.map((model) => {
-                return (
-                  <option key={model} value={model}>
-                    {model}
-                  </option>
-                );
-              })}
-            </optgroup>
-          ))}
-        </select>
+        {showModelPicker && (
+          <>
+            <label htmlFor="model-selector" style={{ marginLeft: '15px' }}>{t('aiModelLabel')}</label>
+            <select
+              id="model-selector"
+              className="chat-level-selector"
+              value={selectedModel}
+              onChange={(e) => onModelChange(e.target.value)}
+            >
+              {Object.entries(modelsByProvider || {}).map(([provider, models]) => (
+                <optgroup key={provider} label={provider.toUpperCase()}>
+                  {models.map((model) => {
+                    return (
+                      <option key={model} value={model}>
+                        {model}
+                      </option>
+                    );
+                  })}
+                </optgroup>
+              ))}
+            </select>
+          </>
+        )}
         <div className="llm-usage-indicator">
           <div
             className="llm-usage-ring"

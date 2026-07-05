@@ -1,12 +1,74 @@
 /**
  * Chat Streaming Utility
- * Model-agnostic utility that connects to Modal serverless function and handles SSE streaming
+ * Model-agnostic SSE clients for the Modal serverless endpoints.
+ *
+ * All endpoints speak the same SSE vocabulary — `data: {json}\n\n` frames
+ * with a `type` discriminator:
+ *   content | progress | budget_status | usage_logged | done | error
+ * (direct chat emits budget_status/usage_logged, the tutor pipeline emits
+ * progress; readSseEvents handles the union.)
  */
 
 import { supabase } from '../services/supabase';
 
 const MODAL_ENDPOINT_URL = import.meta.env.VITE_MODAL_ENDPOINT_URL;
 const MODAL_BUDGET_ENDPOINT_URL = import.meta.env.VITE_MODAL_BUDGET_ENDPOINT_URL;
+const MODAL_TUTOR_ENDPOINT_URL = import.meta.env.VITE_MODAL_TUTOR_ENDPOINT_URL;
+
+/**
+ * Read `data: {json}` SSE events off a fetch Response body.
+ * Yields each parsed event object; returns on {type:'done'}, throws on
+ * {type:'error'}. Unparseable frames are warned about and skipped.
+ */
+async function* readSseEvents(response) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // Process complete SSE messages (lines starting with "data: ")
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const dataStr = line.slice(6); // Remove "data: " prefix
+
+      let data;
+      try {
+        data = JSON.parse(dataStr);
+      } catch (parseError) {
+        console.warn('Failed to parse SSE data:', dataStr, parseError);
+        continue;
+      }
+
+      if (data.type === 'done') {
+        return; // Stream complete
+      }
+      if (data.type === 'error') {
+        throw new Error(data.error);
+      }
+      yield data;
+    }
+  }
+}
+
+async function postJson(url, payload) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response;
+}
 
 /**
  * Stream chat completion from Modal endpoint (no budget tracking)
@@ -21,60 +83,15 @@ export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxT
   }
 
   try {
-    const response = await fetch(MODAL_ENDPOINT_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messages,
-        model,
-        max_tokens: maxTokens,
-      }),
+    const response = await postJson(MODAL_ENDPOINT_URL, {
+      messages,
+      model,
+      max_tokens: maxTokens,
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) break;
-
-      // Decode chunk and add to buffer
-      buffer += decoder.decode(value, { stream: true });
-
-      // Process complete SSE messages (lines starting with "data: ")
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const dataStr = line.slice(6); // Remove "data: " prefix
-          
-          try {
-            const data = JSON.parse(dataStr);
-            
-            if (data.type === 'content') {
-              yield data.content;
-            } else if (data.type === 'done') {
-              return; // Stream complete
-            } else if (data.type === 'error') {
-              throw new Error(data.error);
-            }
-          } catch (parseError) {
-            // If this is an intentionally thrown Error (not a SyntaxError from JSON.parse), re-throw it
-            if (!(parseError instanceof SyntaxError)) {
-              throw parseError;
-            }
-            console.warn('Failed to parse SSE data:', dataStr, parseError);
-          }
-        }
+    for await (const event of readSseEvents(response)) {
+      if (event.type === 'content') {
+        yield event.content;
       }
     }
   } catch (error) {
@@ -88,7 +105,7 @@ export async function* streamChatCompletion(messages, model = 'gpt-5-nano', maxT
  * @param {Array} messages - Array of message objects with role and content
  * @param {String} model - Model name (e.g., 'gpt-5-nano', 'skolegpt-v3')
  * @param {Number} maxTokens - Maximum tokens to generate
- * @returns {AsyncGenerator} - Yields chunks of content and budget status
+ * @returns {AsyncGenerator} - Yields {type:'content'|'budget_status'|'usage_logged'} events
  */
 export async function* streamChatCompletionWithBudget(messages, model = 'gpt-5-nano', maxTokens = 64000) {
   if (!MODAL_BUDGET_ENDPOINT_URL) {
@@ -104,66 +121,21 @@ export async function* streamChatCompletionWithBudget(messages, model = 'gpt-5-n
       throw new Error('User not authenticated');
     }
 
-    const response = await fetch(MODAL_BUDGET_ENDPOINT_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messages,
-        model,
-        max_tokens: maxTokens,
-        user_id: user.id,
-        auth_token: session.access_token,
-      }),
+    const response = await postJson(MODAL_BUDGET_ENDPOINT_URL, {
+      messages,
+      model,
+      max_tokens: maxTokens,
+      user_id: user.id,
+      auth_token: session.access_token,
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) break;
-
-      // Decode chunk and add to buffer
-      buffer += decoder.decode(value, { stream: true });
-
-      // Process complete SSE messages (lines starting with "data: ")
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const dataStr = line.slice(6); // Remove "data: " prefix
-          
-          try {
-            const data = JSON.parse(dataStr);
-            
-            if (data.type === 'content') {
-              yield { type: 'content', content: data.content };
-            } else if (data.type === 'budget_status') {
-              yield { type: 'budget_status', ...data };
-            } else if (data.type === 'usage_logged') {
-              yield { type: 'usage_logged', ...data };
-            } else if (data.type === 'done') {
-              return; // Stream complete
-            } else if (data.type === 'error') {
-              throw new Error(data.error);
-            }
-          } catch (parseError) {
-            // If this is an intentionally thrown Error (not a SyntaxError from JSON.parse), re-throw it
-            if (!(parseError instanceof SyntaxError)) {
-              throw parseError;
-            }
-            console.warn('Failed to parse SSE data:', dataStr, parseError);
-          }
-        }
+    for await (const event of readSseEvents(response)) {
+      if (
+        event.type === 'content' ||
+        event.type === 'budget_status' ||
+        event.type === 'usage_logged'
+      ) {
+        yield event;
       }
     }
   } catch (error) {
@@ -172,3 +144,26 @@ export async function* streamChatCompletionWithBudget(messages, model = 'gpt-5-n
   }
 }
 
+/**
+ * Stream a tutor-pipeline completion (chat.mode 'tutor' instances).
+ * The server owns prompt assembly; the payload carries raw fields only.
+ *
+ * @param {Object} payload - { history, user_msg, hw_mode, level, lang,
+ *   code?, console? } (+ user_id/auth_token when the deployment requires auth)
+ * @returns {AsyncGenerator} - Yields {type:'content', content} and
+ *   {type:'progress', stage, status, payload?} events
+ */
+export async function* streamTutorCompletion(payload) {
+  const endpoint = MODAL_TUTOR_ENDPOINT_URL || MODAL_ENDPOINT_URL;
+  if (!endpoint) {
+    throw new Error('VITE_MODAL_TUTOR_ENDPOINT_URL is not configured in .env.local');
+  }
+
+  try {
+    const response = await postJson(endpoint, payload);
+    yield* readSseEvents(response);
+  } catch (error) {
+    console.error('Error in streamTutorCompletion:', error);
+    throw error;
+  }
+}

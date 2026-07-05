@@ -223,5 +223,6 @@
   "studentNames": "Student names",
   "studentNamesPlaceholder": "Ada Lovelace\nGrace Hopper\nKatherine Johnson",
   "saving": "Saving…",
-  "saveAndContinue": "Save and continue"
+  "saveAndContinue": "Save and continue",
+  "tutorPlatformUnsupported": "The AI tutor does not support the current hardware platform yet. Please create a session with a supported platform."
 }

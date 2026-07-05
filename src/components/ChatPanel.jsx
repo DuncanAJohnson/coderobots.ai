@@ -9,9 +9,10 @@ import DOMPurify from 'dompurify';
 import { useSession } from '../contexts/SessionContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { logMessage, logConsole } from '../services/dataLogger';
-import { streamChatCompletionWithBudget } from '../utils/chatStream';
+import { streamChatCompletionWithBudget, streamTutorCompletion } from '../utils/chatStream';
 import { getUserAccessLevel, getDailyBudgetUsage } from '../services/aiUsage';
 import { fetchModelMetadata, pickInitialModel } from '../services/aiModels';
+import instance from '../config/instance';
 import { 
   LEVEL_INSTRUCTION_PREFIX,
   beginnerPrompt,
@@ -37,6 +38,14 @@ const RESPONSE_LANGUAGE_DIRECTIVES = {
   da: 'Respond in Danish. Write code comments in Danish, but keep code identifiers and API names unchanged.',
 };
 
+// Chat mode from the instance config: 'direct' keeps the original
+// client-primed budget endpoint; 'tutor' sends raw fields to the server-side
+// tutor pipeline (prompts assembled server-side, no model picker).
+const TUTOR_MODE = instance.chat.mode === 'tutor';
+
+// Logged as ai_model on tutor-pipeline assistant messages (no selectedModel).
+const TUTOR_AI_MODEL = 'tutor-pipeline';
+
 const EMPTY_MODEL_METADATA = {
   rows: [],
   allModels: [],
@@ -59,6 +68,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     createNewConversation,
     updateConversationName,
     createSnapshot,
+    activePlatform,
   } = useSession();
   const { t, lang } = useLanguage();
 
@@ -86,6 +96,18 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
   const streamingMessageRef = useRef(null);
   const stickToBottomRef = useRef(true);
   const currentConversationIdRef = useRef(currentConversationId);
+  const warnedNoTutorHwModeRef = useRef(false);
+
+  // Startup sanity check: tutor mode needs a platform with a tutorHwMode.
+  useEffect(() => {
+    if (!TUTOR_MODE || warnedNoTutorHwModeRef.current) return;
+    if (activePlatform && !activePlatform.tutorHwMode) {
+      warnedNoTutorHwModeRef.current = true;
+      console.warn(
+        `Tutor chat mode: active platform "${activePlatform.id}" has no tutorHwMode; tutor requests will be rejected.`
+      );
+    }
+  }, [activePlatform]);
 
   useEffect(() => {
     currentConversationIdRef.current = currentConversationId;
@@ -159,8 +181,10 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     fetchAccessLevel();
   }, []);
 
-  // Fetch model metadata from database
+  // Fetch model metadata from database (direct mode only — the tutor
+  // pipeline has no model picker, so skip the Supabase call entirely)
   useEffect(() => {
+    if (TUTOR_MODE) return;
     const loadModelMetadata = async () => {
       try {
         const metadata = await fetchModelMetadata();
@@ -274,7 +298,13 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       alert(t('noActiveSession'));
       return;
     }
-    if (!selectedModel) {
+    if (TUTOR_MODE && !activePlatform?.tutorHwMode) {
+      // Platform has no tutor pipeline support — surface an error in chat
+      // instead of calling the endpoint.
+      setMessages(prev => [...prev, { role: 'bot', content: t('tutorPlatformUnsupported') }]);
+      return;
+    }
+    if (!TUTOR_MODE && !selectedModel) {
       alert(t('noModelAvailable'));
       return;
     }
@@ -299,6 +329,10 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     if (attachedContext.includeConsole && getConsoleContent) {
       finalContext.console = await getConsoleContent();
     }
+
+    // Raw user text before code/console wrapping — the tutor pipeline stacks
+    // code/console itself, so user_msg must stay unwrapped.
+    const rawText = text;
 
     // Build display message with wrapped code and console
     if (finalContext.code) {
@@ -336,6 +370,90 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         code_context_id: codeContextId,
         console_context_id: consoleContextId,
       });
+    }
+
+    // Tutor mode: the server-side pipeline owns prompt assembly. Send raw
+    // fields (history/user_msg/hw_mode/level/lang + optional code/console)
+    // and render progress events as a thinking trace on the bot message.
+    if (TUTOR_MODE) {
+      // history = prior turns only (messages state before this send; the
+      // current user message is carried separately in user_msg).
+      const history = messages.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content,
+      }));
+
+      const payload = {
+        history,
+        user_msg: rawText || 'Please analyze the provided context.',
+        hw_mode: activePlatform.tutorHwMode,
+        level: codingLevel,
+        lang,
+      };
+      if (finalContext.code && finalContext.code.trim()) {
+        payload.code = finalContext.code;
+      }
+      if (finalContext.console && finalContext.console.trim()) {
+        payload.console = finalContext.console;
+      }
+
+      setIsStreaming(true);
+      setStreamingConversationId(conversationId);
+      streamingMessageRef.current = '';
+
+      // Patch the streaming bot message in place; skipped when the user has
+      // switched to a different conversation tab (mirrors the direct path).
+      const updateLast = (patch) => {
+        if (currentConversationIdRef.current !== conversationId) return;
+        setMessages(prev => {
+          if (prev.length === 0) return prev;
+          const next = [...prev];
+          next[next.length - 1] = { ...next[next.length - 1], ...patch };
+          return next;
+        });
+      };
+
+      try {
+        let fullResponse = '';
+        const thinking = [];
+
+        // Insert a placeholder bot message immediately so the thinking trace
+        // is visible while progress events arrive (before the first token).
+        setMessages(prev => [...prev, { role: 'bot', content: '', thinking: [], streaming: true }]);
+
+        for await (const event of streamTutorCompletion(payload)) {
+          if (event.type === 'progress') {
+            thinking.push({ stage: event.stage, status: event.status, payload: event.payload || {} });
+            updateLast({ thinking: [...thinking] });
+          } else if (event.type === 'content') {
+            fullResponse += event.content;
+            streamingMessageRef.current = fullResponse;
+            updateLast({ content: fullResponse });
+          }
+        }
+
+        // Finalize message
+        updateLast({ content: fullResponse, thinking: [...thinking], streaming: false });
+
+        // Log assistant message
+        await logMessage({
+          conversation_id: conversationId,
+          role: 'assistant',
+          content: fullResponse,
+          coding_level: codingLevel,
+          ai_model: TUTOR_AI_MODEL,
+          prompt_tokens: 0,
+          completion_tokens: 0,
+        });
+      } catch (error) {
+        console.error('Streaming error:', error);
+        updateLast({ content: `${t('errorPrefix')}${error.message}`, streaming: false });
+      } finally {
+        setIsStreaming(false);
+        setStreamingConversationId(null);
+        streamingMessageRef.current = null;
+      }
+      return;
     }
 
     // Build conversation for AI
@@ -552,6 +670,53 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
     closeConsoleModal();
   };
 
+  // Collapsible tutor-pipeline thinking trace (progress events). Open while
+  // streaming, collapsed once the answer is complete. No-op in direct mode
+  // (messages never carry a thinking array there).
+  const renderThinkingTrace = (thinking, streaming) => {
+    if (!thinking || thinking.length === 0) return null;
+    const labels = {
+      summarize: t('thinkingSummarize'),
+      doc_routing: t('thinkingDocRouting'),
+      outline: t('thinkingOutline'),
+    };
+    return (
+      <details className="chat-thinking" open={streaming}>
+        <summary>
+          {streaming ? t('thinkingInProgress') : t('thinkingDone')} ({thinking.length} {t('thinkingSteps')})
+        </summary>
+        <ul className="chat-thinking-steps">
+          {thinking.map((step, idx) => {
+            const label = labels[step.stage] || step.stage;
+            const p = step.payload || {};
+            let detail = null;
+            if (step.stage === 'summarize') {
+              detail = p.summarized
+                ? t('thinkingSummarized')
+                    .replace('{before}', p.before_tokens)
+                    .replace('{after}', p.after_tokens)
+                : t('thinkingNotSummarized');
+            } else if (step.stage === 'doc_routing' && Array.isArray(p.bundles)) {
+              detail = p.bundles.length
+                ? t('thinkingDocsLabel').replace('{bundles}', p.bundles.join(', '))
+                : t('thinkingDocsNone');
+            } else if (step.stage === 'outline' && p.outline) {
+              detail = p.outline;
+            }
+            return (
+              <li key={idx}>
+                <strong>{label}</strong>
+                {detail && (
+                  <div className="chat-thinking-detail">{detail}</div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </details>
+    );
+  };
+
   const renderMessage = (message, index) => {
     const isUser = message.role === 'user';
     const label = isUser ? t('userLabel') : message.role === 'system' ? 'System' : t('botLabel');
@@ -568,6 +733,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       <div key={index} className={`chat-msg-wrap ${align}`}>
         <div className="chat-label">{label}</div>
         <div className="chat-bubble" style={{ backgroundColor: color }}>
+          {!isUser && renderThinkingTrace(message.thinking, message.streaming)}
           {consoleSegments.map((consoleSeg, consoleIdx) => {
             if (consoleIdx % 2 === 1) {
               // This is a console block
@@ -643,6 +809,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
       <ChatConfiguration
         codingLevel={codingLevel}
         onCodingLevelChange={setCodingLevel}
+        showModelPicker={!TUTOR_MODE}
         selectedModel={selectedModel}
         onModelChange={setSelectedModel}
         modelsByProvider={modelMetadata.modelsByProvider}
@@ -671,7 +838,7 @@ const ChatPanel = ({ onReplaceCode, getCodeContent, getConsoleContent }) => {
         {isStreaming && streamingConversationId === currentConversationId && (
           <div className="chat-spinner" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div className="loader"></div>
-            {!selectedModelStreaming && (
+            {!TUTOR_MODE && !selectedModelStreaming && (
               <div style={{ marginTop: '10px', fontSize: '0.9em', color: '#666' }}>
                 {t('waitingForFullResponse').replace('{model}', selectedModel)}
               </div>

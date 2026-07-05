@@ -223,5 +223,6 @@
   "studentNames": "Elevnavne",
   "studentNamesPlaceholder": "Ada Lovelace\nGrace Hopper\nKatherine Johnson",
   "saving": "Gemmer…",
-  "saveAndContinue": "Gem og fortsæt"
+  "saveAndContinue": "Gem og fortsæt",
+  "tutorPlatformUnsupported": "AI-tutoren understøtter endnu ikke den valgte hardwareplatform. Opret en session med en understøttet platform."
 }
