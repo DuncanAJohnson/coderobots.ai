@@ -10,7 +10,21 @@
 
 const modules = import.meta.glob('./instances/*.js', { eager: true });
 
-const id = import.meta.env.VITE_INSTANCE || 'purdue';
+// Map production hostnames → instance id. Selecting at runtime lets a single
+// build (and single Vercel project) serve every domain; VITE_INSTANCE stays as
+// the local-dev / explicit override. Host wins in prod so the correct instance
+// resolves regardless of any baked-in VITE_INSTANCE value.
+const HOST_INSTANCE = {
+  'purdue.en1editor.com': 'purdue',
+  'denmark.en1editor.com': 'skolegpt-dk',
+};
+
+const hostId =
+  typeof window !== 'undefined'
+    ? HOST_INSTANCE[window.location.hostname]
+    : undefined;
+
+const id = hostId || import.meta.env.VITE_INSTANCE || 'purdue';
 const mod = modules[`./instances/${id}.js`];
 
 if (!mod || !mod.default) {
