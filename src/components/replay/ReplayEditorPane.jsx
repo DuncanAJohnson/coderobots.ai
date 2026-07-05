@@ -11,6 +11,15 @@ import './Replay.css';
 
 const noop = () => {};
 
+// Turn an unrecognized button key into a readable label, e.g.
+// 'save_to_slot_11' -> 'Save To Slot 11', 'reset_device' -> 'Reset Device'.
+const humanizeButton = (key) =>
+  (key || '')
+    .split('_')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+
 // Recorded interaction button_name -> display label (mirrors ControlPanel).
 const ACTION_LABELS = [
   { key: 'connect', label: 'Connect' },
@@ -24,7 +33,7 @@ const ACTION_LABELS = [
   { key: 'reset', label: 'Reset Device' },
 ];
 
-const ReplayEditorPane = ({ frame }) => {
+const ReplayEditorPane = ({ frame, profile }) => {
   const consoleRef = useRef(null);
 
   // Keep the console scrolled to the latest output.
@@ -42,17 +51,22 @@ const ReplayEditorPane = ({ frame }) => {
   const isConsole = frame.highlightKind === 'console';
   const pressedKey = isInteraction ? frame.event.buttonName : null;
   const knownPressed = ACTION_LABELS.some((a) => a.key === pressedKey);
+  // Legacy single-buffer sessions had no tabs; only show tab chrome when the
+  // format supports it (defaults to shown for unstamped/current sessions).
+  const showCodeTabs = profile?.hasCodeTabs !== false;
 
   return (
     <div className="replay-editor spike-editor">
-      <CodeTabs
-        codeRecords={codeRecords}
-        currentCodeId={frame.activeCodeTab}
-        onSwitchCode={noop}
-        onCreateCode={noop}
-        onRenameCode={noop}
-      />
-      {frame.codeTabSwitched && (
+      {showCodeTabs && (
+        <CodeTabs
+          codeRecords={codeRecords}
+          currentCodeId={frame.activeCodeTab}
+          onSwitchCode={noop}
+          onCreateCode={noop}
+          onRenameCode={noop}
+        />
+      )}
+      {showCodeTabs && frame.codeTabSwitched && (
         <div className="replay-tab-flash">Switched to code tab “{frame.activeCodeTab}”</div>
       )}
 
@@ -88,7 +102,7 @@ const ReplayEditorPane = ({ frame }) => {
             })}
             {isInteraction && !knownPressed && (
               <span className="button replay-action replay-action-active replay-action-unknown">
-                {pressedKey || 'action'}
+                {humanizeButton(pressedKey) || 'action'}
               </span>
             )}
           </div>

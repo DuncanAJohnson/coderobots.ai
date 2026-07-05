@@ -123,11 +123,11 @@ const ReplayView = () => {
       />
       <div className="main-content" ref={containerRef}>
         <div className="left-panel">
-          <ReplayEditorPane frame={frame} />
+          <ReplayEditorPane frame={frame} profile={session.profile} />
         </div>
         <div className="horizontal-resizer" ref={resizerRef}></div>
         <div className="right-panel">
-          <ReplayChatPane frame={frame} />
+          <ReplayChatPane frame={frame} profile={session.profile} />
         </div>
       </div>
       <ReplayControls
