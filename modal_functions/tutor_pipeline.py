@@ -251,7 +251,7 @@ def _stages():
 
     class SummarizeIfOver(Stage):
         name = "summarize"
-        output_budget = 800
+        output_budget = None
         threshold = 5000
 
         async def run(self, scratch) -> None:
@@ -305,7 +305,7 @@ def _stages():
 
     class ClassifyDocs(Stage):
         name = "doc_routing"
-        output_budget = 200
+        output_budget = None
 
         def __init__(self, hw_mode: str):
             self.hw_mode = hw_mode
@@ -350,7 +350,7 @@ def _stages():
 
     class Outline(Stage):
         name = "outline"
-        output_budget = 800
+        output_budget = None
 
         def build_messages(self, scratch) -> list[dict]:
             from prompts import EXAMPLES, LEVEL_PROMPTS, PREAMBLES
@@ -385,7 +385,7 @@ def _stages():
 
     class FinalAnswer(Stage):
         name = "final"
-        output_budget = 1500
+        output_budget = None
 
         def build_messages(self, scratch) -> list[dict]:
             from prompts import EXAMPLES, LEVEL_PROMPTS, PREAMBLES

@@ -32,7 +32,7 @@ class Stage:
     """
 
     name: str = "stage"
-    output_budget: int = 1000
+    output_budget: int | None = None
     input_budget: int = 8000
 
     def build_messages(self, scratch: Scratch) -> list[dict]:

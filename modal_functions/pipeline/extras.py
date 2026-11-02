@@ -52,7 +52,6 @@ class DocRouter:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            max_tokens=200,
             temperature=0.1,
         )
         cleaned = response.strip()

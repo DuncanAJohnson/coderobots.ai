@@ -112,7 +112,7 @@ class Linear:
                 elif is_final and self.stream_final:
                     messages = stage.build_messages(scratch)
                     logger.info(
-                        "stage %s: streaming, %d messages, max_tokens=%d",
+                        "stage %s: streaming, %d messages, max_tokens=%s",
                         stage_label, len(messages), stage.output_budget,
                     )
                     chunks: list[str] = []
